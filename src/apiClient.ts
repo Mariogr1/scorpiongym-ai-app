@@ -94,6 +94,7 @@ export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
 
 
 export interface ClientData {
+    dni: string;
     profile: Profile;
     routine: Routine | null;
     routineGeneratedDate?: string;
@@ -186,94 +187,100 @@ export const DEFAULT_EXERCISE_LIBRARY: ExerciseLibrary = {
 export const apiClient = {
   // Client Management
   async getClients(): Promise<ClientListItem[]> {
-    const clientList: ClientListItem[] = [];
-    const seenDnis = new Set<string>();
-    Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('gym_ai_user_')) {
-            try {
-                const cleanDni = key.replace('gym_ai_user_', '').trim();
-                if (!cleanDni || seenDnis.has(cleanDni)) {
-                    localStorage.removeItem(key); // Remove empty or duplicate keys
-                    return;
-                }
-                seenDnis.add(cleanDni);
-                const clientData = JSON.parse(localStorage.getItem(key)!) as Partial<ClientData>;
-                clientList.push({
-                    dni: cleanDni,
-                    profile: clientData.profile || {},
-                    planName: clientData.routine?.planName || 'Sin plan',
-                    status: clientData.status || 'active',
-                });
-            } catch (e) { console.error(`Error processing key ${key}:`, e); }
-        }
-    });
-    return clientList.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
+    try {
+        const response = await fetch('/api/clients');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const clients: ClientListItem[] = await response.json();
+        return clients.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
+    } catch (error) {
+        console.error("Failed to fetch clients:", error);
+        return [];
+    }
   },
 
   async getClientData(dni: string): Promise<ClientData | null> {
-    const storedData = localStorage.getItem(`gym_ai_user_${dni}`);
-    if (!storedData) return null;
-    
-    const userData = JSON.parse(storedData) as Partial<ClientData> & { profile?: { password?: any } };
-
-    // Sanitize and set defaults
-    let dataWasChanged = false;
-    if (!userData.accessCode) {
-        userData.accessCode = Math.floor(100000 + Math.random() * 900000).toString();
-        dataWasChanged = true;
+    try {
+        const response = await fetch(`/api/clients/${dni}`);
+        if (!response.ok) {
+            if (response.status === 404) return null;
+            throw new Error('Network response was not ok');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`Failed to fetch client data for DNI ${dni}:`, error);
+        return null;
     }
-    if (userData.profile?.password) {
-        delete userData.profile.password;
-        dataWasChanged = true;
-    }
-    if (!userData.progressLog) userData.progressLog = {};
-    if (!userData.bodyWeightLog) userData.bodyWeightLog = [];
-    if (userData.termsAccepted === undefined) userData.termsAccepted = false;
-    
-    if (dataWasChanged) {
-        localStorage.setItem(`gym_ai_user_${dni}`, JSON.stringify(userData));
-    }
-    
-    return userData as ClientData;
   },
 
   async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<void> {
-    const currentData = JSON.parse(localStorage.getItem(`gym_ai_user_${dni}`) || '{}') as Partial<ClientData>;
-    localStorage.setItem(`gym_ai_user_${dni}`, JSON.stringify({ ...currentData, ...dataToSave }));
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSave),
+        });
+        if (!response.ok) throw new Error('Network response was not ok');
+    } catch (error) {
+        console.error(`Failed to save client data for DNI ${dni}:`, error);
+    }
   },
 
-  async createClient(dni: string): Promise<void> {
-    const newAccessCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const newClientProfile: Profile = { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", bodyFocusSpecific: "", includeAdaptationPhase: "Sí", trainingIntensity: "Moderada" };
-    const newClientData: ClientData = { profile: newClientProfile, routine: null, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false, accessCode: newAccessCode, status: 'active' };
-    localStorage.setItem(`gym_ai_user_${dni}`, JSON.stringify(newClientData));
+  async createClient(dni: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const response = await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, message: errorData.message || 'Failed to create client' };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to create client with DNI ${dni}:`, error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
   },
   
   async updateClientStatus(dnis: Set<string>, newStatus: 'active' | 'archived'): Promise<void> {
-    for (const dni of dnis) {
-        const key = `gym_ai_user_${dni.trim()}`;
-        const data = localStorage.getItem(key);
-        if (data) {
-            const clientData = JSON.parse(data) as ClientData;
-            clientData.status = newStatus;
-            localStorage.setItem(key, JSON.stringify(clientData));
-        }
+    try {
+        const promises = Array.from(dnis).map(dni => 
+            fetch(`/api/clients/${dni}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            })
+        );
+        await Promise.all(promises);
+    } catch (error) {
+        console.error(`Failed to update status for clients:`, error);
     }
   },
 
   async deleteClients(dnis: Set<string>): Promise<void> {
-    dnis.forEach(dni => {
-         const key = `gym_ai_user_${dni.trim()}`;
-         localStorage.removeItem(key);
-    });
+    try {
+        const promises = Array.from(dnis).map(dni =>
+            fetch(`/api/clients/${dni}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+    } catch (error) {
+        console.error(`Failed to delete clients:`, error);
+    }
   },
 
   async loginClient(dni: string, accessCode: string): Promise<boolean> {
-    const data = await this.getClientData(dni);
-    return !!data && data.accessCode === accessCode && (data.status === 'active' || data.status === undefined);
+     try {
+        const response = await fetch(`/api/clients/${dni}`);
+        if (!response.ok) return false;
+        const data: ClientData = await response.json();
+        return data.accessCode === accessCode && (data.status === 'active' || data.status === undefined);
+    } catch (error) {
+        return false;
+    }
   },
 
-  // Exercise Library Management
+  // Exercise Library Management (still uses localStorage for simplicity)
   async getExerciseLibrary(): Promise<ExerciseLibrary> {
     const storedLibrary = localStorage.getItem('gym_ai_exercise_library');
     if (storedLibrary) {

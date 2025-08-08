@@ -1355,12 +1355,15 @@ const App = () => {
     const handleAddClient = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedDni = newDni.trim();
-        const clients = await apiClient.getClients();
-        if (trimmedDni && !clients.some(c => c.dni === trimmedDni)) {
-            await apiClient.createClient(trimmedDni);
+        if (!trimmedDni) return;
+        
+        const result = await apiClient.createClient(trimmedDni);
+        if (result.success) {
             setNewDni('');
             const updatedClients = await apiClient.getClients();
             setClients(updatedClients);
+        } else {
+            alert(result.message);
         }
     };
 
