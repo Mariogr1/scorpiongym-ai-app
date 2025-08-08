@@ -1,197 +1,27 @@
+declare var process: any;
 "use client";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { GoogleGenAI, Type } from "@google/genai";
 import "./index.css";
 
-declare var process: any;
+import {
+    apiClient,
+    ADMIN_PASSWORD,
+    advancedTechniqueOptions,
+    // Types
+    Profile,
+    Routine,
+    DietPlan,
+    Exercise,
+    ClientData,
+    ClientListItem,
+    ProgressLog,
+    BodyWeightEntry,
+    ExerciseLibrary,
+    ProgressLogEntry
+} from './apiClient';
 
-// --- Type Definitions ---
-interface Profile {
-    name: string;
-    age: string;
-    weight: string;
-    height: string;
-    gender: 'Masculino' | 'Femenino' | 'Prefiero no decirlo';
-    level: 'Principiante' | 'Intermedio' | 'Avanzado';
-    goal: 'Hipertrofia' | 'Pérdida de grasa' | 'Mantenimiento' | 'Resistencia';
-    trainingDays: string;
-    activityFactor: 'Sedentario' | 'Ligero' | 'Activo' | 'Muy Activo';
-    useAdvancedTechniques: 'Sí' | 'No';
-    bodyFocusArea: 'Cuerpo completo' | 'Tren Superior' | 'Tren Inferior';
-    bodyFocusSpecific: string;
-    includeAdaptationPhase: 'Sí' | 'No';
-    trainingIntensity: 'Baja' | 'Moderada' | 'Alta' | 'Extrema';
-}
-
-interface Exercise {
-    nombre: string;
-    series: string;
-    repeticiones: string;
-    descanso: string;
-    tecnicaAvanzada?: string;
-}
-
-interface DayPlan {
-    dia: string;
-    grupoMuscular: string;
-    ejercicios: Exercise[];
-    cardio: string;
-}
-
-interface Phase {
-    phaseName: string;
-    durationWeeks: number;
-    routine: {
-        dias: DayPlan[];
-    };
-}
-
-interface Routine {
-    planName: string;
-    totalDurationWeeks: number;
-    phases: Phase[];
-}
-
-interface FoodItem {
-    food: string;
-    amount: string;
-}
-
-interface Meal {
-    mealName: string;
-    foodItems: FoodItem[];
-}
-
-interface DietPlan {
-    planTitle: string;
-    summary: {
-        totalCalories: number;
-        macronutrients: {
-            proteinGrams: number;
-            carbsGrams: number;
-            fatGrams: number;
-        };
-    };
-    meals: Meal[];
-    recommendations: string[];
-}
-
-interface ProgressLogEntry {
-    date: string; // Should be a full ISO string
-    weight: number;
-    repetitions: number;
-}
-
-type ProgressLog = Record<string, ProgressLogEntry[]>;
-
-interface BodyWeightEntry {
-    date: string; // Should be a full ISO string
-    weight: number;
-    imc?: number;
-    imcCategoryClass?: string;
-}
-
-// --- Nuevas definiciones para Biblioteca de Ejercicios ---
-interface ExerciseDefinition {
-    name: string;
-    isEnabled: boolean;
-    youtubeLink: string;
-}
-
-type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
-
-
-interface ClientData {
-    profile: Profile;
-    routine: Routine | null;
-    routineGeneratedDate?: string;
-    dietPlan: DietPlan | null;
-    progressLog: ProgressLog;
-    bodyWeightLog?: BodyWeightEntry[];
-    termsAccepted?: boolean;
-    accessCode: string;
-    status?: 'active' | 'archived';
-}
-
-interface ClientListItem {
-    dni: string;
-    profile: Partial<Profile>;
-    planName: string;
-    status: 'active' | 'archived';
-}
-
-
-const ADMIN_PASSWORD = "admin";
-
-const advancedTechniqueOptions = [
-      { value: '', label: 'Ninguna' },
-      { value: 'Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.', label: 'Drop Set (2 descensos)' },
-      { value: 'Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.', label: 'Rest-Pause (3 pausas)' },
-      { value: 'Myo-reps (3 pasadas) - Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.', label: 'Myo-reps (3 pasadas)' },
-      { value: 'Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.', label: 'Excéntricas (Negativas)' }
-];
-
-// --- Default Exercise Library ---
-const DEFAULT_EXERCISE_LIBRARY: ExerciseLibrary = {
-    "Pecho": [
-        { name: "Press de banca plano con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Press inclinado con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Aperturas con mancuernas en banco plano", isEnabled: true, youtubeLink: "" },
-        { name: "Fondos en paralelas (Dips)", isEnabled: true, youtubeLink: "" },
-        { name: "Press declinado con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Cruce de poleas (crossover)", isEnabled: true, youtubeLink: "" },
-        { name: "Flexiones de brazos (Push-ups)", isEnabled: true, youtubeLink: "" },
-        { name: "Press en máquina hammer", isEnabled: true, youtubeLink: "" }
-    ],
-    "Espalda": [
-        { name: "Dominadas (Pull-ups)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo con barra (inclinado)", isEnabled: true, youtubeLink: "" },
-        { name: "Jalón al pecho (Polea alta)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo en punta con barra T", isEnabled: true, youtubeLink: "" },
-        { name: "Remo con mancuerna a una mano", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto convencional", isEnabled: true, youtubeLink: "" },
-        { name: "Pull-over con mancuerna", isEnabled: true, youtubeLink: "" },
-        { name: "Remo sentado en polea (agarre estrecho)", isEnabled: true, youtubeLink: "" }
-    ],
-    "Hombros": [
-        { name: "Press militar con barra (de pie)", isEnabled: true, youtubeLink: "" },
-        { name: "Press Arnold con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevaciones laterales con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevaciones frontales con disco", isEnabled: true, youtubeLink: "" },
-        { name: "Pájaros (Bent-over reverse flyes)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo al mentón con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Face pulls en polea", isEnabled: true, youtubeLink: "" },
-        { name: "Press en máquina de hombros", isEnabled: true, youtubeLink: "" }
-    ],
-    "Piernas": [
-        { name: "Sentadilla libre con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Prensa de piernas a 45 grados", isEnabled: true, youtubeLink: "" },
-        { name: "Zancadas (lunges) con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Extensiones de cuádriceps en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Curl femoral tumbado en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto rumano con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevación de talones (gemelos) de pie", isEnabled: true, youtubeLink: "" },
-        { name: "Sentadilla búlgara con mancuernas", isEnabled: true, youtubeLink: "" }
-    ],
-    "Glúteos": [
-        { name: "Hip thrust con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Patada de glúteo en polea", isEnabled: true, youtubeLink: "" },
-        { name: "Abducción de cadera en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto sumo con mancuerna", isEnabled: true, youtubeLink: "" },
-        { name: "Puente de glúteos con disco", isEnabled: true, youtubeLink: "" }
-    ],
-    "Brazos (Bíceps y Tríceps)": [
-        { name: "Curl de bíceps con barra recta", isEnabled: true, youtubeLink: "" },
-        { name: "Press francés con barra Z", isEnabled: true, youtubeLink: "" },
-        { name: "Curl martillo con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Extensiones de tríceps en polea alta con soga", isEnabled: true, youtubeLink: "" },
-        { name: "Curl de bíceps concentrado", isEnabled: true, youtubeLink: "" },
-        { name: "Fondos entre bancos", isEnabled: true, youtubeLink: "" },
-        { name: "Curl predicador (Scott) con barra Z", isEnabled: true, youtubeLink: "" },
-        { name: "Patada de tríceps con mancuerna", isEnabled: true, youtubeLink: "" }
-    ]
-};
 
 // --- Utility Function ---
 const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, category: string, categoryClass: string } => {
@@ -309,19 +139,18 @@ const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBa
     const [dni, setDni] = useState('');
     const [accessCode, setAccessCode] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const storedData = localStorage.getItem(`gym_ai_user_${dni}`);
-        if (storedData) {
-            const userData = JSON.parse(storedData) as Partial<ClientData>;
-            if (userData.accessCode === accessCode && (userData.status === 'active' || userData.status === undefined)) {
-                onLogin(dni);
-            } else {
-                setError('DNI o código incorrectos, o cliente inactivo.');
-            }
+        setIsLoading(true);
+        setError('');
+        const success = await apiClient.loginClient(dni, accessCode);
+        if (success) {
+            onLogin(dni);
         } else {
-            setError('DNI o código incorrectos.');
+            setError('DNI o código incorrectos, o cliente inactivo.');
+            setIsLoading(false);
         }
     };
     
@@ -334,7 +163,9 @@ const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBa
                     <input type="text" value={dni} onChange={e => {setDni(e.target.value); setError('')}} placeholder="DNI" />
                     <input type="password" value={accessCode} onChange={e => {setAccessCode(e.target.value); setError('')}} placeholder="Código de Acceso" />
                     {error && <p className="error-text">{error}</p>}
-                    <button type="submit" className="cta-button" disabled={!dni || !accessCode}>Ingresar</button>
+                    <button type="submit" className="cta-button" disabled={!dni || !accessCode || isLoading}>
+                        {isLoading ? <span className="spinner small" /> : 'Ingresar'}
+                    </button>
                     <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
                 </form>
             </div>
@@ -601,7 +432,6 @@ interface ProgressViewProps {
 const ProgressView = ({ progressLog, bodyWeightLog }: ProgressViewProps) => {
     const [activeProgressTab, setActiveProgressTab] = useState('exercises');
 
-    // Logic from original ProgressList
     const availableExercises = useMemo(() => Object.keys(progressLog).filter(key => progressLog[key]?.length > 0), [progressLog]);
     const [selectedExercise, setSelectedExercise] = useState(availableExercises[0] || '');
 
@@ -821,19 +651,16 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
 
 
     useEffect(() => {
-        if (!clientDni) return;
-        const storedData = localStorage.getItem(`gym_ai_user_${clientDni}`);
-        if (storedData) {
-            const data = JSON.parse(storedData) as Partial<ClientData>;
-            if (!data.progressLog) data.progressLog = {};
-            if (!data.bodyWeightLog) data.bodyWeightLog = [];
-            if (data.termsAccepted === undefined) data.termsAccepted = false;
-            setClientData(data as ClientData);
-        }
-         const storedLibrary = localStorage.getItem('gym_ai_exercise_library');
-        if (storedLibrary) {
-            setExerciseLibrary(JSON.parse(storedLibrary));
-        }
+        const loadInitialData = async () => {
+          if (!clientDni) return;
+          const [data, library] = await Promise.all([
+              apiClient.getClientData(clientDni),
+              apiClient.getExerciseLibrary()
+          ]);
+          setClientData(data);
+          setExerciseLibrary(library);
+        };
+        loadInitialData();
     }, [clientDni]);
 
     const flatExerciseLibrary = useMemo(() => Object.values(exerciseLibrary).flat(), [exerciseLibrary]);
@@ -854,7 +681,6 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         if (!profile?.weight || !profile?.goal || !routine?.totalDurationWeeks) return null;
         const currentWeight = parseFloat(profile.weight);
         if (isNaN(currentWeight) || currentWeight <= 0) return null;
-
         const { goal } = profile;
         const { totalDurationWeeks } = routine;
         let target;
@@ -879,7 +705,7 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         setDailyReps(prev => ({ ...prev, [exerciseName]: reps }));
     };
 
-    const handleLogBodyWeight = () => {
+    const handleLogBodyWeight = async () => {
         if (!clientData || !clientDni || !currentBodyWeight || isNaN(parseFloat(currentBodyWeight)) || !profile?.height) return;
 
         const now = new Date().toISOString();
@@ -893,15 +719,15 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         existingLog.push(newLogEntry);
         existingLog.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        const updatedClientData: ClientData = { ...clientData, bodyWeightLog: existingLog };
-        localStorage.setItem(`gym_ai_user_${clientDni}`, JSON.stringify(updatedClientData));
-        setClientData(updatedClientData);
+        const updatedClientData: Partial<ClientData> = { bodyWeightLog: existingLog };
+        await apiClient.saveClientData(clientDni, updatedClientData);
+        setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
         setCurrentBodyWeight('');
         setLogWeightText("✓");
         setTimeout(() => setLogWeightText("Registrar"), 2000);
     };
 
-    const handleSaveProgress = () => {
+    const handleSaveProgress = async () => {
         if (!clientData || !clientDni) return;
 
         const now = new Date().toISOString();
@@ -914,14 +740,9 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
             const weight = dailyWeights[exerciseName];
             const reps = dailyReps[exerciseName];
 
-            // Only log if both weight and reps are valid numbers
-            if (!weight || isNaN(parseFloat(weight)) || !reps || isNaN(parseInt(reps, 10))) {
-                return;
-            }
+            if (!weight || isNaN(parseFloat(weight)) || !reps || isNaN(parseInt(reps, 10))) return;
 
-            if (!newProgressLog[exerciseName]) {
-                newProgressLog[exerciseName] = [];
-            }
+            if (!newProgressLog[exerciseName]) newProgressLog[exerciseName] = [];
             
             newProgressLog[exerciseName].push({ date: now, weight: parseFloat(weight), repetitions: parseInt(reps, 10) });
             newProgressLog[exerciseName].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -929,9 +750,9 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         });
 
         if (progressWasSaved) {
-            const updatedClientData: ClientData = { ...clientData, progressLog: newProgressLog };
-            localStorage.setItem(`gym_ai_user_${clientDni}`, JSON.stringify(updatedClientData));
-            setClientData(updatedClientData);
+            const updatedClientData = { progressLog: newProgressLog };
+            await apiClient.saveClientData(clientDni, updatedClientData);
+            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
             setDailyWeights({});
             setDailyReps({});
             setSaveProgressText("Guardado ✓");
@@ -939,11 +760,11 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         }
     };
     
-    const handleAcceptTerms = () => {
-        if (!clientData || !clientDni) return;
-        const updatedClientData: ClientData = { ...clientData, termsAccepted: true };
-        localStorage.setItem(`gym_ai_user_${clientDni}`, JSON.stringify(updatedClientData));
-        setClientData(updatedClientData);
+    const handleAcceptTerms = async () => {
+        if (!clientDni) return;
+        const updatedClientData = { termsAccepted: true };
+        await apiClient.saveClientData(clientDni, updatedClientData);
+        setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
     };
 
     const routinePlanInfo = useMemo(() => {
@@ -1168,7 +989,7 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
     };
     
     const handleCheckboxClick = (e: React.MouseEvent<HTMLInputElement>, dni: string) => {
-        e.stopPropagation(); // Previene que el click en el checkbox dispare el click de la tarjeta
+        e.stopPropagation();
         onSelectionChange(dni);
     };
 
@@ -1186,7 +1007,7 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
                             className="client-selection-checkbox" 
                             checked={selectedClients.has(client.dni)}
                             onClick={(e) => handleCheckboxClick(e, client.dni)}
-                            readOnly // El click se maneja en el manejador para evitar conflictos
+                            readOnly
                         />
                     )}
                     <h3>{client.profile?.name || `DNI: ${client.dni}`}</h3>
@@ -1371,7 +1192,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
                                         onChange={(e) => setEditingText(e.target.value)}
                                         className="editing-input"
                                         autoFocus
-                                        onBlur={handleSaveEdit} // Save on blur
+                                        onBlur={handleSaveEdit}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                                     />
                                 ) : (
@@ -1412,7 +1233,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
 // --- Componente Principal ---
 const App = () => {
     // --- State de la Aplicación ---
-    const [currentView, setCurrentView] = useState('landing'); // 'landing', 'adminLogin', 'clientLogin', 'adminDashboard', 'clientPortal'
+    const [currentView, setCurrentView] = useState('landing');
     const [selectedClientDNI, setSelectedClientDNI] = useState<string | null>(null);
     const [loggedInClientDNI, setLoggedInClientDNI] = useState<string | null>(null);
     
@@ -1447,7 +1268,7 @@ const App = () => {
         try {
             const apiKey = process.env.API_KEY;
             if (!apiKey) {
-                console.error("API Key de Google no encontrada. Asegúrate de que tu archivo .env.local existe y la variable está definida, y reinicia el servidor de desarrollo.");
+                console.error("API Key de Google no encontrada. Revisa tu archivo .env y reinicia el servidor.");
                 return null;
             }
             return new GoogleGenAI({ apiKey });
@@ -1468,7 +1289,6 @@ const App = () => {
         if (!profile?.weight || !profile?.goal || !routine?.totalDurationWeeks) return null;
         const currentWeight = parseFloat(profile.weight);
         if (isNaN(currentWeight) || currentWeight <= 0) return null;
-
         const { goal } = profile;
         const { totalDurationWeeks } = routine;
         let target;
@@ -1486,61 +1306,44 @@ const App = () => {
     
     // Carga inicial de clientes y biblioteca de ejercicios
     useEffect(() => {
-        if (currentView === 'adminDashboard') {
-            loadClients();
-            
-            const storedLibrary = localStorage.getItem('gym_ai_exercise_library');
-            if (storedLibrary) {
-                setExerciseLibrary(JSON.parse(storedLibrary));
-            } else {
-                setExerciseLibrary(DEFAULT_EXERCISE_LIBRARY);
-                localStorage.setItem('gym_ai_exercise_library', JSON.stringify(DEFAULT_EXERCISE_LIBRARY));
-            }
-        }
+        const loadInitialAdminData = async () => {
+          if (currentView === 'adminDashboard') {
+            const [clientsData, libraryData] = await Promise.all([
+              apiClient.getClients(),
+              apiClient.getExerciseLibrary()
+            ]);
+            setClients(clientsData);
+            setExerciseLibrary(libraryData);
+          }
+        };
+        loadInitialAdminData();
     }, [currentView]);
 
     // Cargar datos del cliente seleccionado por el admin
     useEffect(() => {
-        if (selectedClientDNI) {
-            const storedData = localStorage.getItem(`gym_ai_user_${selectedClientDNI}`);
-            if (storedData) {
-                const userData = JSON.parse(storedData) as Partial<ClientData> & { profile?: { password?: any } };
-
-                let code = userData.accessCode;
-                let dataWasChanged = false;
-                if (!code) {
-                    code = Math.floor(100000 + Math.random() * 900000).toString();
-                    userData.accessCode = code;
-                    dataWasChanged = true;
-                }
-                if (userData.profile?.password) {
-                    delete userData.profile.password;
-                    dataWasChanged = true;
-                }
-                if (dataWasChanged) {
-                    localStorage.setItem(`gym_ai_user_${selectedClientDNI}`, JSON.stringify(userData));
-                }
-                setClientAccessCode(code);
-                
-                const profileWithDefaults: Profile = {
-                    name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: 'Cuerpo completo', bodyFocusSpecific: '', includeAdaptationPhase: 'Sí', trainingIntensity: 'Moderada', ...userData.profile
-                };
-                
-                setProfile(profileWithDefaults);
-                setRoutine(userData.routine || null);
-                setDietPlan(userData.dietPlan || null);
-                setRoutineGeneratedDate(userData.routineGeneratedDate || null);
-                setSelectedPhaseTabIndex(0);
-                setAdminSelectedDayIndex(0);
-                setActiveTab('training');
-                if (!ai) {
-                    setError("La API Key de Google no está configurada. No se pueden generar planes.");
-                } else {
-                    setError('');
-                }
-                setCurrentView('adminClientManagement');
-            }
-        }
+        const loadSelectedClient = async () => {
+          if (selectedClientDNI) {
+              const userData = await apiClient.getClientData(selectedClientDNI);
+              if (userData) {
+                  setClientAccessCode(userData.accessCode);
+                  const profileWithDefaults: Profile = {
+                      name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: 'Cuerpo completo', bodyFocusSpecific: '', includeAdaptationPhase: 'Sí', trainingIntensity: 'Moderada', ...userData.profile
+                  };
+                  
+                  setProfile(profileWithDefaults);
+                  setRoutine(userData.routine || null);
+                  setDietPlan(userData.dietPlan || null);
+                  setRoutineGeneratedDate(userData.routineGeneratedDate || null);
+                  setSelectedPhaseTabIndex(0);
+                  setAdminSelectedDayIndex(0);
+                  setActiveTab('training');
+                  if (!ai) setError("La API Key de Google no está configurada. No se pueden generar planes.");
+                  else setError('');
+                  setCurrentView('adminClientManagement');
+              }
+          }
+        };
+        loadSelectedClient();
     }, [selectedClientDNI, ai]);
     
     // Reset day index on phase change para la vista del admin
@@ -1548,84 +1351,44 @@ const App = () => {
         setAdminSelectedDayIndex(0);
     }, [selectedPhaseTabIndex]);
 
-    // --- Funciones de Gestión de Clientes (movidas a App) ---
-    const loadClients = () => {
-        const clientList: ClientListItem[] = [];
-        const seenDnis = new Set<string>();
-        Object.keys(localStorage).forEach(key => {
-            if (key.startsWith('gym_ai_user_')) {
-                try {
-                    const cleanDni = key.replace('gym_ai_user_', '').trim();
-                    if (!cleanDni || seenDnis.has(cleanDni)) {
-                        localStorage.removeItem(key); // Remove empty or duplicate keys
-                        return;
-                    }
-                    seenDnis.add(cleanDni);
-                    const clientData = JSON.parse(localStorage.getItem(key)!) as Partial<ClientData>;
-                    clientList.push({
-                        dni: cleanDni,
-                        profile: clientData.profile || {},
-                        planName: clientData.routine?.planName || 'Sin plan',
-                        status: clientData.status || 'active',
-                    });
-                } catch (e) { console.error(`Error processing key ${key}:`, e); }
-            }
-        });
-        setClients(clientList.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni)));
-    };
-
-    const handleAddClient = (e: React.FormEvent) => {
+    // --- Funciones de Gestión de Clientes ---
+    const handleAddClient = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedDni = newDni.trim();
+        const clients = await apiClient.getClients();
         if (trimmedDni && !clients.some(c => c.dni === trimmedDni)) {
-            const newAccessCode = Math.floor(100000 + Math.random() * 900000).toString();
-            const newClientProfile: Profile = { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", bodyFocusSpecific: "", includeAdaptationPhase: "Sí", trainingIntensity: "Moderada" };
-            const newClientData: ClientData = { profile: newClientProfile, routine: null, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false, accessCode: newAccessCode, status: 'active' };
-            localStorage.setItem(`gym_ai_user_${trimmedDni}`, JSON.stringify(newClientData));
+            await apiClient.createClient(trimmedDni);
             setNewDni('');
-            loadClients();
+            const updatedClients = await apiClient.getClients();
+            setClients(updatedClients);
         }
     };
 
     const handleSelectionChange = (dni: string) => {
         setSelectedClients(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(dni)) {
-                newSet.delete(dni);
-            } else {
-                newSet.add(dni);
-            }
+            if (newSet.has(dni)) newSet.delete(dni);
+            else newSet.add(dni);
             return newSet;
         });
     };
     
     // --- Handlers de acciones ---
-    const closeConfirmationModal = () => {
-        setConfirmationModal({ isOpen: false, message: '', onConfirm: () => {} });
-    };
+    const closeConfirmationModal = () => setConfirmationModal({ isOpen: false, message: '', onConfirm: () => {} });
 
-    const updateClientStatus = (dnis: Set<string>, newStatus: 'active' | 'archived') => {
-        dnis.forEach(dni => {
-            const key = `gym_ai_user_${dni.trim()}`;
-            const data = localStorage.getItem(key);
-            if (data) {
-                const clientData = JSON.parse(data) as ClientData;
-                clientData.status = newStatus;
-                localStorage.setItem(key, JSON.stringify(clientData));
-            }
-        });
-        loadClients();
+    const handleUpdateClientStatus = async (dnis: Set<string>, newStatus: 'active' | 'archived') => {
+        await apiClient.updateClientStatus(dnis, newStatus);
+        const updatedClients = await apiClient.getClients();
+        setClients(updatedClients);
         setIsSelectionMode(false);
         setSelectedClients(new Set());
         closeConfirmationModal();
     };
     
-    const deleteClientsPermanently = (dnis: Set<string>) => {
-        dnis.forEach(dni => {
-             const key = `gym_ai_user_${dni.trim()}`;
-             localStorage.removeItem(key);
-        });
-        loadClients();
+    const handleDeleteClientsPermanently = async (dnis: Set<string>) => {
+        await apiClient.deleteClients(dnis);
+        const updatedClients = await apiClient.getClients();
+        setClients(updatedClients);
         setIsSelectionMode(false);
         setSelectedClients(new Set());
         closeConfirmationModal();
@@ -1636,7 +1399,7 @@ const App = () => {
         setConfirmationModal({
             isOpen: true,
             message: `¿Estás seguro de que querés archivar ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => updateClientStatus(selectedClients, 'archived')
+            onConfirm: () => handleUpdateClientStatus(selectedClients, 'archived')
         });
     };
 
@@ -1645,7 +1408,7 @@ const App = () => {
         setConfirmationModal({
             isOpen: true,
             message: `¿Estás seguro de que querés restaurar ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => updateClientStatus(selectedClients, 'active')
+            onConfirm: () => handleUpdateClientStatus(selectedClients, 'active')
         });
     };
 
@@ -1654,7 +1417,7 @@ const App = () => {
         setConfirmationModal({
             isOpen: true,
             message: `¡ACCIÓN IRREVERSIBLE! ¿Estás seguro de que querés eliminar permanentemente ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => deleteClientsPermanently(selectedClients)
+            onConfirm: () => handleDeleteClientsPermanently(selectedClients)
         });
     };
 
@@ -1663,9 +1426,9 @@ const App = () => {
         setSelectedClients(new Set());
     };
 
-    const handleSaveLibrary = (updatedLibrary: ExerciseLibrary) => {
+    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary) => {
+        await apiClient.saveExerciseLibrary(updatedLibrary);
         setExerciseLibrary(updatedLibrary);
-        localStorage.setItem('gym_ai_exercise_library', JSON.stringify(updatedLibrary));
     };
 
     const filteredClients = clients
@@ -1676,12 +1439,6 @@ const App = () => {
         );
 
     // --- Handlers y Funciones de Navegación y Generación ---
-    const saveData = (dataToSave: Partial<ClientData>) => {
-        if (!selectedClientDNI) return;
-        const currentData = JSON.parse(localStorage.getItem(`gym_ai_user_${selectedClientDNI}`) || '{}') as Partial<ClientData>;
-        localStorage.setItem(`gym_ai_user_${selectedClientDNI}`, JSON.stringify({ ...currentData, ...dataToSave }));
-    };
-
     const handleRoleSelect = (role: 'admin' | 'client') => {
         if (role === 'admin') setCurrentView('adminLogin');
         if (role === 'client') setCurrentView('clientLogin');
@@ -1700,11 +1457,12 @@ const App = () => {
         setLoggedInClientDNI(null);
     };
     
-    const handleBackToDashboard = () => {
+    const handleBackToDashboard = async () => {
         setSelectedClientDNI(null);
         setCurrentView('adminDashboard');
         setAdminView('dashboard');
-        loadClients();
+        const clientsData = await apiClient.getClients();
+        setClients(clientsData);
     };
     
     const isFormValid = useMemo(() => {
@@ -1725,8 +1483,9 @@ const App = () => {
         });
     };
 
-    const handleSaveChanges = () => {
-        saveData({ profile: profile!, routine, dietPlan });
+    const handleSaveChanges = async () => {
+        if (!selectedClientDNI) return;
+        await apiClient.saveClientData(selectedClientDNI, { profile: profile!, routine, dietPlan });
         setSaveButtonText("Guardado ✓");
         setTimeout(() => setSaveButtonText("Guardar cambios"), 2000);
     };
@@ -1762,11 +1521,8 @@ const App = () => {
     };
 
     const handleGenerateDiet = async () => {
-        if (!ai) {
-            setError("La API Key de Google no está configurada. No se pueden generar planes.");
-            return;
-        }
-        if (!isFormValid || !profile) return; 
+        if (!ai) { setError("La API Key de Google no está configurada. No se pueden generar planes."); return; }
+        if (!isFormValid || !profile || !selectedClientDNI) return; 
         setLoadingDiet(true); 
         setError("");
 
@@ -1780,43 +1536,19 @@ const App = () => {
         5.  **Recomendaciones (IMPORTANTE):** Agregá una lista de 2 a 4 recomendaciones generales clave, usando voseo (ej: "Tomá 2-3 litros de agua por día", "Intentá comer 1-2 horas antes de entrenar.").
         6.  **Formato:** Devolvé exclusivamente un objeto JSON que siga el schema.`;
 
-        const dietSchema = {
-            type: Type.OBJECT,
-            properties: {
-                planTitle: { type: Type.STRING },
-                summary: { type: Type.OBJECT, properties: {
-                    totalCalories: { type: Type.INTEGER }, macronutrients: { type: Type.OBJECT, properties: {
-                        proteinGrams: { type: Type.INTEGER }, carbsGrams: { type: Type.INTEGER }, fatGrams: { type: Type.INTEGER }
-                    }, required: ["proteinGrams", "carbsGrams", "fatGrams"] }
-                }, required: ["totalCalories", "macronutrients"] },
-                meals: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                    mealName: { type: Type.STRING },
-                    foodItems: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
-                        food: { type: Type.STRING }, amount: { type: Type.STRING }
-                    }, required: ["food", "amount"] } }
-                }, required: ["mealName", "foodItems"] } },
-                recommendations: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING },
-                    description: "Lista de 2-4 recomendaciones nutricionales generales y de hidratación."
-                }
-            }, required: ["planTitle", "summary", "meals", "recommendations"]
-        };
+        const dietSchema = { type: Type.OBJECT, properties: { planTitle: { type: Type.STRING }, summary: { type: Type.OBJECT, properties: { totalCalories: { type: Type.INTEGER }, macronutrients: { type: Type.OBJECT, properties: { proteinGrams: { type: Type.INTEGER }, carbsGrams: { type: Type.INTEGER }, fatGrams: { type: Type.INTEGER } }, required: ["proteinGrams", "carbsGrams", "fatGrams"] } }, required: ["totalCalories", "macronutrients"] }, meals: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { mealName: { type: Type.STRING }, foodItems: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { food: { type: Type.STRING }, amount: { type: Type.STRING } }, required: ["food", "amount"] } } }, required: ["mealName", "foodItems"] } }, recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de 2-4 recomendaciones nutricionales generales y de hidratación." } }, required: ["planTitle", "summary", "meals", "recommendations"] };
 
         try {
             const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: "Creá el plan nutricional.", config: { systemInstruction: dietSystemInstruction, responseMimeType: "application/json", responseSchema: dietSchema } });
             const parsedDiet = JSON.parse(response.text) as DietPlan;
             setDietPlan(parsedDiet);
-            saveData({ dietPlan: parsedDiet });
+            await apiClient.saveClientData(selectedClientDNI, { dietPlan: parsedDiet });
         } catch (err) { setError("No se pudo generar el plan nutricional."); console.error(err); } finally { setLoadingDiet(false); }
     };
     
     const handleGenerateRoutine = async () => {
-        if (!ai) {
-            setError("La API Key de Google no está configurada. No se pueden generar planes.");
-            return;
-        }
-      if (!isFormValid || !profile) return; 
+      if (!ai) { setError("La API Key de Google no está configurada. No se pueden generar planes."); return; }
+      if (!isFormValid || !profile || !selectedClientDNI) return; 
       setLoadingRoutine(true); 
       setError("");
       
@@ -1854,25 +1586,15 @@ const App = () => {
       `;
       
       const prompt = `Armá un plan de entrenamiento completo para este cliente, basado en tus directivas.`;
-      
       const schema = { type: Type.OBJECT, properties: { planName: { type: Type.STRING }, totalDurationWeeks: { type: Type.INTEGER }, phases: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { phaseName: { type: Type.STRING }, durationWeeks: { type: Type.INTEGER }, routine: { type: Type.OBJECT, properties: { dias: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { dia: { type: Type.STRING, description: "El nombre o número del día de entrenamiento (ej. 'Día 1', 'Día A'). NO incluyas el grupo muscular en este campo." }, grupoMuscular: { type: Type.STRING, description: "El grupo muscular principal para este día (ej. 'Pecho y Tríceps', 'Piernas y Glúteos')." }, ejercicios: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { nombre: { type: Type.STRING }, series: { type: Type.STRING }, repeticiones: { type: Type.STRING }, descanso: { type: Type.STRING, description: "El tiempo de descanso en segundos, como una cadena de texto que contenga SÓLO el número (ej: '60')." }, tecnicaAvanzada: { type: Type.STRING } }, required: ["nombre", "series", "repeticiones", "descanso"] }}, cardio: { type: Type.STRING } }, required: ["dia", "grupoMuscular", "ejercicios", "cardio"] }}}}}, required: ["phaseName", "durationWeeks", "routine"] }}}, required: ["planName", "totalDurationWeeks", "phases"] };
 
       try {
         const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt, config: { systemInstruction, responseMimeType: "application/json", responseSchema: schema } });
         const parsedPlan = JSON.parse(response.text) as Routine;
         
-        // Sanitize data from AI
-        parsedPlan.phases.forEach(phase => {
-            phase.routine.dias.forEach(dia => {
-                dia.ejercicios.forEach(ex => {
-                    let rest = String(ex.descanso || '60').replace(/[^0-9]/g, '');
-                    if (!rest || isNaN(parseInt(rest))) {
-                        rest = '60'; // Default to 60 if empty or invalid
-                    }
-                    ex.descanso = rest;
-                });
-            });
-        });
+        parsedPlan.phases.forEach(phase => phase.routine.dias.forEach(dia => dia.ejercicios.forEach(ex => {
+            ex.descanso = String(ex.descanso || '60').replace(/[^0-9]/g, '') || '60';
+        })));
 
         const generatedDate = new Date().toISOString();
         
@@ -1880,12 +1602,11 @@ const App = () => {
         setRoutineGeneratedDate(generatedDate);
         setDietPlan(null);
         setActiveTab('training');
-        saveData({ routine: parsedPlan, routineGeneratedDate: generatedDate, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false });
+        await apiClient.saveClientData(selectedClientDNI, { routine: parsedPlan, routineGeneratedDate: generatedDate, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false });
       } catch (err) { setError("No se pudo generar el plan."); console.error(err); } finally { setLoadingRoutine(false); }
     };
     
     // --- Lógica de Renderizado ---
-
     const renderContent = () => {
         if (currentView === 'landing') return <LandingPage onSelectRole={handleRoleSelect} />;
         if (currentView === 'adminLogin') return <AdminLogin onLogin={handleAdminLogin} />;
@@ -1928,34 +1649,19 @@ const App = () => {
                     
                     <div className="view-controls">
                         <div className="view-toggle">
-                            <button onClick={() => { setViewMode('active'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>
-                                Activos
-                            </button>
-                            <button onClick={() => { setViewMode('archived'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>
-                                Archivados
-                            </button>
+                            <button onClick={() => { setViewMode('active'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
+                            <button onClick={() => { setViewMode('archived'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
                         </div>
     
                         <div className="selection-controls">
-                            <button className="selection-toggle-button" onClick={handleSelectionModeToggle}>
-                                {isSelectionMode ? 'Cancelar Selección' : 'Seleccionar...'}
-                            </button>
+                            <button className="selection-toggle-button" onClick={handleSelectionModeToggle}>{isSelectionMode ? 'Cancelar Selección' : 'Seleccionar...'}</button>
                             {isSelectionMode && viewMode === 'active' && (
-                                <button 
-                                    className="archive-selected-button"
-                                    onClick={handleArchiveSelected} 
-                                    disabled={selectedClients.size === 0}>
-                                    Archivar ({selectedClients.size})
-                                </button>
+                                <button className="archive-selected-button" onClick={handleArchiveSelected} disabled={selectedClients.size === 0}>Archivar ({selectedClients.size})</button>
                             )}
                             {isSelectionMode && viewMode === 'archived' && (
                                 <>
-                                    <button className="restore-selected-button" onClick={handleRestoreSelected} disabled={selectedClients.size === 0}>
-                                        Restaurar ({selectedClients.size})
-                                    </button>
-                                    <button className="delete-selected-button" onClick={handleDeletePermanentlySelected} disabled={selectedClients.size === 0}>
-                                        Eliminar ({selectedClients.size})
-                                    </button>
+                                    <button className="restore-selected-button" onClick={handleRestoreSelected} disabled={selectedClients.size === 0}>Restaurar ({selectedClients.size})</button>
+                                    <button className="delete-selected-button" onClick={handleDeletePermanentlySelected} disabled={selectedClients.size === 0}>Eliminar ({selectedClients.size})</button>
                                 </>
                             )}
                         </div>
@@ -1978,16 +1684,10 @@ const App = () => {
             const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
             const enabledExercisesByGroup = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
                 const enabled = exercises.filter(ex => ex.isEnabled);
-                if (enabled.length > 0) {
-                    acc[group] = enabled;
-                }
+                if (enabled.length > 0) acc[group] = enabled;
                 return acc;
             }, {} as ExerciseLibrary);
             
-            const handleTabSwitch = (tab: 'training' | 'nutrition') => {
-                setActiveTab(tab);
-            };
-
             return (
                 <>
                   <header className="main-header">
@@ -2011,80 +1711,15 @@ const App = () => {
                           <div className="form-group"><label>Nivel</label><select name="level" value={profile.level} onChange={handleInputChange}><option>Principiante</option><option>Intermedio</option><option>Avanzado</option></select></div>
                           <div className="form-group"><label>Objetivo</label><select name="goal" value={profile.goal} onChange={handleInputChange}><option>Hipertrofia</option><option>Pérdida de grasa</option><option>Mantenimiento</option><option>Resistencia</option></select></div>
                           <div className="form-group"><label>Días por semana</label><input type="number" name="trainingDays" value={profile.trainingDays} min="1" max="7" onChange={handleInputChange}/></div>
-                          
-                          <div className="form-group">
-                            <label>Factor de Actividad (fuera del gym)</label>
-                            <select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}>
-                                <option value="Sedentario">Sedentario (trabajo de oficina)</option>
-                                <option value="Ligero">Ligero (trabajo de pie, caminatas)</option>
-                                <option value="Activo">Activo (trabajo físico moderado)</option>
-                                <option value="Muy Activo">Muy Activo (trabajo físico intenso)</option>
-                            </select>
-                          </div>
-
-                          <div className="form-group">
-                            <label>Área de Enfoque</label>
-                            <select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}>
-                                <option value="Cuerpo completo">Cuerpo completo</option>
-                                <option value="Tren Superior">Tren Superior</option>
-                                <option value="Tren Inferior">Tren Inferior</option>
-                            </select>
-                          </div>
-                          {profile.bodyFocusArea && profile.bodyFocusArea !== 'Cuerpo completo' && (
-                              <div className="form-group">
-                                  <label>Músculo Específico (Opcional)</label>
-                                  <select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}>
-                                      <option value="">Enfoque General</option>
-                                      {profile.bodyFocusArea === 'Tren Superior' && (
-                                          <>
-                                              <option value="Pecho">Pecho</option>
-                                              <option value="Espalda">Espalda</option>
-                                              <option value="Hombros">Hombros</option>
-                                              <option value="Brazos">Brazos</option>
-                                          </>
-                                      )}
-                                      {profile.bodyFocusArea === 'Tren Inferior' && (
-                                          <>
-                                              <option value="Piernas">Piernas (Cuádriceps/Femorales)</option>
-                                              <option value="Glúteos">Glúteos</option>
-                                          </>
-                                      )}
-                                  </select>
-                              </div>
-                          )}
-                          
-                           <div className="form-group">
-                            <label>Intensidad del entrenamiento</label>
-                            <select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}>
-                                <option value="Baja">Baja</option>
-                                <option value="Moderada">Moderada</option>
-                                <option value="Alta">Alta</option>
-                                <option value="Extrema">Extrema</option>
-                            </select>
-                          </div>
-    
-                          <div className="form-group">
-                            <label>Fase de adaptación</label>
-                            <select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}>
-                                <option value="Sí">Incluir fase de adaptación</option>
-                                <option value="No">Empezar directo sin adaptación</option>
-                            </select>
-                          </div>
-    
+                          <div className="form-group"><label>Factor de Actividad (fuera del gym)</label><select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}><option value="Sedentario">Sedentario (trabajo de oficina)</option><option value="Ligero">Ligero (trabajo de pie, caminatas)</option><option value="Activo">Activo (trabajo físico moderado)</option><option value="Muy Activo">Muy Activo (trabajo físico intenso)</option></select></div>
+                          <div className="form-group"><label>Área de Enfoque</label><select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}><option value="Cuerpo completo">Cuerpo completo</option><option value="Tren Superior">Tren Superior</option><option value="Tren Inferior">Tren Inferior</option></select></div>
+                          {profile.bodyFocusArea && profile.bodyFocusArea !== 'Cuerpo completo' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General</option>{profile.bodyFocusArea === 'Tren Superior' && (<><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos">Brazos</option></>)}{profile.bodyFocusArea === 'Tren Inferior' && (<><option value="Piernas">Piernas (Cuádriceps/Femorales)</option><option value="Glúteos">Glúteos</option></>)}</select></div>)}
+                          <div className="form-group"><label>Intensidad del entrenamiento</label><select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}><option value="Baja">Baja</option><option value="Moderada">Moderada</option><option value="Alta">Alta</option><option value="Extrema">Extrema</option></select></div>
+                          <div className="form-group"><label>Fase de adaptación</label><select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}><option value="Sí">Incluir fase de adaptación</option><option value="No">Empezar directo sin adaptación</option></select></div>
                           <div className="form-group"><label>Complejidad de la rutina</label><select name="useAdvancedTechniques" value={profile.useAdvancedTechniques} onChange={handleInputChange}><option value="No">Ejercicios simples</option><option value="Sí">Incluir técnicas avançadas</option></select></div>
                         </form>
-                         {clientAccessCode && (
-                            <div className="access-code-display">
-                                <span>Código de Acceso del Cliente</span>
-                                <strong>{clientAccessCode}</strong>
-                            </div>
-                        )}
-                         {bmi !== null && (
-                            <div className="bmi-display">
-                                <span>IMC: <strong>{bmi.toFixed(1)}</strong></span>
-                                <span className={`bmi-category ${bmiCategoryClass}`}>{bmiCategory}</span>
-                            </div>
-                        )}
+                         {clientAccessCode && (<div className="access-code-display"><span>Código de Acceso del Cliente</span><strong>{clientAccessCode}</strong></div>)}
+                         {bmi !== null && (<div className="bmi-display"><span>IMC: <strong>{bmi.toFixed(1)}</strong></span><span className={`bmi-category ${bmiCategoryClass}`}>{bmiCategory}</span></div>)}
                     </aside>
             
                     <main className="main-content">
@@ -2094,161 +1729,55 @@ const App = () => {
                       </div>
                       
                         <div className="main-tabs-nav">
-                            <button onClick={() => handleTabSwitch('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
-                            <button onClick={() => handleTabSwitch('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>
+                            <button onClick={() => setActiveTab('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
+                            <button onClick={() => setActiveTab('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>
                         </div>
             
                         <section className="results-section">
-                            {isLoading && (
-                                <div className="loading-container">
-                                    <div className="spinner"></div>
-                                    <p>{loadingRoutine ? 'Armando el plan de entrenamiento...' : 'Armando el plan de nutrición...'}</p>
+                            {activeTab === 'training' && (<>
+                              {loadingRoutine && <div className="loading-container"><div className="spinner"></div><p>Armando el plan de entrenamiento...</p></div>}
+                              {!isLoading && !routine && !error && <p className="placeholder">Completá el perfil del cliente/a y generá un plan de entrenamiento.</p>}
+                              {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
+                              {routine && (<div className="plan-container">
+                                    <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p>{targetWeight !== null && (<p className="target-weight-info">Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg</p>)}</header>
+                                    <div className="phases-container">
+                                        <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
+                                        {selectedPhase && (<div className="phase-tab-content">
+                                            <div className="day-tabs-nav">{selectedPhase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
+                                            {selectedDay && (<div className="routine-plan editable">
+                                                <div className="day-card animated-fade-in">
+                                                    <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
+                                                    <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
+                                                        <li key={exIndex} className="exercise-item editable">
+                                                            <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
+                                                            <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
+                                                            <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
+                                                            <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
+                                                        </li>))}
+                                                    </ul>
+                                                    <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
+                                                    <p className="cardio-note">{selectedDay.cardio}</p>
+                                                </div>
+                                            </div>)}
+                                        </div>)}
+                                    </div>
+                                </div>)}
+                              </>)}
+                            {activeTab === 'nutrition' && (
+                                <div className="diet-plan-container">
+                                    {loadingDiet && (<div className="loading-container"><div className="spinner"></div><p>Armando el plan de nutrición...</p></div>)}
+                                    {!loadingDiet && !dietPlan && !error && (<div className="placeholder-action"><p>Todavía no hay un plan de nutrición para este cliente/a.</p><button className="cta-button" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>Generar plan de nutrición</button></div>)}
+                                    {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
+                                    {!loadingDiet && dietPlan && (
+                                        <>
+                                            <header className="plan-header"><h2>{dietPlan.planTitle}</h2></header>
+                                            <div className="diet-summary"><div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div><div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div><div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div><div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div></div>
+                                            <div className="meals-grid">{dietPlan.meals?.map((meal, index) => (<div key={index} className="meal-card"><h3>{meal.mealName}</h3><ul>{meal.foodItems?.map((item, i) => (<li key={i}>{item.food} <span>({item.amount})</span></li>))}</ul></div>))}</div>
+                                            {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (<div className="recommendations-section"><h4>💡 Recomendaciones clave</h4><ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul></div>)}
+                                            <button className="cta-button regenerate" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>{loadingDiet ? <><span className="spinner small"></span>Regenerando...</> : "Volver a generar plan"}</button>
+                                        </>
+                                    )}
                                 </div>
-                            )}
-
-                            {!isLoading && error && (
-                                 <div className="error-container"><p>{error}</p></div>
-                            )}
-                            
-                            {!isLoading && !error && (
-                                <>
-                                    {activeTab === 'training' && (
-                                        !routine ? (
-                                            <p className="placeholder">Completá el perfil del cliente/a y generá un plan de entrenamiento.</p>
-                                        ) : (
-                                            <div className="plan-container">
-                                                <header className="plan-header">
-                                                  <h2>{routine.planName}</h2>
-                                                  <p>Duración total: {routine.totalDurationWeeks} semanas</p>
-                                                  {targetWeight !== null && (
-                                                    <p className="target-weight-info">
-                                                        Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg
-                                                    </p>
-                                                  )}
-                                                </header>
-                                                <div className="phases-container">
-                                                    <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
-                                                    {selectedPhase && (<div className="phase-tab-content">
-                                                        <div className="day-tabs-nav">
-                                                          {selectedPhase.routine.dias.map((day, dayIndex) => (
-                                                              <button 
-                                                                  key={dayIndex} 
-                                                                  className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`}
-                                                                  onClick={() => setAdminSelectedDayIndex(dayIndex)}>
-                                                                  {day.dia}
-                                                              </button>
-                                                          ))}
-                                                        </div>
-                                                        {selectedDay && (<div className="routine-plan editable">
-                                                            <div className="day-card animated-fade-in">
-                                                                <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
-                                                                <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
-                                                                    <li key={exIndex} className="exercise-item editable">
-                                                                        <div className="exercise-item-header">
-                                                                            <h4>Ejercicio {exIndex + 1}</h4>
-                                                                            <button
-                                                                                className="action-btn delete"
-                                                                                onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)}
-                                                                                aria-label={`Borrar ejercicio ${exIndex + 1}`}
-                                                                            >
-                                                                                Borrar
-                                                                            </button>
-                                                                        </div>
-                                                                        <div className="form-group">
-                                                                            <label>Ejercicio</label>
-                                                                             <select
-                                                                                className="exercise-input name-select"
-                                                                                value={ex.nombre}
-                                                                                onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}
-                                                                            >
-                                                                                 {Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (
-                                                                                    <optgroup key={group} label={group}>
-                                                                                        {exercises.map(exDef => (
-                                                                                            <option key={exDef.name} value={exDef.name}>{exDef.name}</option>
-                                                                                        ))}
-                                                                                    </optgroup>
-                                                                                ))}
-                                                                            </select>
-                                                                        </div>
-                                                                        <div className="exercise-details editable">
-                                                                            <span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span>
-                                                                            <span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span>
-                                                                            <span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span>
-                                                                        </div>
-                                                                         <div className="form-group">
-                                                                            <label>Técnica Avanzada</label>
-                                                                            <select
-                                                                                name="tecnicaAvanzada"
-                                                                                value={ex.tecnicaAvanzada || ''}
-                                                                                onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}
-                                                                            >
-                                                                                {advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}
-                                                                            </select>
-                                                                        </div>
-                                                                    </li>))}
-                                                                </ul>
-                                                                <div className="add-exercise-action">
-                                                                    <button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>
-                                                                        + Agregar Ejercicio
-                                                                    </button>
-                                                                </div>
-                                                                <p className="cardio-note">{selectedDay.cardio}</p>
-                                                            </div>
-                                                        </div>)}
-                                                    </div>)}
-                                                </div>
-                                            </div>
-                                        )
-                                    )}
-
-                                    {activeTab === 'nutrition' && (
-                                        !dietPlan ? (
-                                            <div className="placeholder-action">
-                                                <p>Todavía no hay un plan de nutrición para este cliente/a.</p>
-                                                <button className="cta-button" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>
-                                                    Generar plan de nutrición
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="diet-plan-container">
-                                                <header className="plan-header">
-                                                    <h2>{dietPlan.planTitle}</h2>
-                                                </header>
-                                                <div className="diet-summary">
-                                                    <div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div>
-                                                    <div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div>
-                                                    <div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div>
-                                                    <div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div>
-                                                </div>
-                                                <div className="meals-grid">
-                                                    {dietPlan.meals?.map((meal, index) => (
-                                                        <div key={index} className="meal-card">
-                                                            <h3>{meal.mealName}</h3>
-                                                            <ul>
-                                                                {meal.foodItems?.map((item, i) => (
-                                                                    <li key={i}>{item.food} <span>({item.amount})</span></li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (
-                                                    <div className="recommendations-section">
-                                                        <h4>💡 Recomendaciones clave</h4>
-                                                        <ul>
-                                                            {dietPlan.recommendations.map((rec, i) => (
-                                                                <li key={i}>{rec}</li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                <button className="cta-button regenerate" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>
-                                                    {loadingDiet ? <><span className="spinner small"></span>Regenerando...</> : "Volver a generar plan"}
-                                                </button>
-                                            </div>
-                                        )
-                                    )}
-                                </>
                             )}
                         </section>
                     </main>
@@ -2257,7 +1786,7 @@ const App = () => {
             );
         }
     
-        return <div className="login-container"><div className="spinner"></div></div>; // Fallback
+        return <div className="login-container"><div className="spinner"></div></div>;
     };
     
     return (
