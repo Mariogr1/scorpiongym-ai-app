@@ -152,16 +152,21 @@ export const apiClient = {
     }
   },
 
-  async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<void> {
+  async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<boolean> {
     try {
         const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dataToSave),
         });
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) {
+            console.error(`Failed to save client data for DNI ${dni}, server responded with error:`, await response.text());
+            return false;
+        }
+        return true;
     } catch (error) {
         console.error(`Failed to save client data for DNI ${dni}:`, error);
+        return false;
     }
   },
 
@@ -233,16 +238,21 @@ export const apiClient = {
     }
   },
 
-  async saveExerciseLibrary(library: ExerciseLibrary): Promise<void> {
+  async saveExerciseLibrary(library: ExerciseLibrary): Promise<boolean> {
     try {
         const response = await fetch('/api/library', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(library),
         });
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) {
+            console.error('Failed to save exercise library, server responded with error:', await response.text());
+            return false;
+        }
+        return true;
     } catch (error) {
         console.error(`Failed to save exercise library:`, error);
+        return false;
     }
   },
 };

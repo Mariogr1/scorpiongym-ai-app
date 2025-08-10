@@ -720,11 +720,13 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
         existingLog.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         const updatedClientData: Partial<ClientData> = { bodyWeightLog: existingLog };
-        await apiClient.saveClientData(clientDni, updatedClientData);
-        setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
-        setCurrentBodyWeight('');
-        setLogWeightText("✓");
-        setTimeout(() => setLogWeightText("Registrar"), 2000);
+        const success = await apiClient.saveClientData(clientDni, updatedClientData);
+        if (success) {
+            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
+            setCurrentBodyWeight('');
+            setLogWeightText("✓");
+            setTimeout(() => setLogWeightText("Registrar"), 2000);
+        }
     };
 
     const handleSaveProgress = async () => {
@@ -751,20 +753,24 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
 
         if (progressWasSaved) {
             const updatedClientData = { progressLog: newProgressLog };
-            await apiClient.saveClientData(clientDni, updatedClientData);
-            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
-            setDailyWeights({});
-            setDailyReps({});
-            setSaveProgressText("Guardado ✓");
-            setTimeout(() => setSaveProgressText("Guardar Progreso"), 2000);
+            const success = await apiClient.saveClientData(clientDni, updatedClientData);
+            if (success) {
+                setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
+                setDailyWeights({});
+                setDailyReps({});
+                setSaveProgressText("Guardado ✓");
+                setTimeout(() => setSaveProgressText("Guardar Progreso"), 2000);
+            }
         }
     };
     
     const handleAcceptTerms = async () => {
         if (!clientDni) return;
         const updatedClientData = { termsAccepted: true };
-        await apiClient.saveClientData(clientDni, updatedClientData);
-        setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
+        const success = await apiClient.saveClientData(clientDni, updatedClientData);
+        if (success) {
+            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
+        }
     };
 
     const routinePlanInfo = useMemo(() => {
@@ -1021,7 +1027,7 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
 };
 
 // 6. Nuevo Componente: Gestor de la Biblioteca de Ejercicios
-const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLibrary: ExerciseLibrary, onSave: (library: ExerciseLibrary) => void, onBack: () => void }) => {
+const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLibrary: ExerciseLibrary, onSave: (library: ExerciseLibrary) => Promise<boolean>, onBack: () => void }) => {
     const [library, setLibrary] = useState<ExerciseLibrary>(JSON.parse(JSON.stringify(initialLibrary)));
     const [saveButtonText, setSaveButtonText] = useState("Guardar Cambios");
     const [newExerciseName, setNewExerciseName] = useState('');
@@ -1112,10 +1118,17 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
         setDeleteConfirmation(null);
     };
 
-    const handleSave = () => {
-        onSave(library);
-        setSaveButtonText("Guardado ✓");
-        setTimeout(() => setSaveButtonText("Guardar Cambios"), 2000);
+    const handleSave = async () => {
+        setSaveButtonText("Guardando...");
+        const success = await onSave(library);
+        if (success) {
+            setSaveButtonText("Guardado ✓");
+            setTimeout(() => setSaveButtonText("Guardar Cambios"), 2000);
+        } else {
+            setSaveButtonText("Error al Guardar");
+            setTimeout(() => setSaveButtonText("Guardar Cambios"), 3000);
+            alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs de Vercel para más detalles.");
+        }
     };
 
     return (
@@ -1132,7 +1145,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
                     <h1>Biblioteca de Ejercicios</h1>
                     <p>Gestioná los ejercicios disponibles y sus videos.</p>
                 </div>
-                 <button onClick={handleSave} className={`save-changes-button ${saveButtonText === 'Guardado ✓' ? 'saved' : ''}`}>
+                 <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={saveButtonText === "Guardando..."}>
                     {saveButtonText}
                 </button>
             </header>
@@ -1429,10 +1442,14 @@ const App = () => {
         setSelectedClients(new Set());
     };
 
-    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary) => {
-        await apiClient.saveExerciseLibrary(updatedLibrary);
-        setExerciseLibrary(updatedLibrary);
+    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary): Promise<boolean> => {
+        const success = await apiClient.saveExerciseLibrary(updatedLibrary);
+        if (success) {
+            setExerciseLibrary(updatedLibrary);
+        }
+        return success;
     };
+
 
     const filteredClients = clients
         .filter(client => (client.status || 'active') === viewMode)
@@ -1488,9 +1505,15 @@ const App = () => {
 
     const handleSaveChanges = async () => {
         if (!selectedClientDNI) return;
-        await apiClient.saveClientData(selectedClientDNI, { profile: profile!, routine, dietPlan });
-        setSaveButtonText("Guardado ✓");
-        setTimeout(() => setSaveButtonText("Guardar cambios"), 2000);
+        setSaveButtonText("Guardando...");
+        const success = await apiClient.saveClientData(selectedClientDNI, { profile: profile!, routine, dietPlan });
+        if (success) {
+            setSaveButtonText("Guardado ✓");
+        } else {
+            setSaveButtonText("Error al Guardar");
+            alert("No se pudieron guardar los cambios del cliente. Revisa la consola del navegador y los logs de Vercel.");
+        }
+        setTimeout(() => setSaveButtonText("Guardar cambios"), 3000);
     };
     
     const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
@@ -1728,7 +1751,7 @@ const App = () => {
                     <main className="main-content">
                       <div className="actions-bar">
                         <button className="cta-button" onClick={handleGenerateRoutine} disabled={!isFormValid || isLoading}>{loadingRoutine ? <><span className="spinner small"></span>Armando rutina...</> : (routine ? "Volver a generar rutina" : "Generar rutina")}</button>
-                        <button className={`save-changes-button ${saveButtonText === 'Guardado ✓' ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading}>{saveButtonText}</button>
+                        <button className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading || saveButtonText === "Guardando..."}>{saveButtonText}</button>
                       </div>
                       
                         <div className="main-tabs-nav">
