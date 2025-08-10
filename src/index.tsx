@@ -1,3 +1,4 @@
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
@@ -1038,37 +1039,36 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ group: string; index: number; name: string } | null>(null);
 
     const handleLinkChange = (group: string, index: number, link: string) => {
-        const newLibrary = { ...library };
-        newLibrary[group][index].youtubeLink = link;
-        setLibrary(newLibrary);
+        setLibrary(prev => {
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group][index].youtubeLink = link;
+            return newLibrary;
+        });
     };
 
     const handleEnabledChange = (group: string, index: number, isEnabled: boolean) => {
-        const newLibrary = { ...library };
-        newLibrary[group][index].isEnabled = isEnabled;
-        setLibrary(newLibrary);
+        setLibrary(prev => {
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group][index].isEnabled = isEnabled;
+            return newLibrary;
+        });
     };
     
     const handleAddNewExercise = () => {
         const trimmedName = newExerciseName.trim();
         if (!trimmedName || !selectedMuscleGroup) return;
 
-        const newLibrary = { ...library };
-        const groupExercises = newLibrary[selectedMuscleGroup];
-
-        if (groupExercises.some(ex => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
-            alert('Este ejercicio ya existe en este grupo muscular.');
-            return;
-        }
-
-        newLibrary[selectedMuscleGroup].push({
-            name: trimmedName,
-            isEnabled: true,
-            youtubeLink: ''
+        setLibrary(prev => {
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            const groupExercises = newLibrary[selectedMuscleGroup];
+            if (groupExercises.some(ex => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
+                alert('Este ejercicio ya existe en este grupo muscular.');
+                return prev;
+            }
+            groupExercises.push({ name: trimmedName, isEnabled: true, youtubeLink: '' });
+            groupExercises.sort((a, b) => a.name.localeCompare(b.name));
+            return newLibrary;
         });
-        
-        newLibrary[selectedMuscleGroup].sort((a, b) => a.name.localeCompare(b.name));
-        setLibrary(newLibrary);
         setNewExerciseName('');
     };
 
@@ -1087,21 +1087,19 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
             handleCancelEdit();
             return;
         }
-        
         const { group, index } = editingExercise;
-        const newLibrary = { ...library };
-
-        const isDuplicate = newLibrary[group]
-            .some((ex, i) => i !== index && ex.name.toLowerCase() === editingText.trim().toLowerCase());
-        
-        if (isDuplicate) {
-            alert("Ya existe un ejercicio con este nombre en el grupo.");
-            return;
-        }
-        
-        newLibrary[group][index].name = editingText.trim();
-        newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
-        setLibrary(newLibrary);
+        setLibrary(prev => {
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            const isDuplicate = newLibrary[group]
+                .some((ex, i) => i !== index && ex.name.toLowerCase() === editingText.trim().toLowerCase());
+            if (isDuplicate) {
+                alert("Ya existe un ejercicio con este nombre en el grupo.");
+                return prev;
+            }
+            newLibrary[group][index].name = editingText.trim();
+            newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
+            return newLibrary;
+        });
         handleCancelEdit();
     };
 
@@ -1112,9 +1110,11 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     const confirmDelete = () => {
         if (!deleteConfirmation) return;
         const { group, index } = deleteConfirmation;
-        const newLibrary = { ...library };
-        newLibrary[group].splice(index, 1);
-        setLibrary(newLibrary);
+        setLibrary(prev => {
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group].splice(index, 1);
+            return newLibrary;
+        });
         setDeleteConfirmation(null);
     };
 
