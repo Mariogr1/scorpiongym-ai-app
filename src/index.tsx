@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
@@ -1246,24 +1247,31 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
             </div>
             
             <div className="add-exercise-container">
-                <h3>Agregar Nuevo Ejercicio</h3>
-                <div className="add-exercise-form">
-                    <input 
-                        type="text" 
-                        placeholder="Nombre del nuevo ejercicio" 
-                        value={newExerciseName}
-                        onChange={(e) => setNewExerciseName(e.target.value)}
-                    />
-                    <select 
-                        value={selectedMuscleGroup} 
-                        onChange={(e) => setSelectedMuscleGroup(e.target.value)}
-                    >
-                        {Object.keys(library).map(group => (
-                            <option key={group} value={group}>{group}</option>
-                        ))}
-                    </select>
-                    <button onClick={handleAddNewExercise} disabled={!newExerciseName.trim()}>
-                        Agregar
+                <div className="add-exercise-form-wrapper">
+                    <h3>Agregar Nuevo Ejercicio</h3>
+                    <div className="add-exercise-form">
+                        <input 
+                            type="text" 
+                            placeholder="Nombre del nuevo ejercicio" 
+                            value={newExerciseName}
+                            onChange={(e) => setNewExerciseName(e.target.value)}
+                        />
+                        <select 
+                            value={selectedMuscleGroup} 
+                            onChange={(e) => setSelectedMuscleGroup(e.target.value)}
+                        >
+                            {Object.keys(library).map(group => (
+                                <option key={group} value={group}>{group}</option>
+                            ))}
+                        </select>
+                        <button onClick={handleAddNewExercise} disabled={!newExerciseName.trim()}>
+                            Agregar
+                        </button>
+                    </div>
+                </div>
+                <div className="library-save-action">
+                    <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
+                        {saveButtonText}
                     </button>
                 </div>
             </div>
@@ -1296,6 +1304,7 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                                         onChange={(e) => setEditingText(e.target.value)}
                                         className="editing-input"
                                         autoFocus
+                                        onBlur={handleSaveEdit}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                                     />
                                 ) : (
@@ -1328,11 +1337,6 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                     </div>
                 </div>
             ))}
-            <div className="library-save-action">
-                <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
-                    {saveButtonText}
-                </button>
-            </div>
         </div>
     );
 };

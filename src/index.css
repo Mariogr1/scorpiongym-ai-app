@@ -1214,11 +1214,20 @@ body {
 }
 
 .add-exercise-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2rem;
     background-color: var(--surface-color);
     padding: 1.5rem;
     border-radius: 8px;
     margin-bottom: 2rem;
     border: 1px solid var(--border-color);
+}
+
+.add-exercise-form-wrapper {
+    flex: 1 1 500px;
 }
 
 .add-exercise-container h3 {
@@ -1358,11 +1367,10 @@ body {
 .action-btn.cancel { background-color: var(--secondary-button-color); color: white; border-color: var(--secondary-button-color); }
 
 .library-save-action {
-    margin-top: 2.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    justify-content: flex-end;
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-shrink: 0;
 }
 
 
@@ -1556,6 +1564,12 @@ input:checked + .slider:before {
         border-bottom: 1px solid var(--border-color);
     }
     
+    .add-exercise-container {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.5rem;
+    }
+
     .add-exercise-form {
         flex-direction: column;
         align-items: stretch;
