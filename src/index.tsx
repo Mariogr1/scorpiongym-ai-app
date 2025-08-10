@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
@@ -1028,17 +1029,35 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
 };
 
 // 6. Nuevo Componente: Gestor de la Biblioteca de Ejercicios
-const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLibrary: ExerciseLibrary, onSave: (library: ExerciseLibrary) => Promise<boolean>, onBack: () => void }) => {
-    const [library, setLibrary] = useState<ExerciseLibrary>(JSON.parse(JSON.stringify(initialLibrary)));
+const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: ExerciseLibrary) => Promise<boolean>, onBack: () => void }) => {
+    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
     const [saveButtonText, setSaveButtonText] = useState("Guardar Cambios");
     const [newExerciseName, setNewExerciseName] = useState('');
-    const [selectedMuscleGroup, setSelectedMuscleGroup] = useState(Object.keys(initialLibrary)[0] || '');
+    const [selectedMuscleGroup, setSelectedMuscleGroup] = useState('');
     
     const [editingExercise, setEditingExercise] = useState<{ group: string; index: number } | null>(null);
     const [editingText, setEditingText] = useState('');
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ group: string; index: number; name: string } | null>(null);
 
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            setIsLoading(true);
+            const data = await apiClient.getExerciseLibrary();
+             if (data && Object.keys(data).length > 0) {
+                setLibrary(data);
+                setSelectedMuscleGroup(Object.keys(data)[0] || '');
+            } else {
+                setLibrary({});
+            }
+            setIsLoading(false);
+        };
+        fetchLibrary();
+    }, []);
+
+
     const handleLinkChange = (group: string, index: number, link: string) => {
+        if (!library) return;
         setLibrary(prev => {
             const newLibrary = JSON.parse(JSON.stringify(prev));
             newLibrary[group][index].youtubeLink = link;
@@ -1047,6 +1066,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
 
     const handleEnabledChange = (group: string, index: number, isEnabled: boolean) => {
+        if (!library) return;
         setLibrary(prev => {
             const newLibrary = JSON.parse(JSON.stringify(prev));
             newLibrary[group][index].isEnabled = isEnabled;
@@ -1055,6 +1075,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
     
     const handleAddNewExercise = () => {
+        if (!library) return;
         const trimmedName = newExerciseName.trim();
         if (!trimmedName || !selectedMuscleGroup) return;
 
@@ -1073,6 +1094,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
 
     const handleStartEdit = (group: string, index: number) => {
+        if (!library) return;
         setEditingExercise({ group, index });
         setEditingText(library[group][index].name);
     };
@@ -1083,7 +1105,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
 
     const handleSaveEdit = () => {
-        if (!editingExercise || !editingText.trim()) {
+        if (!editingExercise || !editingText.trim() || !library) {
             handleCancelEdit();
             return;
         }
@@ -1104,11 +1126,12 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
 
     const handleDeleteRequest = (group: string, index: number) => {
+        if (!library) return;
         setDeleteConfirmation({ group, index, name: library[group][index].name });
     };
 
     const confirmDelete = () => {
-        if (!deleteConfirmation) return;
+        if (!deleteConfirmation || !library) return;
         const { group, index } = deleteConfirmation;
         setLibrary(prev => {
             const newLibrary = JSON.parse(JSON.stringify(prev));
@@ -1119,6 +1142,7 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
     };
 
     const handleSave = async () => {
+        if (!library) return;
         setSaveButtonText("Guardando...");
         const success = await onSave(library);
         if (success) {
@@ -1130,6 +1154,33 @@ const ExerciseLibraryManager = ({ initialLibrary, onSave, onBack }: { initialLib
             alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs de Vercel para más detalles.");
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="library-container">
+                 <header className="main-header">
+                     <button onClick={onBack} className="back-button">← Volver al Panel</button>
+                 </header>
+                <div className="loading-container">
+                    <div className="spinner"></div>
+                    <p>Cargando biblioteca de ejercicios...</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (!library) {
+         return (
+             <div className="library-container">
+                 <header className="main-header">
+                     <button onClick={onBack} className="back-button">← Volver al Panel</button>
+                 </header>
+                 <div className="error-container">
+                     <p>No se pudo cargar la biblioteca de ejercicios. Por favor, intentá de nuevo.</p>
+                 </div>
+             </div>
+        );
+    }
 
     return (
         <div className="library-container">
@@ -1481,8 +1532,12 @@ const App = () => {
         setSelectedClientDNI(null);
         setCurrentView('adminDashboard');
         setAdminView('dashboard');
-        const clientsData = await apiClient.getClients();
+        const [clientsData, libraryData] = await Promise.all([
+            apiClient.getClients(),
+            apiClient.getExerciseLibrary()
+        ]);
         setClients(clientsData);
+        setExerciseLibrary(libraryData);
     };
     
     const isFormValid = useMemo(() => {
@@ -1642,9 +1697,8 @@ const App = () => {
         if (currentView === 'adminDashboard') {
             if (adminView === 'library') {
                  return <ExerciseLibraryManager 
-                            initialLibrary={exerciseLibrary} 
                             onSave={handleSaveLibrary} 
-                            onBack={() => setAdminView('dashboard')} 
+                            onBack={handleBackToDashboard} 
                         />;
             }
 
