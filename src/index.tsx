@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect } from "react";
@@ -1073,18 +1074,18 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     const handleLinkChange = (group: string, index: number, link: string) => {
         setLibrary(prev => {
             if (!prev) return null;
-            const newGroup = [...prev[group]];
-            newGroup[index] = { ...newGroup[index], youtubeLink: link };
-            return { ...prev, [group]: newGroup };
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group][index].youtubeLink = link;
+            return newLibrary;
         });
     };
 
     const handleEnabledChange = (group: string, index: number, isEnabled: boolean) => {
         setLibrary(prev => {
             if (!prev) return null;
-            const newGroup = [...prev[group]];
-            newGroup[index] = { ...newGroup[index], isEnabled: isEnabled };
-            return { ...prev, [group]: newGroup };
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group][index].isEnabled = isEnabled;
+            return newLibrary;
         });
     };
     
@@ -1092,19 +1093,24 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
         if (!library || !newExerciseName.trim() || !selectedMuscleGroup) return;
 
         const trimmedName = newExerciseName.trim();
-        const groupExercises = library[selectedMuscleGroup] || [];
-        if (groupExercises.some(ex => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
-            alert('Este ejercicio ya existe en este grupo muscular.');
-            return;
-        }
+        
+        setLibrary(prevLibrary => {
+            if (!prevLibrary) return null;
+            const newLibrary = JSON.parse(JSON.stringify(prevLibrary));
+            const groupExercises = newLibrary[selectedMuscleGroup] || [];
+            
+            if (groupExercises.some((ex: ExerciseDefinition) => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
+                alert('Este ejercicio ya existe en este grupo muscular.');
+                return prevLibrary; // Return original state if duplicate
+            }
 
-        const newExercise: ExerciseDefinition = { name: trimmedName, isEnabled: true, youtubeLink: '' };
-        const updatedGroupExercises = [...groupExercises, newExercise].sort((a, b) => a.name.localeCompare(b.name));
-
-        setLibrary(prevLibrary => ({
-            ...prevLibrary!,
-            [selectedMuscleGroup]: updatedGroupExercises
-        }));
+            const newExercise: ExerciseDefinition = { name: trimmedName, isEnabled: true, youtubeLink: '' };
+            groupExercises.push(newExercise);
+            groupExercises.sort((a: ExerciseDefinition, b: ExerciseDefinition) => a.name.localeCompare(b.name));
+            newLibrary[selectedMuscleGroup] = groupExercises;
+            
+            return newLibrary;
+        });
         setNewExerciseName('');
     };
 
@@ -1124,20 +1130,21 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
             handleCancelEdit();
             return;
         }
+
         const { group, index } = editingExercise;
         const newName = editingText.trim();
-        if (library[group].some((ex, i) => i !== index && ex.name.toLowerCase() === newName.toLowerCase())) {
-            alert("Ya existe un ejercicio con este nombre en el grupo.");
-            handleCancelEdit();
-            return;
-        }
 
         setLibrary(prev => {
             if (!prev) return null;
-            const newGroup = [...prev[group]];
-            newGroup[index] = { ...newGroup[index], name: newName };
-            newGroup.sort((a, b) => a.name.localeCompare(b.name));
-            return { ...prev, [group]: newGroup };
+            if (prev[group].some((ex: ExerciseDefinition, i: number) => i !== index && ex.name.toLowerCase() === newName.toLowerCase())) {
+                alert("Ya existe un ejercicio con este nombre en el grupo.");
+                return prev;
+            }
+            
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group][index].name = newName;
+            newLibrary[group].sort((a: ExerciseDefinition, b: ExerciseDefinition) => a.name.localeCompare(b.name));
+            return newLibrary;
         });
         handleCancelEdit();
     };
@@ -1148,14 +1155,14 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     };
 
     const confirmDelete = () => {
-        if (!deleteConfirmation || !library) return;
+        if (!deleteConfirmation) return;
         const { group, index } = deleteConfirmation;
         
         setLibrary(prev => {
             if (!prev) return null;
-            const newGroup = [...prev[group]];
-            newGroup.splice(index, 1);
-            return { ...prev, [group]: newGroup };
+            const newLibrary = JSON.parse(JSON.stringify(prev));
+            newLibrary[group].splice(index, 1);
+            return newLibrary;
         });
         setDeleteConfirmation(null);
     };
@@ -1232,9 +1239,6 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                     <h1>Biblioteca de Ejercicios</h1>
                     <p>Gestioná los ejercicios disponibles y sus videos.</p>
                 </div>
-                 <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
-                    {saveButtonText}
-                </button>
             </header>
             
             <div className="library-instructions">
@@ -1324,6 +1328,11 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                     </div>
                 </div>
             ))}
+            <div className="library-save-action">
+                <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
+                    {saveButtonText}
+                </button>
+            </div>
         </div>
     );
 };
