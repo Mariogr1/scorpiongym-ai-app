@@ -1292,7 +1292,6 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                                         onChange={(e) => setEditingText(e.target.value)}
                                         className="editing-input"
                                         autoFocus
-                                        onBlur={handleSaveEdit}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
                                     />
                                 ) : (
