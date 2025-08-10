@@ -21,7 +21,8 @@ import {
     ProgressLog,
     BodyWeightEntry,
     ExerciseLibrary,
-    ProgressLogEntry
+    ProgressLogEntry,
+    ExerciseDefinition
 } from './apiClient';
 
 
@@ -1055,41 +1056,41 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
         fetchLibrary();
     }, []);
 
-
     const handleLinkChange = (group: string, index: number, link: string) => {
-        if (!library) return;
         setLibrary(prev => {
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group][index].youtubeLink = link;
-            return newLibrary;
+            if (!prev) return null;
+            const newGroup = [...prev[group]];
+            newGroup[index] = { ...newGroup[index], youtubeLink: link };
+            return { ...prev, [group]: newGroup };
         });
     };
 
     const handleEnabledChange = (group: string, index: number, isEnabled: boolean) => {
-        if (!library) return;
         setLibrary(prev => {
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group][index].isEnabled = isEnabled;
-            return newLibrary;
+            if (!prev) return null;
+            const newGroup = [...prev[group]];
+            newGroup[index] = { ...newGroup[index], isEnabled: isEnabled };
+            return { ...prev, [group]: newGroup };
         });
     };
     
     const handleAddNewExercise = () => {
-        if (!library) return;
-        const trimmedName = newExerciseName.trim();
-        if (!trimmedName || !selectedMuscleGroup) return;
+        if (!library || !newExerciseName.trim() || !selectedMuscleGroup) return;
 
-        setLibrary(prev => {
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            const groupExercises = newLibrary[selectedMuscleGroup];
-            if (groupExercises.some(ex => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
-                alert('Este ejercicio ya existe en este grupo muscular.');
-                return prev;
-            }
-            groupExercises.push({ name: trimmedName, isEnabled: true, youtubeLink: '' });
-            groupExercises.sort((a, b) => a.name.localeCompare(b.name));
-            return newLibrary;
-        });
+        const trimmedName = newExerciseName.trim();
+        const groupExercises = library[selectedMuscleGroup] || [];
+        if (groupExercises.some(ex => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
+            alert('Este ejercicio ya existe en este grupo muscular.');
+            return;
+        }
+
+        const newExercise: ExerciseDefinition = { name: trimmedName, isEnabled: true, youtubeLink: '' };
+        const updatedGroupExercises = [...groupExercises, newExercise].sort((a, b) => a.name.localeCompare(b.name));
+
+        setLibrary(prevLibrary => ({
+            ...prevLibrary!,
+            [selectedMuscleGroup]: updatedGroupExercises
+        }));
         setNewExerciseName('');
     };
 
@@ -1110,17 +1111,19 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
             return;
         }
         const { group, index } = editingExercise;
+        const newName = editingText.trim();
+        if (library[group].some((ex, i) => i !== index && ex.name.toLowerCase() === newName.toLowerCase())) {
+            alert("Ya existe un ejercicio con este nombre en el grupo.");
+            handleCancelEdit();
+            return;
+        }
+
         setLibrary(prev => {
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            const isDuplicate = newLibrary[group]
-                .some((ex, i) => i !== index && ex.name.toLowerCase() === editingText.trim().toLowerCase());
-            if (isDuplicate) {
-                alert("Ya existe un ejercicio con este nombre en el grupo.");
-                return prev;
-            }
-            newLibrary[group][index].name = editingText.trim();
-            newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
-            return newLibrary;
+            if (!prev) return null;
+            const newGroup = [...prev[group]];
+            newGroup[index] = { ...newGroup[index], name: newName };
+            newGroup.sort((a, b) => a.name.localeCompare(b.name));
+            return { ...prev, [group]: newGroup };
         });
         handleCancelEdit();
     };
@@ -1133,10 +1136,12 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     const confirmDelete = () => {
         if (!deleteConfirmation || !library) return;
         const { group, index } = deleteConfirmation;
+        
         setLibrary(prev => {
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group].splice(index, 1);
-            return newLibrary;
+            if (!prev) return null;
+            const newGroup = [...prev[group]];
+            newGroup.splice(index, 1);
+            return { ...prev, [group]: newGroup };
         });
         setDeleteConfirmation(null);
     };
