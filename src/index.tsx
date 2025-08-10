@@ -58,11 +58,15 @@ const ConfirmationModal = ({
   message,
   onConfirm,
   onCancel,
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
 }: {
   isOpen: boolean;
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
 }) => {
   if (!isOpen) return null;
 
@@ -72,10 +76,10 @@ const ConfirmationModal = ({
         <p>{message}</p>
         <div className="modal-actions">
           <button className="cta-button secondary" onClick={onCancel}>
-            Cancelar
+            {cancelText}
           </button>
           <button className="cta-button" onClick={onConfirm}>
-            Confirmar
+            {confirmText}
           </button>
         </div>
       </div>
@@ -1032,6 +1036,7 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
 // 6. Nuevo Componente: Gestor de la Biblioteca de Ejercicios
 const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: ExerciseLibrary) => Promise<boolean>, onBack: () => void }) => {
     const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
+    const [originalLibrary, setOriginalLibrary] = useState<ExerciseLibrary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [saveButtonText, setSaveButtonText] = useState("Guardar Cambios");
     const [newExerciseName, setNewExerciseName] = useState('');
@@ -1040,16 +1045,25 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     const [editingExercise, setEditingExercise] = useState<{ group: string; index: number } | null>(null);
     const [editingText, setEditingText] = useState('');
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ group: string; index: number; name: string } | null>(null);
+    const [isUnsavedChangesModalOpen, setUnsavedChangesModalOpen] = useState(false);
+    
+    const isDirty = useMemo(() => {
+        if (!library || !originalLibrary) return false;
+        return JSON.stringify(library) !== JSON.stringify(originalLibrary);
+    }, [library, originalLibrary]);
 
     useEffect(() => {
         const fetchLibrary = async () => {
             setIsLoading(true);
             const data = await apiClient.getExerciseLibrary();
              if (data && Object.keys(data).length > 0) {
+                const deepCopy = JSON.parse(JSON.stringify(data));
                 setLibrary(data);
+                setOriginalLibrary(deepCopy);
                 setSelectedMuscleGroup(Object.keys(data)[0] || '');
             } else {
                 setLibrary({});
+                setOriginalLibrary({});
             }
             setIsLoading(false);
         };
@@ -1147,16 +1161,25 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     };
 
     const handleSave = async () => {
-        if (!library) return;
+        if (!library || !isDirty) return;
         setSaveButtonText("Guardando...");
         const success = await onSave(library);
         if (success) {
             setSaveButtonText("Guardado ✓");
+            setOriginalLibrary(JSON.parse(JSON.stringify(library)));
             setTimeout(() => setSaveButtonText("Guardar Cambios"), 2000);
         } else {
             setSaveButtonText("Error al Guardar");
             setTimeout(() => setSaveButtonText("Guardar Cambios"), 3000);
             alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs de Vercel para más detalles.");
+        }
+    };
+    
+    const handleAttemptBackNavigation = () => {
+        if (isDirty) {
+            setUnsavedChangesModalOpen(true);
+        } else {
+            onBack();
         }
     };
 
@@ -1195,13 +1218,21 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
                 onConfirm={confirmDelete}
                 onCancel={() => setDeleteConfirmation(null)}
             />
+            <ConfirmationModal
+                isOpen={isUnsavedChangesModalOpen}
+                message="Tenés cambios sin guardar. ¿Estás seguro de que querés salir y descartarlos?"
+                onConfirm={onBack}
+                onCancel={() => setUnsavedChangesModalOpen(false)}
+                confirmText="Salir sin guardar"
+                cancelText="Quedarme"
+            />
             <header className="main-header">
-                <button onClick={onBack} className="back-button">← Volver al Panel</button>
+                <button onClick={handleAttemptBackNavigation} className="back-button">← Volver al Panel</button>
                  <div className="header-title-wrapper">
                     <h1>Biblioteca de Ejercicios</h1>
                     <p>Gestioná los ejercicios disponibles y sus videos.</p>
                 </div>
-                 <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={saveButtonText === "Guardando..."}>
+                 <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
                     {saveButtonText}
                 </button>
             </header>
