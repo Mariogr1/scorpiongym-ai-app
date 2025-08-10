@@ -124,66 +124,6 @@ export const advancedTechniqueOptions = [
       { value: 'Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.', label: 'Excéntricas (Negativas)' }
 ];
 
-export const DEFAULT_EXERCISE_LIBRARY: ExerciseLibrary = {
-    "Pecho": [
-        { name: "Press de banca plano con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Press inclinado con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Aperturas con mancuernas en banco plano", isEnabled: true, youtubeLink: "" },
-        { name: "Fondos en paralelas (Dips)", isEnabled: true, youtubeLink: "" },
-        { name: "Press declinado con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Cruce de poleas (crossover)", isEnabled: true, youtubeLink: "" },
-        { name: "Flexiones de brazos (Push-ups)", isEnabled: true, youtubeLink: "" },
-        { name: "Press en máquina hammer", isEnabled: true, youtubeLink: "" }
-    ],
-    "Espalda": [
-        { name: "Dominadas (Pull-ups)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo con barra (inclinado)", isEnabled: true, youtubeLink: "" },
-        { name: "Jalón al pecho (Polea alta)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo en punta con barra T", isEnabled: true, youtubeLink: "" },
-        { name: "Remo con mancuerna a una mano", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto convencional", isEnabled: true, youtubeLink: "" },
-        { name: "Pull-over con mancuerna", isEnabled: true, youtubeLink: "" },
-        { name: "Remo sentado en polea (agarre estrecho)", isEnabled: true, youtubeLink: "" }
-    ],
-    "Hombros": [
-        { name: "Press militar con barra (de pie)", isEnabled: true, youtubeLink: "" },
-        { name: "Press Arnold con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevaciones laterales con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevaciones frontales con disco", isEnabled: true, youtubeLink: "" },
-        { name: "Pájaros (Bent-over reverse flyes)", isEnabled: true, youtubeLink: "" },
-        { name: "Remo al mentón con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Face pulls en polea", isEnabled: true, youtubeLink: "" },
-        { name: "Press en máquina de hombros", isEnabled: true, youtubeLink: "" }
-    ],
-    "Piernas": [
-        { name: "Sentadilla libre con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Prensa de piernas a 45 grados", isEnabled: true, youtubeLink: "" },
-        { name: "Zancadas (lunges) con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Extensiones de cuádriceps en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Curl femoral tumbado en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto rumano con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Elevación de talones (gemelos) de pie", isEnabled: true, youtubeLink: "" },
-        { name: "Sentadilla búlgara con mancuernas", isEnabled: true, youtubeLink: "" }
-    ],
-    "Glúteos": [
-        { name: "Hip thrust con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Patada de glúteo en polea", isEnabled: true, youtubeLink: "" },
-        { name: "Abducción de cadera en máquina", isEnabled: true, youtubeLink: "" },
-        { name: "Peso muerto sumo con mancuerna", isEnabled: true, youtubeLink: "" },
-        { name: "Puente de glúteos con disco", isEnabled: true, youtubeLink: "" }
-    ],
-    "Brazos (Bíceps y Tríceps)": [
-        { name: "Curl de bíceps con barra recta", isEnabled: true, youtubeLink: "" },
-        { name: "Press francés con barra Z", isEnabled: true, youtubeLink: "" },
-        { name: "Curl martillo con mancuernas", isEnabled: true, youtubeLink: "" },
-        { name: "Extensiones de tríceps en polea alta con soga", isEnabled: true, youtubeLink: "" },
-        { name: "Curl de bíceps concentrado", isEnabled: true, youtubeLink: "" },
-        { name: "Fondos entre bancos", isEnabled: true, youtubeLink: "" },
-        { name: "Curl predicador (Scott) con barra Z", isEnabled: true, youtubeLink: "" },
-        { name: "Patada de tríceps con mancuerna", isEnabled: true, youtubeLink: "" }
-    ]
-};
-
 export const apiClient = {
   // Client Management
   async getClients(): Promise<ClientListItem[]> {
@@ -280,18 +220,29 @@ export const apiClient = {
     }
   },
 
-  // Exercise Library Management (still uses localStorage for simplicity)
+  // Exercise Library Management (uses MongoDB via API)
   async getExerciseLibrary(): Promise<ExerciseLibrary> {
-    const storedLibrary = localStorage.getItem('gym_ai_exercise_library');
-    if (storedLibrary) {
-        return JSON.parse(storedLibrary);
-    } else {
-        localStorage.setItem('gym_ai_exercise_library', JSON.stringify(DEFAULT_EXERCISE_LIBRARY));
-        return DEFAULT_EXERCISE_LIBRARY;
+    try {
+        const response = await fetch('/api/library');
+        if (!response.ok) throw new Error('Network response was not ok');
+        const library: ExerciseLibrary = await response.json();
+        return library;
+    } catch (error) {
+        console.error("Failed to fetch exercise library:", error);
+        return {};
     }
   },
 
   async saveExerciseLibrary(library: ExerciseLibrary): Promise<void> {
-    localStorage.setItem('gym_ai_exercise_library', JSON.stringify(library));
+    try {
+        const response = await fetch('/api/library', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(library),
+        });
+        if (!response.ok) throw new Error('Network response was not ok');
+    } catch (error) {
+        console.error(`Failed to save exercise library:`, error);
+    }
   },
 };
