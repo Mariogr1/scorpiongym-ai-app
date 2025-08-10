@@ -15,6 +15,7 @@ export default async function handler(req, res) {
         }
         res.status(200).json(clientData);
       } catch (e) {
+        console.error(`API /api/clients/${dni} [GET] Error:`, e);
         res.status(500).json({ error: 'Unable to fetch client data' });
       }
       break;
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
 
         res.status(200).json({ success: true });
       } catch (e) {
+        console.error(`API /api/clients/${dni} [PUT] Error:`, e);
         res.status(500).json({ error: 'Unable to update client data' });
       }
       break;
@@ -50,6 +52,7 @@ export default async function handler(req, res) {
 
         res.status(200).json({ success: true });
       } catch (e) {
+        console.error(`API /api/clients/${dni} [DELETE] Error:`, e);
         res.status(500).json({ error: 'Unable to delete client' });
       }
       break;

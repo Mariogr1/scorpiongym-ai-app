@@ -17,6 +17,7 @@ export default async function handler(req, res) {
         }));
         res.status(200).json(clientList);
       } catch (e) {
+        console.error("API /api/clients [GET] Error:", e);
         res.status(500).json({ error: 'Unable to fetch clients' });
       }
       break;
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
         await collection.insertOne(newClient);
         res.status(201).json({ success: true, client: newClient });
       } catch (e) {
+        console.error("API /api/clients [POST] Error:", e);
         res.status(500).json({ error: 'Unable to create client' });
       }
       break;

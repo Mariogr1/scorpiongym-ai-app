@@ -73,6 +73,7 @@ export default async function handler(req, res) {
         let libraryDoc = await collection.findOne({ _id: LIBRARY_DOC_ID });
 
         if (!libraryDoc) {
+          console.log("No exercise library found, creating default one...");
           const newLibrary = { _id: LIBRARY_DOC_ID, data: DEFAULT_EXERCISE_LIBRARY };
           await collection.insertOne(newLibrary);
           libraryDoc = newLibrary;
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
         
         res.status(200).json(libraryDoc.data);
       } catch (e) {
-        console.error("Error fetching exercise library:", e);
+        console.error("API /api/library [GET] Error:", e);
         res.status(500).json({ error: 'Unable to fetch exercise library' });
       }
       break;
@@ -100,7 +101,7 @@ export default async function handler(req, res) {
 
         res.status(200).json({ success: true });
       } catch (e) {
-        console.error("Error saving exercise library:", e);
+        console.error("API /api/library [POST] Error:", e);
         res.status(500).json({ error: 'Unable to save exercise library' });
       }
       break;
