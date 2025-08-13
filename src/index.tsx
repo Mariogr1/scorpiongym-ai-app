@@ -1013,89 +1013,105 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
             </div>
 
             {activeTab === 'training' && routine && (
-                <div className="phases-container-client">
+                <div className="plan-container">
                      <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p></header>
                      <div className="phases-container">
-                         <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
-                         {selectedPhase && (
-                         <div className="phase-tab-content">
-                             <div className="day-tabs-nav">
-                                 {selectedPhase.routine.dias.map((day, dayIndex) => (
-                                     <button 
-                                         key={dayIndex} 
-                                         className={`day-tab-button ${dayIndex === selectedDayIndex ? 'active' : ''}`}
-                                         onClick={() => setSelectedDayIndex(dayIndex)}>
-                                         {day.dia}
-                                     </button>
-                                 ))}
-                             </div>
-                             {selectedDay && (
-                                <div className="routine-plan">
-                                     <div className="day-card animated-fade-in">
-                                       <h4>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h4>
-                                       <ul className="exercise-list">
-                                           {selectedDay.ejercicios.map((exercise, i) => {
-                                                const history = progressLog?.[exercise.nombre] || [];
-                                                const lastEntry = history.length > 0 ? history[history.length - 1] : null;
-                                                const lastWeight = lastEntry ? `Últ.: ${lastEntry.weight}kg` : 'kg';
-                                                const lastReps = lastEntry ? `Últ.: ${lastEntry.repetitions}` : 'reps';
-                                                const videoLink = flatExerciseLibrary.find(def => def.name === exercise.nombre)?.youtubeLink;
-
-                                                return (
-                                                <li key={i} className="exercise-item">
-                                                    <div className="exercise-name-wrapper">
-                                                        <p className="exercise-name">{exercise.nombre}</p>
-                                                        {videoLink && (
-                                                          <a href={videoLink} target="_blank" rel="noopener noreferrer" className="video-link" aria-label={`Ver video de ${exercise.nombre}`}>
-                                                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
-                                                          </a>
-                                                        )}
+                        <div className="accordion-phases">
+                            {routine.phases.map((phase, index) => (
+                                <div key={index} className="accordion-item">
+                                    <button
+                                        className={`accordion-header ${index === selectedPhaseTabIndex ? 'active' : ''}`}
+                                        onClick={() => setSelectedPhaseTabIndex(prev => prev === index ? -1 : index)}
+                                        aria-expanded={index === selectedPhaseTabIndex}
+                                    >
+                                        <span>{phase.phaseName} ({phase.durationWeeks} sem)</span>
+                                        <span className="accordion-header-icon">+</span>
+                                    </button>
+                                    <div className={`accordion-content ${index === selectedPhaseTabIndex ? 'open' : ''}`}>
+                                         {index === selectedPhaseTabIndex && (
+                                            <div className="phase-tab-content">
+                                                 <div className="day-tabs-nav">
+                                                     {phase.routine.dias.map((day, dayIndex) => (
+                                                         <button 
+                                                             key={dayIndex} 
+                                                             className={`day-tab-button ${dayIndex === selectedDayIndex ? 'active' : ''}`}
+                                                             onClick={() => setSelectedDayIndex(dayIndex)}>
+                                                             {day.dia}
+                                                         </button>
+                                                     ))}
+                                                 </div>
+                                                 {selectedDay && (
+                                                    <div className="routine-plan">
+                                                         <div className="day-card animated-fade-in">
+                                                           <h4>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h4>
+                                                           <ul className="exercise-list">
+                                                               {selectedDay.ejercicios.map((exercise, i) => {
+                                                                    const history = progressLog?.[exercise.nombre] || [];
+                                                                    const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+                                                                    const lastWeight = lastEntry ? `Últ.: ${lastEntry.weight}kg` : 'kg';
+                                                                    const lastReps = lastEntry ? `Últ.: ${lastEntry.repetitions}` : 'reps';
+                                                                    const videoLink = flatExerciseLibrary.find(def => def.name === exercise.nombre)?.youtubeLink;
+            
+                                                                    return (
+                                                                    <li key={i} className="exercise-item">
+                                                                        <div className="exercise-name-wrapper">
+                                                                            <p className="exercise-name">{exercise.nombre}</p>
+                                                                            {videoLink && (
+                                                                              <a href={videoLink} target="_blank" rel="noopener noreferrer" className="video-link" aria-label={`Ver video de ${exercise.nombre}`}>
+                                                                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+                                                                              </a>
+                                                                            )}
+                                                                        </div>
+                                                                       <div className="exercise-details">
+                                                                           <span>Series: {exercise.series}</span>
+                                                                           <span>Reps: {exercise.repeticiones}</span>
+                                                                           <span>Descanso: {exercise.descanso}s</span>
+                                                                       </div>
+                                                                        <div className="exercise-tracking">
+                                                                            <div>
+                                                                                <label htmlFor={`weight-${i}`}>Peso (kg)</label>
+                                                                                <input 
+                                                                                    id={`weight-${i}`}
+                                                                                    type="number" 
+                                                                                    className="weight-input"
+                                                                                    placeholder={lastWeight}
+                                                                                    value={dailyWeights[exercise.nombre] || ''}
+                                                                                    onChange={(e) => handleWeightChange(exercise.nombre, e.target.value)}
+                                                                                />
+                                                                            </div>
+                                                                            <div>
+                                                                                <label htmlFor={`reps-${i}`}>Repeticiones</label>
+                                                                                <input 
+                                                                                    id={`reps-${i}`}
+                                                                                    type="number" 
+                                                                                    className="reps-input"
+                                                                                    placeholder={lastReps}
+                                                                                    value={dailyReps[exercise.nombre] || ''}
+                                                                                    onChange={(e) => handleRepChange(exercise.nombre, e.target.value)}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                       {exercise.tecnicaAvanzada && (
+                                                                           <div className="advanced-technique">
+                                                                               <span>⚡️</span> {exercise.tecnicaAvanzada}
+                                                                           </div>
+                                                                       )}
+                                                                   </li>
+                                                               )})}
+                                                           </ul>
+                                                           <p className="cardio-note">{selectedDay.cardio}</p>
+                                                           <button className={`save-progress-button ${saveProgressText === 'Guardado ✓' ? 'saved' : ''}`} onClick={handleSaveProgress}>
+                                                                {saveProgressText}
+                                                           </button>
+                                                         </div>
                                                     </div>
-                                                   <div className="exercise-details">
-                                                       <span>Series: {exercise.series}</span>
-                                                       <span>Reps: {exercise.repeticiones}</span>
-                                                       <span>Descanso: {exercise.descanso}s</span>
-                                                   </div>
-                                                    <div className="exercise-tracking">
-                                                        <div>
-                                                            <label htmlFor={`weight-${i}`}>Peso (kg)</label>
-                                                            <input 
-                                                                id={`weight-${i}`}
-                                                                type="number" 
-                                                                className="weight-input"
-                                                                placeholder={lastWeight}
-                                                                value={dailyWeights[exercise.nombre] || ''}
-                                                                onChange={(e) => handleWeightChange(exercise.nombre, e.target.value)}
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label htmlFor={`reps-${i}`}>Repeticiones</label>
-                                                            <input 
-                                                                id={`reps-${i}`}
-                                                                type="number" 
-                                                                className="reps-input"
-                                                                placeholder={lastReps}
-                                                                value={dailyReps[exercise.nombre] || ''}
-                                                                onChange={(e) => handleRepChange(exercise.nombre, e.target.value)}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                   {exercise.tecnicaAvanzada && (
-                                                       <div className="advanced-technique">
-                                                           <span>⚡️</span> {exercise.tecnicaAvanzada}
-                                                       </div>
-                                                   )}
-                                               </li>
-                                           )})}
-                                       </ul>
-                                       <p className="cardio-note">{selectedDay.cardio}</p>
-                                       <button className={`save-progress-button ${saveProgressText === 'Guardado ✓' ? 'saved' : ''}`} onClick={handleSaveProgress}>
-                                            {saveProgressText}
-                                       </button>
-                                     </div>
+                                                 )}
+                                            </div>
+                                         )}
+                                    </div>
                                 </div>
-                             )}
-                         </div>)}
+                            ))}
+                        </div>
                      </div>
                 </div>
             )}
@@ -1862,6 +1878,9 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
         setAdditionalInstructions('');
       } catch (err) { setError("No se pudo generar el plan."); console.error(err); } finally { setLoadingRoutine(false); }
     };
+    
+    const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
+    const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
 
     if (view === 'dashboard') {
         return (
@@ -1932,8 +1951,6 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
 
     if (view === 'clientManagement' && profile) {
         const isLoading = loadingRoutine || loadingDiet;
-        const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
-        const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
         const enabledExercisesByGroup = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
             const enabled = exercises.filter(ex => ex.isEnabled);
             if (enabled.length > 0) acc[group] = enabled;
@@ -2010,25 +2027,42 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                           {routine && (<div className="plan-container">
                                 <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p>{targetWeight !== null && (<p className="target-weight-info">Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg</p>)}</header>
                                 <div className="phases-container">
-                                    <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
-                                    {selectedPhase && (<div className="phase-tab-content">
-                                        <div className="day-tabs-nav">{selectedPhase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
-                                        {selectedDay && (<div className="routine-plan editable">
-                                            <div className="day-card animated-fade-in">
-                                                <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
-                                                <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
-                                                    <li key={exIndex} className="exercise-item editable">
-                                                        <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
-                                                        <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
-                                                        <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
-                                                        <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
-                                                    </li>))}
-                                                </ul>
-                                                <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
-                                                <p className="cardio-note">{selectedDay.cardio}</p>
+                                    <div className="accordion-phases">
+                                        {routine.phases.map((phase, index) => (
+                                            <div key={index} className="accordion-item">
+                                                <button
+                                                    className={`accordion-header ${index === selectedPhaseTabIndex ? 'active' : ''}`}
+                                                    onClick={() => setSelectedPhaseTabIndex(prev => prev === index ? -1 : index)}
+                                                    aria-expanded={index === selectedPhaseTabIndex}
+                                                >
+                                                    <span>{phase.phaseName} ({phase.durationWeeks} sem)</span>
+                                                    <span className="accordion-header-icon">+</span>
+                                                </button>
+                                                <div className={`accordion-content ${index === selectedPhaseTabIndex ? 'open' : ''}`}>
+                                                    {index === selectedPhaseTabIndex && (
+                                                        <div className="phase-tab-content">
+                                                            <div className="day-tabs-nav">{phase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
+                                                            {selectedDay && (<div className="routine-plan editable">
+                                                                <div className="day-card animated-fade-in">
+                                                                    <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
+                                                                    <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
+                                                                        <li key={exIndex} className="exercise-item editable">
+                                                                            <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
+                                                                            <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
+                                                                            <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
+                                                                            <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
+                                                                        </li>))}
+                                                                    </ul>
+                                                                    <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
+                                                                    <p className="cardio-note">{selectedDay.cardio}</p>
+                                                                </div>
+                                                            </div>)}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>)}
-                                    </div>)}
+                                        ))}
+                                    </div>
                                 </div>
                             </div>)}
                           </>)}
