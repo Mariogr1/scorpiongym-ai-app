@@ -1,11 +1,5 @@
 
 
-
-
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -15,7 +9,7 @@ import "./index.css";
 
 import {
     apiClient,
-    ADMIN_PASSWORD,
+    SUPER_ADMIN_PASSWORD,
     advancedTechniqueOptions,
     // Types
     Profile,
@@ -28,7 +22,8 @@ import {
     BodyWeightEntry,
     ExerciseLibrary,
     ProgressLogEntry,
-    ExerciseDefinition
+    ExerciseDefinition,
+    Gym
 } from './apiClient';
 
 
@@ -94,7 +89,7 @@ const ConfirmationModal = ({
 };
 
 // 1. Página de Bienvenida (Selección de Rol)
-const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'admin' | 'client') => void }) => (
+const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'superadmin' | 'gym' | 'client') => void }) => (
     <div className="login-container">
         <header>
             <h1>ScorpionGYM AI</h1>
@@ -104,21 +99,22 @@ const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'admin' | 'client'
             <h2>Bienvenido</h2>
             <p>¿Cómo querés acceder?</p>
             <div className="role-selection">
-                <button className="cta-button" onClick={() => onSelectRole('admin')}>Acceso Entrenador</button>
+                <button className="cta-button" onClick={() => onSelectRole('superadmin')}>Acceso Administrador General</button>
+                <button className="cta-button" onClick={() => onSelectRole('gym')}>Acceso Gimnasio / Entrenador</button>
                 <button className="cta-button secondary" onClick={() => onSelectRole('client')}>Acceso Cliente</button>
             </div>
         </div>
     </div>
 );
 
-// 2. Login de Administrador
-const AdminLogin = ({ onLogin }: { onLogin: () => void }) => {
+// 2. Logins
+const SuperAdminLogin = ({ onLogin, onBack }: { onLogin: () => void; onBack: () => void; }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (password === ADMIN_PASSWORD) {
+        if (password === SUPER_ADMIN_PASSWORD) {
             onLogin();
         } else {
             setError('Contraseña incorrecta.');
@@ -130,24 +126,62 @@ const AdminLogin = ({ onLogin }: { onLogin: () => void }) => {
         <div className="login-container">
             <header><h1>ScorpionGYM AI</h1></header>
             <div className="login-box">
-                <h2>Acceso de Entrenador</h2>
+                <h2>Acceso de Súper Administrador</h2>
                 <form onSubmit={handleSubmit}>
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                        placeholder="Contraseña"
-                        aria-label="Contraseña de administrador"
+                        placeholder="Contraseña Maestra"
+                        aria-label="Contraseña de súper administrador"
                     />
                     {error && <p className="error-text">{error}</p>}
                     <button type="submit" className="cta-button" disabled={!password}>Ingresar</button>
+                     <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
                 </form>
             </div>
         </div>
     );
 };
 
-// 3. Login de Cliente
+const GymLogin = ({ onLogin, onBack }: { onLogin: (gym: Gym) => void; onBack: () => void; }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+        const gym = await apiClient.gymLogin(username, password);
+        if (gym) {
+            onLogin(gym);
+        } else {
+            setError('Usuario o contraseña incorrectos.');
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="login-container">
+            <header><h1>ScorpionGYM AI</h1></header>
+            <div className="login-box">
+                <h2>Acceso de Gimnasio / Entrenador</h2>
+                <form onSubmit={handleSubmit}>
+                    <input type="text" value={username} onChange={e => {setUsername(e.target.value); setError('')}} placeholder="Usuario" />
+                    <input type="password" value={password} onChange={e => {setPassword(e.target.value); setError('')}} placeholder="Contraseña" />
+                    {error && <p className="error-text">{error}</p>}
+                    <button type="submit" className="cta-button" disabled={!username || !password || isLoading}>
+                        {isLoading ? <span className="spinner small" /> : 'Ingresar'}
+                    </button>
+                    <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBack: () => void; }) => {
     const [dni, setDni] = useState('');
     const [accessCode, setAccessCode] = useState('');
@@ -195,7 +229,7 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
 
     useEffect(() => {
         if (isOpen && clientData) {
-            setMessages([{ role: 'model', text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas rápidas para comidas o ejercicios.` }]);
+            setMessages([{ role: 'model' as const, text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas rápidas para comidas o ejercicios.` }]);
             setInput('');
         }
     }, [isOpen, clientData]);
@@ -775,12 +809,12 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
     useEffect(() => {
         const loadInitialData = async () => {
           if (!clientDni) return;
-          const [data, library] = await Promise.all([
-              apiClient.getClientData(clientDni),
-              apiClient.getExerciseLibrary()
-          ]);
+          const data = await apiClient.getClientData(clientDni);
           setClientData(data);
-          setExerciseLibrary(library);
+          if (data?.gymId) {
+              const library = await apiClient.getExerciseLibrary(data.gymId);
+              setExerciseLibrary(library);
+          }
         };
         loadInitialData();
     }, [clientDni]);
@@ -904,7 +938,7 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
         return { expirationDate, isExpired };
     }, [clientData]);
 
-    if (!clientData) return <div className="client-view-container"><div className="spinner"></div></div>;
+    if (!clientData || !profile) return <div className="client-view-container"><div className="spinner"></div></div>;
     
     if (!termsAccepted) {
         return <AgreementView onAccept={handleAcceptTerms} onDecline={onLogout} />;
@@ -922,7 +956,7 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
                  <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
                 <h2>Tu Plan Expiró</h2>
                 <p>¡Bien ahí! Completaste tu ciclo. 💪</p>
-                <p>Por favor, contactá a tu entrenador en ScorpionGYM para que te arme un nuevo plan.</p>
+                <p>Por favor, contactá a tu entrenador para que te arme un nuevo plan.</p>
             </div>
         );
     }
@@ -1103,15 +1137,14 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
     );
 };
 
-// 5. Panel de Administración (Presentational Component)
-interface ClientDashboardProps {
+// 5. Panel de Clientes para el Gimnasio
+const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSelect, onSelectionChange }: {
     clients: ClientListItem[];
     isSelectionMode: boolean;
     selectedClients: Set<string>;
     onClientSelect: (dni: string) => void;
     onSelectionChange: (dni: string) => void;
-}
-const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSelect, onSelectionChange }: ClientDashboardProps) => {
+}) => {
     
     const handleCardClick = (e: React.MouseEvent<HTMLDivElement>, client: ClientListItem) => {
         if (isSelectionMode) {
@@ -1153,8 +1186,8 @@ const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSe
     );
 };
 
-// 6. Nuevo Componente: Gestor de la Biblioteca de Ejercicios
-const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: ExerciseLibrary) => Promise<boolean>, onBack: () => void }) => {
+// 6. Gestor de la Biblioteca de Ejercicios para el Gimnasio
+const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSave: (library: ExerciseLibrary, gymId: string) => Promise<boolean>, onBack: () => void }) => {
     const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
     const [originalLibrary, setOriginalLibrary] = useState<ExerciseLibrary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -1175,7 +1208,7 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     useEffect(() => {
         const fetchLibrary = async () => {
             setIsLoading(true);
-            const data = await apiClient.getExerciseLibrary();
+            const data = await apiClient.getExerciseLibrary(gymId);
              if (data && Object.keys(data).length > 0) {
                 const deepCopy = JSON.parse(JSON.stringify(data));
                 setLibrary(data);
@@ -1188,7 +1221,7 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
             setIsLoading(false);
         };
         fetchLibrary();
-    }, []);
+    }, [gymId]);
 
     const handleLinkChange = (group: string, index: number, link: string) => {
         setLibrary(prev => {
@@ -1289,7 +1322,7 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
     const handleSave = async () => {
         if (!library || !isDirty) return;
         setSaveButtonText("Guardando...");
-        const success = await onSave(library);
+        const success = await onSave(library, gymId);
         if (success) {
             setSaveButtonText("Guardado ✓");
             setOriginalLibrary(JSON.parse(JSON.stringify(library)));
@@ -1297,7 +1330,7 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
         } else {
             setSaveButtonText("Error al Guardar");
             setTimeout(() => setSaveButtonText("Guardar Cambios"), 3000);
-            alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs de Vercel para más detalles.");
+            alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs para más detalles.");
         }
     };
     
@@ -1460,15 +1493,16 @@ const ExerciseLibraryManager = ({ onSave, onBack }: { onSave: (library: Exercise
 };
 
 
-// --- Componente Principal ---
-const App = () => {
-    // --- State de la Aplicación ---
-    const [currentView, setCurrentView] = useState('landing');
+// 7. Portal del Gimnasio / Entrenador
+const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: { 
+    gym: Gym; 
+    ai: GoogleGenAI | null; 
+    onLogout: () => void;
+    onBackToSuperAdmin?: () => void;
+}) => {
+    // State de la Gestión del Dashboard de Admin
+    const [view, setView] = useState<'dashboard' | 'library' | 'clientManagement'>('dashboard');
     const [selectedClientDNI, setSelectedClientDNI] = useState<string | null>(null);
-    const [loggedInClientDNI, setLoggedInClientDNI] = useState<string | null>(null);
-    
-    // --- State de la Gestión del Dashboard de Admin ---
-    const [adminView, setAdminView] = useState<'dashboard' | 'library'>('dashboard');
     const [clients, setClients] = useState<ClientListItem[]>([]);
     const [newDni, setNewDni] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -1494,20 +1528,6 @@ const App = () => {
     const [loadingDiet, setLoadingDiet] = useState(false);
     const [error, setError] = useState("");
     const [saveButtonText, setSaveButtonText] = useState("Guardar cambios");
-
-    const ai = useMemo(() => {
-        try {
-            const apiKey = process.env.API_KEY;
-            if (!apiKey) {
-                console.error("API Key de Google no encontrada. Revisa tu archivo .env y reinicia el servidor.");
-                return null;
-            }
-            return new GoogleGenAI({ apiKey });
-        } catch (e) {
-            console.error("Error al inicializar GoogleGenAI:", e);
-            return null;
-        }
-    }, []);
 
     // --- Hooks ---
     const { bmi, bmiCategory, bmiCategoryClass } = useMemo(() => {
@@ -1535,27 +1555,24 @@ const App = () => {
         return target > 0 ? target : null;
     }, [profile, routine]);
     
-    // Carga inicial de clientes y biblioteca de ejercicios
-    useEffect(() => {
-        const loadInitialAdminData = async () => {
-          if (currentView === 'adminDashboard') {
-            const [clientsData, libraryData] = await Promise.all([
-              apiClient.getClients(),
-              apiClient.getExerciseLibrary()
-            ]);
-            setClients(clientsData);
-            setExerciseLibrary(libraryData);
-          }
-        };
-        loadInitialAdminData();
-    }, [currentView]);
+    const loadClientsAndLibrary = async () => {
+        const [clientsData, libraryData] = await Promise.all([
+            apiClient.getClients(gym._id),
+            apiClient.getExerciseLibrary(gym._id)
+        ]);
+        setClients(clientsData);
+        setExerciseLibrary(libraryData);
+    };
 
-    // Cargar datos del cliente seleccionado por el admin
+    useEffect(() => {
+        loadClientsAndLibrary();
+    }, [gym._id]);
+
     useEffect(() => {
         const loadSelectedClient = async () => {
           if (selectedClientDNI) {
               const userData = await apiClient.getClientData(selectedClientDNI);
-              if (userData) {
+              if (userData && userData.gymId === gym._id) {
                   setClientAccessCode(userData.accessCode);
                   const profileWithDefaults: Profile = {
                       name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: 'Cuerpo completo', bodyFocusSpecific: '', includeAdaptationPhase: 'Sí', trainingIntensity: 'Moderada', ...userData.profile
@@ -1570,14 +1587,16 @@ const App = () => {
                   setActiveTab('training');
                   if (!ai) setError("La API Key de Google no está configurada. No se pueden generar planes.");
                   else setError('');
-                  setCurrentView('adminClientManagement');
+                  setView('clientManagement');
+              } else if (userData) {
+                  alert("Error: Este cliente no pertenece a tu gimnasio.");
+                  setSelectedClientDNI(null);
               }
           }
         };
         loadSelectedClient();
-    }, [selectedClientDNI, ai]);
+    }, [selectedClientDNI, ai, gym._id]);
     
-    // Reset day index on phase change para la vista del admin
     useEffect(() => {
         setAdminSelectedDayIndex(0);
     }, [selectedPhaseTabIndex]);
@@ -1588,10 +1607,10 @@ const App = () => {
         const trimmedDni = newDni.trim();
         if (!trimmedDni) return;
         
-        const result = await apiClient.createClient(trimmedDni);
+        const result = await apiClient.createClient(trimmedDni, gym._id);
         if (result.success) {
             setNewDni('');
-            const updatedClients = await apiClient.getClients();
+            const updatedClients = await apiClient.getClients(gym._id);
             setClients(updatedClients);
         } else {
             alert(result.message);
@@ -1612,7 +1631,7 @@ const App = () => {
 
     const handleUpdateClientStatus = async (dnis: Set<string>, newStatus: 'active' | 'archived') => {
         await apiClient.updateClientStatus(dnis, newStatus);
-        const updatedClients = await apiClient.getClients();
+        const updatedClients = await apiClient.getClients(gym._id);
         setClients(updatedClients);
         setIsSelectionMode(false);
         setSelectedClients(new Set());
@@ -1621,7 +1640,7 @@ const App = () => {
     
     const handleDeleteClientsPermanently = async (dnis: Set<string>) => {
         await apiClient.deleteClients(dnis);
-        const updatedClients = await apiClient.getClients();
+        const updatedClients = await apiClient.getClients(gym._id);
         setClients(updatedClients);
         setIsSelectionMode(false);
         setSelectedClients(new Set());
@@ -1660,8 +1679,8 @@ const App = () => {
         setSelectedClients(new Set());
     };
 
-    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary): Promise<boolean> => {
-        const success = await apiClient.saveExerciseLibrary(updatedLibrary);
+    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary, gymId: string): Promise<boolean> => {
+        const success = await apiClient.saveExerciseLibrary(updatedLibrary, gymId);
         if (success) {
             setExerciseLibrary(updatedLibrary);
         }
@@ -1677,34 +1696,10 @@ const App = () => {
         );
 
     // --- Handlers y Funciones de Navegación y Generación ---
-    const handleRoleSelect = (role: 'admin' | 'client') => {
-        if (role === 'admin') setCurrentView('adminLogin');
-        if (role === 'client') setCurrentView('clientLogin');
-    };
-    
-    const handleAdminLogin = () => setCurrentView('adminDashboard');
-    
-    const handleClientLogin = (dni: string) => {
-        setLoggedInClientDNI(dni);
-        setCurrentView('clientPortal');
-    };
-
-    const handleLogout = () => {
-        setCurrentView('landing');
-        setSelectedClientDNI(null);
-        setLoggedInClientDNI(null);
-    };
-    
     const handleBackToDashboard = async () => {
         setSelectedClientDNI(null);
-        setCurrentView('adminDashboard');
-        setAdminView('dashboard');
-        const [clientsData, libraryData] = await Promise.all([
-            apiClient.getClients(),
-            apiClient.getExerciseLibrary()
-        ]);
-        setClients(clientsData);
-        setExerciseLibrary(libraryData);
+        setView('dashboard');
+        loadClientsAndLibrary();
     };
     
     const isFormValid = useMemo(() => {
@@ -1733,7 +1728,7 @@ const App = () => {
             setSaveButtonText("Guardado ✓");
         } else {
             setSaveButtonText("Error al Guardar");
-            alert("No se pudieron guardar los cambios del cliente. Revisa la consola del navegador y los logs de Vercel.");
+            alert("No se pudieron guardar los cambios del cliente. Revisa la consola del navegador y los logs.");
         }
         setTimeout(() => setSaveButtonText("Guardar cambios"), 3000);
     };
@@ -1858,211 +1853,396 @@ const App = () => {
         setAdditionalInstructions('');
       } catch (err) { setError("No se pudo generar el plan."); console.error(err); } finally { setLoadingRoutine(false); }
     };
-    
-    // --- Lógica de Renderizado ---
-    const renderContent = () => {
-        if (currentView === 'landing') return <LandingPage onSelectRole={handleRoleSelect} />;
-        if (currentView === 'adminLogin') return <AdminLogin onLogin={handleAdminLogin} />;
-        if (currentView === 'clientLogin') return <ClientLogin onLogin={handleClientLogin} onBack={() => setCurrentView('landing')} />;
-        if (currentView === 'clientPortal' && loggedInClientDNI) return <ClientPortal clientDni={loggedInClientDNI} onLogout={handleLogout} ai={ai} />;
-        
-        if (currentView === 'adminDashboard') {
-            if (adminView === 'library') {
-                 return <ExerciseLibraryManager 
-                            onSave={handleSaveLibrary} 
-                            onBack={handleBackToDashboard} 
-                        />;
-            }
 
-            return (
-                <div className="admin-dashboard">
-                    <header className="main-header">
-                        <div className="header-title-wrapper">
-                             <h1>Panel de Clientes</h1>
-                             <p>Gestioná a tus clientes.</p>
-                        </div>
-                        <div className="admin-header-nav">
-                             <button onClick={() => setAdminView('library')} className="header-nav-button">Gestionar Ejercicios</button>
-                             <button onClick={handleLogout} className="logout-button admin-logout">Cerrar Sesión</button>
-                        </div>
-                    </header>
-    
-                    <div className="client-management-bar">
-                        <div className="add-client-form">
-                            <form onSubmit={handleAddClient}>
-                                <input type="text" value={newDni} onChange={(e) => setNewDni(e.target.value)} placeholder="DNI del nuevo cliente/a" />
-                                <button type="submit" className="cta-button" disabled={!newDni.trim()}>Agregar Cliente/a</button>
-                            </form>
-                        </div>
-                        <div className="search-client-form">
-                            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por Nombre o DNI..." />
-                        </div>
-                    </div>
-                    
-                    <div className="view-controls">
-                        <div className="view-toggle">
-                            <button onClick={() => { setViewMode('active'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
-                            <button onClick={() => { setViewMode('archived'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
-                        </div>
-    
-                        <div className="selection-controls">
-                            <button className="selection-toggle-button" onClick={handleSelectionModeToggle}>{isSelectionMode ? 'Cancelar Selección' : 'Seleccionar...'}</button>
-                            {isSelectionMode && viewMode === 'active' && (
-                                <button className="archive-selected-button" onClick={handleArchiveSelected} disabled={selectedClients.size === 0}>Archivar ({selectedClients.size})</button>
-                            )}
-                            {isSelectionMode && viewMode === 'archived' && (
-                                <>
-                                    <button className="restore-selected-button" onClick={handleRestoreSelected} disabled={selectedClients.size === 0}>Restaurar ({selectedClients.size})</button>
-                                    <button className="delete-selected-button" onClick={handleDeletePermanentlySelected} disabled={selectedClients.size === 0}>Eliminar ({selectedClients.size})</button>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    
-                    <ClientDashboard
-                        clients={filteredClients}
-                        isSelectionMode={isSelectionMode}
-                        selectedClients={selectedClients}
-                        onClientSelect={setSelectedClientDNI}
-                        onSelectionChange={handleSelectionChange}
-                    />
-                </div>
-            );
-        }
-    
-        if (currentView === 'adminClientManagement' && profile) {
-            const isLoading = loadingRoutine || loadingDiet;
-            const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
-            const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
-            const enabledExercisesByGroup = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
-                const enabled = exercises.filter(ex => ex.isEnabled);
-                if (enabled.length > 0) acc[group] = enabled;
-                return acc;
-            }, {} as ExerciseLibrary);
-            
-            return (
-                <>
-                  <header className="main-header">
-                    <button onClick={handleBackToDashboard} className="back-button">← Volver</button>
+    if (view === 'dashboard') {
+        return (
+            <div className="admin-dashboard">
+                <header className="main-header">
                     <div className="header-title-wrapper">
-                      <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
-                      <p>Gestioná el perfil y los planes de tu cliente.</p>
+                         <h1>Panel de {gym.name}</h1>
+                         <p>Gestioná a tus clientes.</p>
                     </div>
-                    <button onClick={handleLogout} className="logout-button">Cerrar Sesión</button>
-                  </header>
-            
-                  <div className="dashboard-grid">
-                    <aside className="profile-section">
-                        <h2>Perfil del cliente/a</h2>
-                        <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
-                          <div className="form-group"><label>Nombre</label><input type="text" name="name" value={profile.name} onChange={handleInputChange}/></div>
-                          <div className="form-group"><label>Edad</label><input type="number" name="age" value={profile.age} onChange={handleInputChange}/></div>
-                          <div className="form-group"><label>Peso (kg)</label><input type="number" name="weight" value={profile.weight} onChange={handleInputChange}/></div>
-                          <div className="form-group"><label>Altura (cm)</label><input type="number" name="height" value={profile.height} onChange={handleInputChange}/></div>
-                          <div className="form-group"><label>Género</label><select name="gender" value={profile.gender} onChange={handleInputChange}><option>Prefiero no decirlo</option><option>Masculino</option><option>Femenino</option></select></div>
-                          <div className="form-group"><label>Nivel</label><select name="level" value={profile.level} onChange={handleInputChange}><option>Principiante</option><option>Intermedio</option><option>Avanzado</option></select></div>
-                          <div className="form-group"><label>Objetivo</label><select name="goal" value={profile.goal} onChange={handleInputChange}><option>Hipertrofia</option><option>Pérdida de grasa</option><option>Mantenimiento</option><option>Resistencia</option></select></div>
-                          <div className="form-group"><label>Días por semana</label><input type="number" name="trainingDays" value={profile.trainingDays} min="1" max="7" onChange={handleInputChange}/></div>
-                          <div className="form-group"><label>Factor de Actividad (fuera del gym)</label><select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}><option value="Sedentario">Sedentario (trabajo de oficina)</option><option value="Ligero">Ligero (trabajo de pie, caminatas)</option><option value="Activo">Activo (trabajo físico moderado)</option><option value="Muy Activo">Muy Activo (trabajo físico intenso)</option></select></div>
-                          <div className="form-group"><label>Área de Enfoque</label><select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}><option value="Cuerpo completo">Cuerpo completo</option><option value="Tren Superior">Tren Superior</option><option value="Tren Inferior">Tren Inferior</option></select></div>
-                          {profile.bodyFocusArea && profile.bodyFocusArea !== 'Cuerpo completo' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General</option>{profile.bodyFocusArea === 'Tren Superior' && (<><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos">Brazos</option></>)}{profile.bodyFocusArea === 'Tren Inferior' && (<><option value="Piernas">Piernas (Cuádriceps/Femorales)</option><option value="Glúteos">Glúteos</option></>)}</select></div>)}
-                          <div className="form-group"><label>Intensidad del entrenamiento</label><select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}><option value="Baja">Baja</option><option value="Moderada">Moderada</option><option value="Alta">Alta</option><option value="Extrema">Extrema</option></select></div>
-                          <div className="form-group"><label>Fase de adaptación</label><select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}><option value="Sí">Incluir fase de adaptación</option><option value="No">Empezar directo sin adaptación</option></select></div>
-                          <div className="form-group"><label>Complejidad de la rutina</label><select name="useAdvancedTechniques" value={profile.useAdvancedTechniques} onChange={handleInputChange}><option value="No">Ejercicios simples</option><option value="Sí">Incluir técnicas avançadas</option></select></div>
+                    <div className="admin-header-nav">
+                         <button onClick={() => setView('library')} className="header-nav-button">Gestionar Ejercicios</button>
+                         {onBackToSuperAdmin 
+                             ? <button onClick={onBackToSuperAdmin} className="logout-button admin-logout">Volver a Super Admin</button>
+                             : <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                         }
+                    </div>
+                </header>
+
+                <div className="client-management-bar">
+                    <div className="add-client-form">
+                        <form onSubmit={handleAddClient}>
+                            <input type="text" value={newDni} onChange={(e) => setNewDni(e.target.value)} placeholder="DNI del nuevo cliente/a" />
+                            <button type="submit" className="cta-button" disabled={!newDni.trim()}>Agregar Cliente/a</button>
                         </form>
-                         {clientAccessCode && (<div className="access-code-display"><span>Código de Acceso del Cliente</span><strong>{clientAccessCode}</strong></div>)}
-                         {bmi !== null && (<div className="bmi-display"><span>IMC: <strong>{bmi.toFixed(1)}</strong></span><span className={`bmi-category ${bmiCategoryClass}`}>{bmiCategory}</span></div>)}
-                    </aside>
-            
-                    <main className="main-content">
-                        <div className="admin-instructions-box">
-                            <label htmlFor="additional-instructions">Instrucciones Adicionales para la IA</label>
-                            <textarea
-                                id="additional-instructions"
-                                name="additional-instructions"
-                                rows={3}
-                                placeholder="Ej: El cliente es intolerante a la lactosa, evitar productos lácteos y reemplazar proteína en polvo. Tiene una lesión en la rodilla, evitar sentadillas y zancadas."
-                                value={additionalInstructions}
-                                onChange={(e) => setAdditionalInstructions(e.target.value)}
-                            ></textarea>
-                        </div>
-                      <div className="actions-bar">
-                        <button className="cta-button" onClick={handleGenerateRoutine} disabled={!isFormValid || isLoading}>{loadingRoutine ? <><span className="spinner small"></span>Armando rutina...</> : (routine ? "Volver a generar rutina" : "Generar rutina")}</button>
-                        <button className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading || saveButtonText === "Guardando..."}>{saveButtonText}</button>
-                      </div>
-                      
-                        <div className="main-tabs-nav">
-                            <button onClick={() => setActiveTab('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
-                            <button onClick={() => setActiveTab('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>
-                        </div>
-            
-                        <section className="results-section">
-                            {activeTab === 'training' && (<>
-                              {loadingRoutine && <div className="loading-container"><div className="spinner"></div><p>Armando el plan de entrenamiento...</p></div>}
-                              {!isLoading && !routine && !error && <p className="placeholder">Completá el perfil del cliente/a y generá un plan de entrenamiento.</p>}
-                              {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
-                              {routine && (<div className="plan-container">
-                                    <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p>{targetWeight !== null && (<p className="target-weight-info">Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg</p>)}</header>
-                                    <div className="phases-container">
-                                        <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
-                                        {selectedPhase && (<div className="phase-tab-content">
-                                            <div className="day-tabs-nav">{selectedPhase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
-                                            {selectedDay && (<div className="routine-plan editable">
-                                                <div className="day-card animated-fade-in">
-                                                    <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
-                                                    <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
-                                                        <li key={exIndex} className="exercise-item editable">
-                                                            <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
-                                                            <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
-                                                            <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
-                                                            <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
-                                                        </li>))}
-                                                    </ul>
-                                                    <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
-                                                    <p className="cardio-note">{selectedDay.cardio}</p>
-                                                </div>
-                                            </div>)}
-                                        </div>)}
-                                    </div>
-                                </div>)}
-                              </>)}
-                            {activeTab === 'nutrition' && (
-                                <div className="diet-plan-container">
-                                    {loadingDiet && (<div className="loading-container"><div className="spinner"></div><p>Armando el plan de nutrición...</p></div>)}
-                                    {!loadingDiet && !dietPlan && !error && (<div className="placeholder-action"><p>Todavía no hay un plan de nutrición para este cliente/a.</p><button className="cta-button" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>Generar plan de nutrición</button></div>)}
-                                    {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
-                                    {!loadingDiet && dietPlan && (
-                                        <>
-                                            <header className="plan-header"><h2>{dietPlan.planTitle}</h2></header>
-                                            <div className="diet-summary"><div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div><div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div><div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div><div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div></div>
-                                            <div className="meals-grid">{dietPlan.meals?.map((meal, index) => (<div key={index} className="meal-card"><h3>{meal.mealName}</h3><ul>{meal.foodItems?.map((item, i) => (<li key={i}>{item.food} <span>({item.amount})</span></li>))}</ul></div>))}</div>
-                                            {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (<div className="recommendations-section"><h4>💡 Recomendaciones clave</h4><ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul></div>)}
-                                            <button className="cta-button regenerate" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>{loadingDiet ? <><span className="spinner small"></span>Regenerando...</> : "Volver a generar plan"}</button>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </section>
-                    </main>
-                  </div>
-                </>
-            );
-        }
+                    </div>
+                    <div className="search-client-form">
+                        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por Nombre o DNI..." />
+                    </div>
+                </div>
+                
+                <div className="view-controls">
+                    <div className="view-toggle">
+                        <button onClick={() => { setViewMode('active'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
+                        <button onClick={() => { setViewMode('archived'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
+                    </div>
+
+                    <div className="selection-controls">
+                        <button className="selection-toggle-button" onClick={handleSelectionModeToggle}>{isSelectionMode ? 'Cancelar Selección' : 'Seleccionar...'}</button>
+                        {isSelectionMode && viewMode === 'active' && (
+                            <button className="archive-selected-button" onClick={handleArchiveSelected} disabled={selectedClients.size === 0}>Archivar ({selectedClients.size})</button>
+                        )}
+                        {isSelectionMode && viewMode === 'archived' && (
+                            <>
+                                <button className="restore-selected-button" onClick={handleRestoreSelected} disabled={selectedClients.size === 0}>Restaurar ({selectedClients.size})</button>
+                                <button className="delete-selected-button" onClick={handleDeletePermanentlySelected} disabled={selectedClients.size === 0}>Eliminar ({selectedClients.size})</button>
+                            </>
+                        )}
+                    </div>
+                </div>
+                
+                <ClientDashboard
+                    clients={filteredClients}
+                    isSelectionMode={isSelectionMode}
+                    selectedClients={selectedClients}
+                    onClientSelect={setSelectedClientDNI}
+                    onSelectionChange={handleSelectionChange}
+                />
+            </div>
+        );
+    }
     
-        return <div className="login-container"><div className="spinner"></div></div>;
+    if (view === 'library') {
+        return <ExerciseLibraryManager gymId={gym._id} onSave={handleSaveLibrary} onBack={() => setView('dashboard')} />;
+    }
+
+    if (view === 'clientManagement' && profile) {
+        const isLoading = loadingRoutine || loadingDiet;
+        const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
+        const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
+        const enabledExercisesByGroup = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
+            const enabled = exercises.filter(ex => ex.isEnabled);
+            if (enabled.length > 0) acc[group] = enabled;
+            return acc;
+        }, {} as ExerciseLibrary);
+            
+        return (
+            <>
+              <header className="main-header">
+                <button onClick={handleBackToDashboard} className="back-button">← Volver al panel de {gym.name}</button>
+                <div className="header-title-wrapper">
+                  <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
+                  <p>Gestioná el perfil y los planes de tu cliente.</p>
+                </div>
+                {onBackToSuperAdmin 
+                     ? <button onClick={onBackToSuperAdmin} className="logout-button admin-logout">Volver a Super Admin</button>
+                     : <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
+                 }
+              </header>
+        
+              <div className="dashboard-grid">
+                <aside className="profile-section">
+                    <h2>Perfil del cliente/a</h2>
+                    <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
+                      <div className="form-group"><label>Nombre</label><input type="text" name="name" value={profile.name} onChange={handleInputChange}/></div>
+                      <div className="form-group"><label>Edad</label><input type="number" name="age" value={profile.age} onChange={handleInputChange}/></div>
+                      <div className="form-group"><label>Peso (kg)</label><input type="number" name="weight" value={profile.weight} onChange={handleInputChange}/></div>
+                      <div className="form-group"><label>Altura (cm)</label><input type="number" name="height" value={profile.height} onChange={handleInputChange}/></div>
+                      <div className="form-group"><label>Género</label><select name="gender" value={profile.gender} onChange={handleInputChange}><option>Prefiero no decirlo</option><option>Masculino</option><option>Femenino</option></select></div>
+                      <div className="form-group"><label>Nivel</label><select name="level" value={profile.level} onChange={handleInputChange}><option>Principiante</option><option>Intermedio</option><option>Avanzado</option></select></div>
+                      <div className="form-group"><label>Objetivo</label><select name="goal" value={profile.goal} onChange={handleInputChange}><option>Hipertrofia</option><option>Pérdida de grasa</option><option>Mantenimiento</option><option>Resistencia</option></select></div>
+                      <div className="form-group"><label>Días por semana</label><input type="number" name="trainingDays" value={profile.trainingDays} min="1" max="7" onChange={handleInputChange}/></div>
+                      <div className="form-group"><label>Factor de Actividad (fuera del gym)</label><select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}><option value="Sedentario">Sedentario (trabajo de oficina)</option><option value="Ligero">Ligero (trabajo de pie, caminatas)</option><option value="Activo">Activo (trabajo físico moderado)</option><option value="Muy Activo">Muy Activo (trabajo físico intenso)</option></select></div>
+                      <div className="form-group"><label>Área de Enfoque</label><select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}><option value="Cuerpo completo">Cuerpo completo</option><option value="Tren Superior">Tren Superior</option><option value="Tren Inferior">Tren Inferior</option></select></div>
+                      {profile.bodyFocusArea && profile.bodyFocusArea !== 'Cuerpo completo' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General</option>{profile.bodyFocusArea === 'Tren Superior' && (<><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos">Brazos</option></>)}{profile.bodyFocusArea === 'Tren Inferior' && (<><option value="Piernas">Piernas (Cuádriceps/Femorales)</option><option value="Glúteos">Glúteos</option></>)}</select></div>)}
+                      <div className="form-group"><label>Intensidad del entrenamiento</label><select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}><option value="Baja">Baja</option><option value="Moderada">Moderada</option><option value="Alta">Alta</option><option value="Extrema">Extrema</option></select></div>
+                      <div className="form-group"><label>Fase de adaptación</label><select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}><option value="Sí">Incluir fase de adaptación</option><option value="No">Empezar directo sin adaptación</option></select></div>
+                      <div className="form-group"><label>Complejidad de la rutina</label><select name="useAdvancedTechniques" value={profile.useAdvancedTechniques} onChange={handleInputChange}><option value="No">Ejercicios simples</option><option value="Sí">Incluir técnicas avançadas</option></select></div>
+                    </form>
+                     {clientAccessCode && (<div className="access-code-display"><span>Código de Acceso del Cliente</span><strong>{clientAccessCode}</strong></div>)}
+                     {bmi !== null && (<div className="bmi-display"><span>IMC: <strong>{bmi.toFixed(1)}</strong></span><span className={`bmi-category ${bmiCategoryClass}`}>{bmiCategory}</span></div>)}
+                </aside>
+        
+                <main className="main-content">
+                    <div className="admin-instructions-box">
+                        <label htmlFor="additional-instructions">Instrucciones Adicionales para la IA</label>
+                        <textarea
+                            id="additional-instructions"
+                            name="additional-instructions"
+                            rows={3}
+                            placeholder="Ej: El cliente es intolerante a la lactosa, evitar productos lácteos y reemplazar proteína en polvo. Tiene una lesión en la rodilla, evitar sentadillas y zancadas."
+                            value={additionalInstructions}
+                            onChange={(e) => setAdditionalInstructions(e.target.value)}
+                        ></textarea>
+                    </div>
+                  <div className="actions-bar">
+                    <button className="cta-button" onClick={handleGenerateRoutine} disabled={!isFormValid || isLoading}>{loadingRoutine ? <><span className="spinner small"></span>Armando rutina...</> : (routine ? "Volver a generar rutina" : "Generar rutina")}</button>
+                    <button className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading || saveButtonText === "Guardando..."}>{saveButtonText}</button>
+                  </div>
+                  
+                    <div className="main-tabs-nav">
+                        <button onClick={() => setActiveTab('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
+                        <button onClick={() => setActiveTab('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>
+                    </div>
+        
+                    <section className="results-section">
+                        {activeTab === 'training' && (<>
+                          {loadingRoutine && <div className="loading-container"><div className="spinner"></div><p>Armando el plan de entrenamiento...</p></div>}
+                          {!isLoading && !routine && !error && <p className="placeholder">Completá el perfil del cliente/a y generá un plan de entrenamiento.</p>}
+                          {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
+                          {routine && (<div className="plan-container">
+                                <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p>{targetWeight !== null && (<p className="target-weight-info">Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg</p>)}</header>
+                                <div className="phases-container">
+                                    <div className="phase-tabs-nav">{routine.phases.map((phase, index) => (<button key={index} className={`phase-tab-button ${index === selectedPhaseTabIndex ? 'active' : ''}`} onClick={() => setSelectedPhaseTabIndex(index)}>{phase.phaseName} ({phase.durationWeeks} sem)</button>))}</div>
+                                    {selectedPhase && (<div className="phase-tab-content">
+                                        <div className="day-tabs-nav">{selectedPhase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
+                                        {selectedDay && (<div className="routine-plan editable">
+                                            <div className="day-card animated-fade-in">
+                                                <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
+                                                <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
+                                                    <li key={exIndex} className="exercise-item editable">
+                                                        <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
+                                                        <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
+                                                        <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
+                                                        <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
+                                                    </li>))}
+                                                </ul>
+                                                <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
+                                                <p className="cardio-note">{selectedDay.cardio}</p>
+                                            </div>
+                                        </div>)}
+                                    </div>)}
+                                </div>
+                            </div>)}
+                          </>)}
+                        {activeTab === 'nutrition' && (
+                            <div className="diet-plan-container">
+                                {loadingDiet && (<div className="loading-container"><div className="spinner"></div><p>Armando el plan de nutrición...</p></div>)}
+                                {!loadingDiet && !dietPlan && !error && (<div className="placeholder-action"><p>Todavía no hay un plan de nutrición para este cliente/a.</p><button className="cta-button" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>Generar plan de nutrición</button></div>)}
+                                {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
+                                {!loadingDiet && dietPlan && (
+                                    <>
+                                        <header className="plan-header"><h2>{dietPlan.planTitle}</h2></header>
+                                        <div className="diet-summary"><div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div><div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div><div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div><div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div></div>
+                                        <div className="meals-grid">{dietPlan.meals?.map((meal, index) => (<div key={index} className="meal-card"><h3>{meal.mealName}</h3><ul>{meal.foodItems?.map((item, i) => (<li key={i}>{item.food} <span>({item.amount})</span></li>))}</ul></div>))}</div>
+                                        {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (<div className="recommendations-section"><h4>💡 Recomendaciones clave</h4><ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul></div>)}
+                                        <button className="cta-button regenerate" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>{loadingDiet ? <><span className="spinner small"></span>Regenerando...</> : "Volver a generar plan"}</button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </section>
+                </main>
+              </div>
+            </>
+        );
+    }
+
+    return <div className="login-container"><div className="spinner"></div></div>;
+};
+
+// 8. Super Admin Portal
+const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) => void; onLogout: () => void; }) => {
+    const [gyms, setGyms] = useState<Gym[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [newGymName, setNewGymName] = useState('');
+    const [newGymUsername, setNewGymUsername] = useState('');
+    const [newGymPassword, setNewGymPassword] = useState('');
+    const [deleteConfirmation, setDeleteConfirmation] = useState<Gym | null>(null);
+
+    useEffect(() => {
+        fetchGyms();
+    }, []);
+
+    const fetchGyms = async () => {
+        setIsLoading(true);
+        const fetchedGyms = await apiClient.getGyms();
+        setGyms(fetchedGyms);
+        setIsLoading(false);
+    };
+
+    const handleCreateGym = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newGymName || !newGymUsername || !newGymPassword) {
+            alert("Todos los campos son obligatorios.");
+            return;
+        }
+        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword);
+        if (success) {
+            setNewGymName('');
+            setNewGymUsername('');
+            setNewGymPassword('');
+            fetchGyms();
+        } else {
+            alert("Error al crear el gimnasio. Es posible que el nombre de usuario ya exista.");
+        }
+    };
+
+    const handleDeleteRequest = (gym: Gym) => {
+        setDeleteConfirmation(gym);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteConfirmation) return;
+        const success = await apiClient.deleteGym(deleteConfirmation._id);
+        if (success) {
+            setDeleteConfirmation(null);
+            fetchGyms();
+        } else {
+            alert("Error al eliminar el gimnasio.");
+        }
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div><p>Cargando gimnasios...</p></div>;
+    }
+
+    return (
+        <div className="admin-dashboard">
+             <ConfirmationModal
+                isOpen={!!deleteConfirmation}
+                message={`¿Estás seguro de que querés eliminar el gimnasio "${deleteConfirmation?.name}"? Esta acción no se puede deshacer y borrará a todos sus clientes.`}
+                onConfirm={confirmDelete}
+                onCancel={() => setDeleteConfirmation(null)}
+                confirmText="Sí, Eliminar"
+            />
+            <header className="main-header">
+                <div className="header-title-wrapper">
+                    <h1>Panel de Súper Administrador</h1>
+                    <p>Gestioná las cuentas de los gimnasios y entrenadores.</p>
+                </div>
+                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+            </header>
+
+            <div className="add-gym-container">
+                <h3>Crear Nuevo Gimnasio / Entrenador</h3>
+                <form onSubmit={handleCreateGym} className="add-gym-form">
+                    <input type="text" value={newGymName} onChange={e => setNewGymName(e.target.value)} placeholder="Nombre del Gimnasio" required />
+                    <input type="text" value={newGymUsername} onChange={e => setNewGymUsername(e.target.value)} placeholder="Usuario (para login)" required />
+                    <input type="password" value={newGymPassword} onChange={e => setNewGymPassword(e.target.value)} placeholder="Contraseña" required />
+                    <button type="submit" className="cta-button">Crear Cuenta</button>
+                </form>
+            </div>
+
+            <div className="gym-list">
+                {gyms.length > 0 ? gyms.map(gym => (
+                    <div key={gym._id} className="gym-card">
+                        <h3>{gym.name}</h3>
+                        <p>Usuario: {gym.username}</p>
+                        <div className="gym-card-actions">
+                            <button className="action-btn delete" onClick={() => handleDeleteRequest(gym)}>Eliminar</button>
+                            <button className="cta-button" onClick={() => onManageGym(gym)}>Gestionar</button>
+                        </div>
+                    </div>
+                )) : <p>No hay gimnasios registrados. ¡Creá el primero!</p>}
+            </div>
+        </div>
+    );
+};
+
+
+// --- Componente Principal ---
+const App = () => {
+    const [view, setView] = useState<'landing' | 'superAdminLogin' | 'gymLogin' | 'clientLogin' | 'superAdminPortal' | 'gymPortal' | 'clientPortal'>('landing');
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [loggedInGym, setLoggedInGym] = useState<Gym | null>(null);
+    const [loggedInClientDNI, setLoggedInClientDNI] = useState<string | null>(null);
+    const [gymToManage, setGymToManage] = useState<Gym | null>(null);
+
+    const ai = useMemo(() => {
+        try {
+            const apiKey = process.env.API_KEY;
+            if (!apiKey) {
+                console.error("API Key de Google no encontrada. Revisa tu archivo .env y reinicia el servidor.");
+                return null;
+            }
+            return new GoogleGenAI({ apiKey });
+        } catch (e) {
+            console.error("Error al inicializar GoogleGenAI:", e);
+            return null;
+        }
+    }, []);
+
+    const handleLogout = () => {
+        setView('landing');
+        setIsSuperAdmin(false);
+        setLoggedInGym(null);
+        setLoggedInClientDNI(null);
+        setGymToManage(null);
+    };
+
+    const handleRoleSelect = (role: 'superadmin' | 'gym' | 'client') => {
+        if (role === 'superadmin') setView('superAdminLogin');
+        if (role === 'gym') setView('gymLogin');
+        if (role === 'client') setView('clientLogin');
+    };
+
+    const handleSuperAdminLogin = () => {
+        setIsSuperAdmin(true);
+        setView('superAdminPortal');
+    };
+
+    const handleGymLogin = (gym: Gym) => {
+        setLoggedInGym(gym);
+        setView('gymPortal');
+    };
+
+    const handleClientLogin = (dni: string) => {
+        setLoggedInClientDNI(dni);
+        setView('clientPortal');
     };
     
-    return (
-        <>
-            <ConfirmationModal 
-                isOpen={confirmationModal.isOpen}
-                message={confirmationModal.message}
-                onConfirm={confirmationModal.onConfirm}
-                onCancel={closeConfirmationModal}
-            />
-            {renderContent()}
-        </>
-    );
+    const handleManageGym = (gym: Gym) => {
+        setGymToManage(gym);
+        setView('gymPortal');
+    };
+    
+    const handleBackToSuperAdmin = () => {
+        setGymToManage(null);
+        setView('superAdminPortal');
+    }
+
+    const renderContent = () => {
+        switch (view) {
+            case 'landing':
+                return <LandingPage onSelectRole={handleRoleSelect} />;
+            case 'superAdminLogin':
+                return <SuperAdminLogin onLogin={handleSuperAdminLogin} onBack={handleLogout} />;
+            case 'gymLogin':
+                return <GymLogin onLogin={handleGymLogin} onBack={handleLogout} />;
+            case 'clientLogin':
+                return <ClientLogin onLogin={handleClientLogin} onBack={handleLogout} />;
+            case 'superAdminPortal':
+                if (isSuperAdmin) {
+                    return <SuperAdminPortal onManageGym={handleManageGym} onLogout={handleLogout} />;
+                }
+                break;
+            case 'gymPortal':
+                const gymForPortal = gymToManage || loggedInGym;
+                if (gymForPortal) {
+                     return <GymPortal 
+                                gym={gymForPortal} 
+                                ai={ai} 
+                                onLogout={handleLogout} 
+                                onBackToSuperAdmin={isSuperAdmin ? handleBackToSuperAdmin : undefined} 
+                            />;
+                }
+                break;
+            case 'clientPortal':
+                if (loggedInClientDNI) {
+                    return <ClientPortal clientDni={loggedInClientDNI} onLogout={handleLogout} ai={ai} />;
+                }
+                break;
+            default:
+                return <LandingPage onSelectRole={handleRoleSelect} />;
+        }
+        // Fallback or loading state
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    };
+    
+    return <>{renderContent()}</>;
 };
 
 const container = document.getElementById('root');

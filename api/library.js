@@ -1,3 +1,4 @@
+
 import clientPromise from './util/mongodb.js';
 
 const DEFAULT_EXERCISE_LIBRARY = {
@@ -60,21 +61,24 @@ const DEFAULT_EXERCISE_LIBRARY = {
     ]
 };
 
-const LIBRARY_DOC_ID = 'main_library';
-
 export default async function handler(req, res) {
   const client = await clientPromise;
   const db = client.db("scorpiongym");
   const collection = db.collection("exerciselibrary");
+  const { gymId } = req.query;
+
+  if (!gymId) {
+    return res.status(400).json({ message: 'Gym ID is required' });
+  }
 
   switch (req.method) {
     case 'GET':
       try {
-        let libraryDoc = await collection.findOne({ _id: LIBRARY_DOC_ID });
+        let libraryDoc = await collection.findOne({ gymId: gymId });
 
         if (!libraryDoc) {
-          console.log("No exercise library found, creating default one...");
-          const newLibrary = { _id: LIBRARY_DOC_ID, data: DEFAULT_EXERCISE_LIBRARY };
+          console.log(`No exercise library found for gym ${gymId}, creating default one...`);
+          const newLibrary = { gymId: gymId, data: DEFAULT_EXERCISE_LIBRARY };
           await collection.insertOne(newLibrary);
           libraryDoc = newLibrary;
         }
@@ -94,7 +98,7 @@ export default async function handler(req, res) {
         }
         
         await collection.updateOne(
-          { _id: LIBRARY_DOC_ID },
+          { gymId: gymId },
           { $set: { data: libraryData } },
           { upsert: true }
         );

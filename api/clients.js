@@ -1,3 +1,4 @@
+
 import clientPromise from './util/mongodb.js';
 
 export default async function handler(req, res) {
@@ -8,7 +9,12 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'GET':
       try {
-        const clients = await collection.find({}).toArray();
+        const { gymId } = req.query;
+        if (!gymId) {
+            return res.status(400).json({ error: 'Gym ID is required' });
+        }
+        
+        const clients = await collection.find({ gymId }).toArray();
         const clientList = clients.map(c => ({
             dni: c.dni,
             profile: c.profile || {},
@@ -24,18 +30,20 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { dni } = req.body;
-        if (!dni) {
-          return res.status(400).json({ message: 'DNI is required' });
+        const { dni, gymId } = req.body;
+        if (!dni || !gymId) {
+          return res.status(400).json({ message: 'DNI and Gym ID are required' });
         }
+        // DNI should be globally unique to simplify client login
         const existingClient = await collection.findOne({ dni });
         if (existingClient) {
-          return res.status(409).json({ message: 'Client with this DNI already exists' });
+          return res.status(409).json({ message: 'Client with this DNI already exists in the system' });
         }
         
         const newAccessCode = Math.floor(100000 + Math.random() * 900000).toString();
         const newClient = {
             dni,
+            gymId,
             accessCode: newAccessCode,
             status: 'active',
             profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", bodyFocusSpecific: "", includeAdaptationPhase: "Sí", trainingIntensity: "Moderada" },

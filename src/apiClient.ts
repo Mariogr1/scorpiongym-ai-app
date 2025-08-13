@@ -1,3 +1,4 @@
+
 // --- Type Definitions ---
 export interface Profile {
     name: string;
@@ -95,6 +96,7 @@ export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
 
 export interface ClientData {
     dni: string;
+    gymId: string;
     profile: Profile;
     routine: Routine | null;
     routineGeneratedDate?: string;
@@ -113,8 +115,15 @@ export interface ClientListItem {
     status: 'active' | 'archived';
 }
 
+export interface Gym {
+    _id: string;
+    name: string;
+    username: string;
+}
+
+
 // --- Constants ---
-export const ADMIN_PASSWORD = "admin";
+export const SUPER_ADMIN_PASSWORD = "admin";
 
 export const advancedTechniqueOptions = [
       { value: '', label: 'Ninguna' },
@@ -125,10 +134,62 @@ export const advancedTechniqueOptions = [
 ];
 
 export const apiClient = {
-  // Client Management
-  async getClients(): Promise<ClientListItem[]> {
+  // --- Super Admin ---
+  async getGyms(): Promise<Gym[]> {
     try {
-        const response = await fetch('/api/clients');
+        const response = await fetch('/api/gyms');
+        if (!response.ok) throw new Error('Network response was not ok');
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch gyms:", error);
+        return [];
+    }
+  },
+  
+  async createGym(name: string, username: string, password: string): Promise<boolean> {
+     try {
+        const response = await fetch('/api/gyms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, username, password }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error("Failed to create gym:", error);
+        return false;
+    }
+  },
+
+  async deleteGym(gymId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to delete gym ${gymId}:`, error);
+        return false;
+    }
+  },
+
+  // --- Gym/Coach Auth ---
+  async gymLogin(username: string, password: string): Promise<Gym | null> {
+    try {
+        const response = await fetch('/api/auth/gym-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error("Gym login failed:", error);
+        return null;
+    }
+  },
+
+  // --- Client Management (Scoped by Gym) ---
+  async getClients(gymId: string): Promise<ClientListItem[]> {
+    try {
+        const response = await fetch(`/api/clients?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const clients: ClientListItem[] = await response.json();
         return clients.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
@@ -170,12 +231,12 @@ export const apiClient = {
     }
   },
 
-  async createClient(dni: string): Promise<{ success: boolean; message?: string }> {
+  async createClient(dni: string, gymId: string): Promise<{ success: boolean; message?: string }> {
     try {
         const response = await fetch('/api/clients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dni }),
+            body: JSON.stringify({ dni, gymId }),
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -225,10 +286,10 @@ export const apiClient = {
     }
   },
 
-  // Exercise Library Management (uses MongoDB via API)
-  async getExerciseLibrary(): Promise<ExerciseLibrary> {
+  // Exercise Library Management (Scoped by Gym)
+  async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {
     try {
-        const response = await fetch('/api/library');
+        const response = await fetch(`/api/library?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const library: ExerciseLibrary = await response.json();
         return library;
@@ -238,9 +299,9 @@ export const apiClient = {
     }
   },
 
-  async saveExerciseLibrary(library: ExerciseLibrary): Promise<boolean> {
+  async saveExerciseLibrary(library: ExerciseLibrary, gymId: string): Promise<boolean> {
     try {
-        const response = await fetch('/api/library', {
+        const response = await fetch(`/api/library?gymId=${gymId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(library),
