@@ -2,9 +2,13 @@
 
 
 
+
+
+
+
 declare var process: any;
 "use client";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { GoogleGenAI, Type } from "@google/genai";
 import "./index.css";
@@ -181,6 +185,114 @@ const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBa
         </div>
     );
 };
+
+// --- Chat Assistant for Client ---
+const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boolean; onClose: () => void; ai: GoogleGenAI | null; clientData: ClientData | null; }) => {
+    const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (isOpen && clientData) {
+            setMessages([{ role: 'model', text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas rápidas para comidas o ejercicios.` }]);
+            setInput('');
+        }
+    }, [isOpen, clientData]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim() || isLoading || !ai || !clientData) return;
+
+        const userMessage = { role: 'user' as const, text: input };
+        setMessages(prev => [...prev, userMessage]);
+        const currentInput = input;
+        setInput('');
+        setIsLoading(true);
+        
+        let modelResponse = '';
+        setMessages(prev => [...prev, { role: 'model' as const, text: '' }]);
+
+        const systemInstruction = `Sos "Scorpion AI", un asistente de IA para un cliente de gimnasio. Tu propósito es dar sugerencias rápidas y útiles sobre el plan de entrenamiento y nutrición del cliente, NUNCA para reemplazar el consejo del entrenador humano.
+        - **Tu Identidad:** Sos amigable, motivador y usas voseo (hablás de "vos").
+        - **Contexto del Cliente:** El plan actual del cliente es: ${JSON.stringify({ profile: clientData.profile, routine: clientData.routine, dietPlan: clientData.dietPlan })}
+        - **Tus Límites (MUY IMPORTANTE):**
+            1. NO podés hacer cambios permanentes en el plan. Siempre debés aclarar que tus sugerencias son temporales y que para un cambio definitivo, debe hablar con su entrenador.
+            2. NO podés dar consejos médicos. Si te preguntan algo relacionado a una lesión o dolor, tu respuesta DEBE ser: "Para cualquier dolor o posible lesión, es fundamental que lo hables con tu entrenador y consultes a un médico o fisioterapeuta. Yo no puedo darte consejos médicos."
+            3. Sé conciso. Tus respuestas deben ser cortas y al punto.
+            4. Si te piden algo fuera de tu alcance (ej: "creame una rutina nueva"), negáte amablemente y recordá tu función: "Mi función es darte sugerencias rápidas para el día a día. Para cambios grandes como una rutina nueva, tenés que hablarlo con tu entrenador."`;
+        
+        const history = messages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
+        const contents = [...history, { role: 'user' as const, parts: [{ text: currentInput }] }];
+
+        try {
+            const responseStream = await ai.models.generateContentStream({ model: "gemini-2.5-flash", contents, config: { systemInstruction } });
+
+            for await (const chunk of responseStream) {
+                modelResponse += chunk.text;
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1].text = modelResponse;
+                    return newMessages;
+                });
+            }
+        } catch (error) {
+            console.error("Error with AI chat:", error);
+            const errorMessage = { role: 'model' as const, text: 'Oops, algo salió mal. Por favor, intentá de nuevo.' };
+            setMessages(prev => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = errorMessage;
+                return newMessages;
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="chat-modal-overlay" onClick={onClose}>
+            <div className="chat-modal-content" onClick={(e) => e.stopPropagation()}>
+                <header className="chat-modal-header">
+                    <h3>Asistente Scorpion AI</h3>
+                    <button className="close-button" onClick={onClose}>&times;</button>
+                </header>
+                <div className="chat-messages">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`chat-message ${msg.role}`}>
+                            <div className="avatar">{msg.role === 'model' ? 'AI' : 'TÚ'}</div>
+                            <div className="message-content">
+                                {msg.text ? <p>{msg.text}</p> : <div className="chat-typing-indicator"><span></span><span></span><span></span></div>}
+                            </div>
+                        </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+                <div className="chat-input-area">
+                    <form onSubmit={handleSendMessage}>
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Escribí tu consulta acá..."
+                            disabled={isLoading}
+                            aria-label="Escribir mensaje al asistente de IA"
+                        />
+                        <button type="submit" disabled={isLoading || !input.trim()} aria-label="Enviar mensaje">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Componente de Gráfico de Peso Corporal y IMC ---
 const BodyWeightChart = ({ data }: { data: BodyWeightEntry[] }) => {
@@ -646,7 +758,7 @@ Para consultas sobre esta política o sobre sus datos personales, puede comunica
 
 
 // 4. Portal del Cliente (Vista de solo lectura)
-const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: () => void }) => {
+const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout: () => void, ai: GoogleGenAI | null }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
     const [activeTab, setActiveTab] = useState<'training' | 'nutrition' | 'progress'>('training');
@@ -657,6 +769,7 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
     const [saveProgressText, setSaveProgressText] = useState("Guardar Progreso");
     const [currentBodyWeight, setCurrentBodyWeight] = useState('');
     const [logWeightText, setLogWeightText] = useState("Registrar");
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
 
     useEffect(() => {
@@ -981,6 +1094,11 @@ const ClientPortal = ({ clientDni, onLogout }: { clientDni: string, onLogout: ()
             {activeTab === 'progress' && (
                 <ProgressView progressLog={progressLog} bodyWeightLog={bodyWeightLog} />
             )}
+
+            <button className="chat-fab" onClick={() => setIsChatOpen(true)} aria-label="Abrir chat de asistencia">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"></path></svg>
+            </button>
+            <ChatAssistantModal isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} ai={ai} clientData={clientData} />
         </div>
     );
 };
@@ -1366,6 +1484,7 @@ const App = () => {
     const [routineGeneratedDate, setRoutineGeneratedDate] = useState<string | null>(null);
     const [dietPlan, setDietPlan] = useState<DietPlan | null>(null);
     const [clientAccessCode, setClientAccessCode] = useState<string>('');
+    const [additionalInstructions, setAdditionalInstructions] = useState('');
     
     // Estado de la UI del Admin
     const [activeTab, setActiveTab] = useState<'training' | 'nutrition'>('training');
@@ -1664,14 +1783,17 @@ const App = () => {
         4.  **Estructura (REQUISITO INDISPENSABLE):** El plan DEBE tener un mínimo de 5 comidas diarias. Utilizá nombres como: Desayuno, Colación de Mañana, Almuerzo, Merienda, Cena. Si el objetivo es hipertrofia o el cliente tiene una alta demanda calórica, podés agregar una sexta comida como "Colación Nocturna". No generes planes con menos de 5 comidas bajo ninguna circunstancia.
         5.  **Recomendaciones (IMPORTANTE):** Agregá una lista de 2 a 4 recomendaciones generales clave, usando voseo (ej: "Tomá 2-3 litros de agua por día", "Intentá comer 1-2 horas antes de entrenar.").
         6.  **Formato:** Devolvé exclusivamente un objeto JSON que siga el schema.`;
+        
+        const finalSystemInstruction = dietSystemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
 
         const dietSchema = { type: Type.OBJECT, properties: { planTitle: { type: Type.STRING }, summary: { type: Type.OBJECT, properties: { totalCalories: { type: Type.INTEGER }, macronutrients: { type: Type.OBJECT, properties: { proteinGrams: { type: Type.INTEGER }, carbsGrams: { type: Type.INTEGER }, fatGrams: { type: Type.INTEGER } }, required: ["proteinGrams", "carbsGrams", "fatGrams"] } }, required: ["totalCalories", "macronutrients"] }, meals: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { mealName: { type: Type.STRING }, foodItems: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { food: { type: Type.STRING }, amount: { type: Type.STRING } }, required: ["food", "amount"] } } }, required: ["mealName", "foodItems"] } }, recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de 2-4 recomendaciones nutricionales generales y de hidratación." } }, required: ["planTitle", "summary", "meals", "recommendations"] };
 
         try {
-            const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: "Creá el plan nutricional.", config: { systemInstruction: dietSystemInstruction, responseMimeType: "application/json", responseSchema: dietSchema } });
+            const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: "Creá el plan nutricional.", config: { systemInstruction: finalSystemInstruction, responseMimeType: "application/json", responseSchema: dietSchema } });
             const parsedDiet = JSON.parse(response.text) as DietPlan;
             setDietPlan(parsedDiet);
             await apiClient.saveClientData(selectedClientDNI, { dietPlan: parsedDiet });
+            setAdditionalInstructions('');
         } catch (err) { setError("No se pudo generar el plan nutricional."); console.error(err); } finally { setLoadingDiet(false); }
     };
     
@@ -1706,7 +1828,7 @@ const App = () => {
             - "Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie."
             - "Myo-reps (3 pasadas) - Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas."
             - "Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos."
-            Si 'useAdvancedTechniques' es 'No', no incluyas el campo 'tecnicaAvanzada'.
+        Si 'useAdvancedTechniques' es 'No', no incluyas el campo 'tecnicaAvanzada'.
         5.  **Descanso (REGLA IMPORTANTE):** El campo 'descanso' DEBE ser una cadena de texto que represente únicamente el número de segundos (ej: '60', '90'). NO incluyas la letra 's' ni la palabra 'segundos'. El valor debe estar entre 30 y 180 segundos, dependiendo de la intensidad del ejercicio.
         6.  **Descarga Activa:** TENÉS QUE generar una rutina detallada de cuerpo completo (4-5 ejercicios compuestos, 2-3 series, 12-15 reps, baja intensidad) para los días de esta fase. NO uses frases genéricas, poné los ejercicios.
         7.  **Cardio:** Agregá "15-25 min de cardio moderado" al final de cada día.
@@ -1714,11 +1836,12 @@ const App = () => {
         9.  **Selección de Ejercicios (REGLA FUNDAMENTAL):** Debés usar ÚNICAMENTE ejercicios de la siguiente lista aprobada: ${enabledExercises.join(', ')}. No inventes ni uses ejercicios que no estén en esta lista.
       `;
       
+      const finalSystemInstruction = systemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
       const prompt = `Armá un plan de entrenamiento completo para este cliente, basado en tus directivas.`;
       const schema = { type: Type.OBJECT, properties: { planName: { type: Type.STRING }, totalDurationWeeks: { type: Type.INTEGER }, phases: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { phaseName: { type: Type.STRING }, durationWeeks: { type: Type.INTEGER }, routine: { type: Type.OBJECT, properties: { dias: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { dia: { type: Type.STRING, description: "El nombre o número del día de entrenamiento (ej. 'Día 1', 'Día A'). NO incluyas el grupo muscular en este campo." }, grupoMuscular: { type: Type.STRING, description: "El grupo muscular principal para este día (ej. 'Pecho y Tríceps', 'Piernas y Glúteos')." }, ejercicios: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { nombre: { type: Type.STRING }, series: { type: Type.STRING }, repeticiones: { type: Type.STRING }, descanso: { type: Type.STRING, description: "El tiempo de descanso en segundos, como una cadena de texto que contenga SÓLO el número (ej: '60')." }, tecnicaAvanzada: { type: Type.STRING } }, required: ["nombre", "series", "repeticiones", "descanso"] }}, cardio: { type: Type.STRING } }, required: ["dia", "grupoMuscular", "ejercicios", "cardio"] }}}}}, required: ["phaseName", "durationWeeks", "routine"] }}}, required: ["planName", "totalDurationWeeks", "phases"] };
 
       try {
-        const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt, config: { systemInstruction, responseMimeType: "application/json", responseSchema: schema } });
+        const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt, config: { systemInstruction: finalSystemInstruction, responseMimeType: "application/json", responseSchema: schema } });
         const parsedPlan = JSON.parse(response.text) as Routine;
         
         parsedPlan.phases.forEach(phase => phase.routine.dias.forEach(dia => dia.ejercicios.forEach(ex => {
@@ -1732,6 +1855,7 @@ const App = () => {
         setDietPlan(null);
         setActiveTab('training');
         await apiClient.saveClientData(selectedClientDNI, { routine: parsedPlan, routineGeneratedDate: generatedDate, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false });
+        setAdditionalInstructions('');
       } catch (err) { setError("No se pudo generar el plan."); console.error(err); } finally { setLoadingRoutine(false); }
     };
     
@@ -1740,7 +1864,7 @@ const App = () => {
         if (currentView === 'landing') return <LandingPage onSelectRole={handleRoleSelect} />;
         if (currentView === 'adminLogin') return <AdminLogin onLogin={handleAdminLogin} />;
         if (currentView === 'clientLogin') return <ClientLogin onLogin={handleClientLogin} onBack={() => setCurrentView('landing')} />;
-        if (currentView === 'clientPortal' && loggedInClientDNI) return <ClientPortal clientDni={loggedInClientDNI} onLogout={handleLogout} />;
+        if (currentView === 'clientPortal' && loggedInClientDNI) return <ClientPortal clientDni={loggedInClientDNI} onLogout={handleLogout} ai={ai} />;
         
         if (currentView === 'adminDashboard') {
             if (adminView === 'library') {
@@ -1851,6 +1975,17 @@ const App = () => {
                     </aside>
             
                     <main className="main-content">
+                        <div className="admin-instructions-box">
+                            <label htmlFor="additional-instructions">Instrucciones Adicionales para la IA</label>
+                            <textarea
+                                id="additional-instructions"
+                                name="additional-instructions"
+                                rows={3}
+                                placeholder="Ej: El cliente es intolerante a la lactosa, evitar productos lácteos y reemplazar proteína en polvo. Tiene una lesión en la rodilla, evitar sentadillas y zancadas."
+                                value={additionalInstructions}
+                                onChange={(e) => setAdditionalInstructions(e.target.value)}
+                            ></textarea>
+                        </div>
                       <div className="actions-bar">
                         <button className="cta-button" onClick={handleGenerateRoutine} disabled={!isFormValid || isLoading}>{loadingRoutine ? <><span className="spinner small"></span>Armando rutina...</> : (routine ? "Volver a generar rutina" : "Generar rutina")}</button>
                         <button className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading || saveButtonText === "Guardando..."}>{saveButtonText}</button>
