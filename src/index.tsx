@@ -1887,7 +1887,7 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
             <div className="admin-dashboard">
                 <header className="main-header">
                     <div className="header-title-wrapper">
-                         <Logo />
+                         {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} className="gym-logo" /> : <Logo />}
                          <div>
                             <h1>Panel de {gym.name}</h1>
                             <p>Gestioná a tus clientes.</p>
@@ -1962,7 +1962,7 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
               <header className="main-header">
                 <button onClick={handleBackToDashboard} className="back-button">← Volver al panel de {gym.name}</button>
                 <div className="header-title-wrapper">
-                  <Logo />
+                  {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} className="gym-logo" /> : <Logo />}
                   <div>
                     <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
                     <p>Gestioná el perfil y los planes de tu cliente.</p>
@@ -2099,7 +2099,9 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
     const [newGymName, setNewGymName] = useState('');
     const [newGymUsername, setNewGymUsername] = useState('');
     const [newGymPassword, setNewGymPassword] = useState('');
+    const [newGymLogo, setNewGymLogo] = useState<string | null>(null);
     const [deleteConfirmation, setDeleteConfirmation] = useState<Gym | null>(null);
+    const [editGym, setEditGym] = useState<Gym | null>(null);
 
     useEffect(() => {
         fetchGyms();
@@ -2112,20 +2114,46 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
         setIsLoading(false);
     };
 
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string | null>>) => {
+        const file = e.target.files?.[0];
+        if (file && file.type === 'image/svg+xml') {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setter(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        } else {
+            alert('Por favor, seleccioná un archivo SVG válido.');
+            setter(null);
+            e.target.value = '';
+        }
+    };
+
     const handleCreateGym = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newGymName || !newGymUsername || !newGymPassword) {
             alert("Todos los campos son obligatorios.");
             return;
         }
-        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword);
+        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLogo);
         if (success) {
             setNewGymName('');
             setNewGymUsername('');
             setNewGymPassword('');
+            setNewGymLogo(null);
             fetchGyms();
         } else {
             alert("Error al crear el gimnasio. Es posible que el nombre de usuario ya exista.");
+        }
+    };
+    
+    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null) => {
+        const success = await apiClient.updateGym(gymId, { name, logoSvg: logoSvg === undefined ? undefined : logoSvg ?? undefined });
+        if (success) {
+            setEditGym(null);
+            fetchGyms();
+        } else {
+            alert("Error al actualizar el gimnasio.");
         }
     };
 
@@ -2147,6 +2175,41 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
     if (isLoading) {
         return <div className="loading-container"><div className="spinner"></div><p>Cargando gimnasios...</p></div>;
     }
+    
+    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null) => void }) => {
+        const [name, setName] = useState(gym.name);
+        const [logo, setLogo] = useState<string | null>(gym.logoSvg || null);
+
+        const handleSave = () => {
+            onSave(gym._id, name, logo);
+        };
+        
+        return (
+            <div className="modal-overlay" onClick={onClose}>
+                <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+                    <h3>Editar Gimnasio</h3>
+                    <div className="form-group">
+                        <label htmlFor="edit-gym-name">Nombre del Gimnasio</label>
+                        <input id="edit-gym-name" type="text" value={name} onChange={e => setName(e.target.value)} />
+                    </div>
+                     <div className="form-group">
+                         <label>Logo (SVG)</label>
+                         <div className="logo-upload-wrapper" style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <label htmlFor="edit-logo-upload" className="file-input-label">Cambiar Logo</label>
+                            <input id="edit-logo-upload" type="file" accept="image/svg+xml" onChange={(e) => handleLogoUpload(e, setLogo)} />
+                            <div className="logo-preview">
+                                {logo ? <img src={logo} alt="Previsualización del logo" /> : 'SVG'}
+                            </div>
+                        </div>
+                     </div>
+                    <div className="modal-actions">
+                        <button className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                        <button className="cta-button" onClick={handleSave}>Guardar Cambios</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="admin-dashboard">
@@ -2157,6 +2220,7 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                 onCancel={() => setDeleteConfirmation(null)}
                 confirmText="Sí, Eliminar"
             />
+            {editGym && <EditGymModal gym={editGym} onClose={() => setEditGym(null)} onSave={handleUpdateGym} />}
             <header className="main-header">
                 <div className="header-title-wrapper">
                     <Logo />
@@ -2174,6 +2238,13 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                     <input type="text" value={newGymName} onChange={e => setNewGymName(e.target.value)} placeholder="Nombre del Gimnasio" required />
                     <input type="text" value={newGymUsername} onChange={e => setNewGymUsername(e.target.value)} placeholder="Usuario (para login)" required />
                     <input type="password" value={newGymPassword} onChange={e => setNewGymPassword(e.target.value)} placeholder="Contraseña" required />
+                     <div className="logo-upload-wrapper">
+                         <label htmlFor="logo-upload" className="file-input-label">Subir Logo</label>
+                         <input id="logo-upload" type="file" accept="image/svg+xml" onChange={(e) => handleLogoUpload(e, setNewGymLogo)} />
+                         <div className="logo-preview">
+                            {newGymLogo ? <img src={newGymLogo} alt="Previsualización del logo" /> : 'SVG'}
+                         </div>
+                     </div>
                     <button type="submit" className="cta-button">Crear Cuenta</button>
                 </form>
             </div>
@@ -2181,10 +2252,18 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
             <div className="gym-list">
                 {gyms.length > 0 ? gyms.map(gym => (
                     <div key={gym._id} className="gym-card">
-                        <h3>{gym.name}</h3>
-                        <p>Usuario: {gym.username}</p>
+                        <div className="gym-card-header">
+                             <div className="gym-card-logo">
+                                {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} /> : <Logo />}
+                             </div>
+                             <div className="gym-card-info">
+                                <h3>{gym.name}</h3>
+                                <p>Usuario: {gym.username}</p>
+                             </div>
+                        </div>
                         <div className="gym-card-actions">
                             <button className="action-btn delete" onClick={() => handleDeleteRequest(gym)}>Eliminar</button>
+                            <button className="action-btn edit" onClick={() => setEditGym(gym)}>Editar</button>
                             <button className="cta-button" onClick={() => onManageGym(gym)}>Gestionar</button>
                         </div>
                     </div>

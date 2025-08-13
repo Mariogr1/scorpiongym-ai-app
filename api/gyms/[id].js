@@ -1,4 +1,5 @@
 
+
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
 
@@ -15,6 +16,35 @@ export default async function handler(req, res) {
   const objectId = new ObjectId(id);
 
   switch (req.method) {
+    case 'PUT':
+      try {
+        const { name, logoSvg } = req.body;
+        const updateData = {};
+        if (name) updateData.name = name;
+        // Allows setting the logo to null/undefined or a new string
+        if (logoSvg !== undefined) updateData.logoSvg = logoSvg;
+
+        if (Object.keys(updateData).length === 0) {
+          return res.status(400).json({ message: 'No update data provided.' });
+        }
+
+        const result = await gymsCollection.updateOne(
+          { _id: objectId },
+          { $set: updateData }
+        );
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: 'Gym not found' });
+        }
+
+        res.status(200).json({ success: true });
+
+      } catch (e) {
+        console.error(`API /api/gyms/${id} [PUT] Error:`, e);
+        res.status(500).json({ error: 'Unable to update gym' });
+      }
+      break;
+
     case 'DELETE':
       const session = client.startSession();
       try {
@@ -46,7 +76,7 @@ export default async function handler(req, res) {
       break;
 
     default:
-      res.setHeader('Allow', ['DELETE']);
+      res.setHeader('Allow', ['PUT', 'DELETE']);
       res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }

@@ -1,4 +1,5 @@
 
+
 import clientPromise from './util/mongodb.js';
 
 export default async function handler(req, res) {
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password } = req.body;
+        const { name, username, password, logoSvg } = req.body;
         if (!name || !username || !password) {
           return res.status(400).json({ message: 'Name, username, and password are required' });
         }
@@ -33,7 +34,8 @@ export default async function handler(req, res) {
         const newGym = {
           name,
           username,
-          password, 
+          password,
+          logoSvg: logoSvg || null,
         };
         
         const result = await gymsCollection.insertOne(newGym);

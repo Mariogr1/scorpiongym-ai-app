@@ -1,4 +1,5 @@
 
+
 // --- Type Definitions ---
 export interface Profile {
     name: string;
@@ -119,6 +120,7 @@ export interface Gym {
     _id: string;
     name: string;
     username: string;
+    logoSvg?: string;
 }
 
 
@@ -146,16 +148,30 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, logoSvg: string | null): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password }),
+            body: JSON.stringify({ name, username, password, logoSvg }),
         });
         return response.ok;
     } catch (error) {
         console.error("Failed to create gym:", error);
+        return false;
+    }
+  },
+  
+  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null }): Promise<boolean> {
+     try {
+        const response = await fetch(`/api/gyms/${gymId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to update gym ${gymId}:`, error);
         return false;
     }
   },
