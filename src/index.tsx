@@ -53,7 +53,15 @@ const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, 
 
 // --- COMPONENTES DE VISTAS ---
 
-// 0. Modal de Confirmación
+// 0. Logo
+const Logo = () => (
+    <svg className="app-logo" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16.417 10.242c.31-.38.232-1.121-.242-1.428-1.077-.695-1.155-2.031-.158-2.89 1.01-1.01 2.753-.943 3.651.192.42.529.986.915 1.631.915.99 0 1.631-.963 1.25-1.84a5.95 5.95 0 00-4.632-4.18c-2.88-.677-5.617 1.05-6.627 3.63-.615 1.572-.31 3.39.881 4.545.42.42 1.03.653 1.659.653.677 0 1.296-.292 1.708-.752l.279-.387zm-2.834 2.075a3.149 3.149 0 00-3.149-3.149 3.149 3.149 0 00-3.149 3.149 3.149 3.149 0 003.149 3.149 3.149 3.149 0 003.149-3.149zm-1.121 5.093c-2.321 2.321-6.095 2.321-8.416 0-1.096-1.096-1.708-2.55-1.708-4.093s.612-3.039 1.708-4.135c.42-.42.42-1.121 0-1.542s-1.121-.42-1.542 0c-1.542 1.542-2.398 3.585-2.398 5.72s.856 4.135 2.398 5.677c3.107 3.107 8.144 3.107 11.25 0 .42-.42.42-1.121 0-1.542s-1.121-.377-1.542.042l-.279.279z" />
+    </svg>
+);
+
+
+// 1. Modal de Confirmación
 const ConfirmationModal = ({
   isOpen,
   message,
@@ -88,10 +96,11 @@ const ConfirmationModal = ({
   );
 };
 
-// 1. Página de Bienvenida (Selección de Rol)
+// 2. Página de Bienvenida (Selección de Rol)
 const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'superadmin' | 'gym' | 'client') => void }) => (
     <div className="login-container">
         <header>
+            <Logo />
             <h1>ScorpionGYM AI</h1>
             <p>Tu plataforma de entrenamiento inteligente.</p>
         </header>
@@ -107,7 +116,7 @@ const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'superadmin' | 'gy
     </div>
 );
 
-// 2. Logins
+// 3. Logins
 const SuperAdminLogin = ({ onLogin, onBack }: { onLogin: () => void; onBack: () => void; }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -124,7 +133,7 @@ const SuperAdminLogin = ({ onLogin, onBack }: { onLogin: () => void; onBack: () 
 
     return (
         <div className="login-container">
-            <header><h1>ScorpionGYM AI</h1></header>
+            <header><Logo /></header>
             <div className="login-box">
                 <h2>Acceso de Súper Administrador</h2>
                 <form onSubmit={handleSubmit}>
@@ -165,7 +174,7 @@ const GymLogin = ({ onLogin, onBack }: { onLogin: (gym: Gym) => void; onBack: ()
 
     return (
         <div className="login-container">
-            <header><h1>ScorpionGYM AI</h1></header>
+            <header><Logo /></header>
             <div className="login-box">
                 <h2>Acceso de Gimnasio / Entrenador</h2>
                 <form onSubmit={handleSubmit}>
@@ -203,7 +212,7 @@ const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBa
     
     return (
          <div className="login-container">
-             <header><h1>ScorpionGYM AI</h1></header>
+             <header><Logo /></header>
             <div className="login-box">
                 <h2>Acceso de Cliente</h2>
                 <form onSubmit={handleSubmit}>
@@ -1859,8 +1868,11 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
             <div className="admin-dashboard">
                 <header className="main-header">
                     <div className="header-title-wrapper">
-                         <h1>Panel de {gym.name}</h1>
-                         <p>Gestioná a tus clientes.</p>
+                         <Logo />
+                         <div>
+                            <h1>Panel de {gym.name}</h1>
+                            <p>Gestioná a tus clientes.</p>
+                         </div>
                     </div>
                     <div className="admin-header-nav">
                          <button onClick={() => setView('library')} className="header-nav-button">Gestionar Ejercicios</button>
@@ -1933,8 +1945,11 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
               <header className="main-header">
                 <button onClick={handleBackToDashboard} className="back-button">← Volver al panel de {gym.name}</button>
                 <div className="header-title-wrapper">
-                  <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
-                  <p>Gestioná el perfil y los planes de tu cliente.</p>
+                  <Logo />
+                  <div>
+                    <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
+                    <p>Gestioná el perfil y los planes de tu cliente.</p>
+                  </div>
                 </div>
                 {onBackToSuperAdmin 
                      ? <button onClick={onBackToSuperAdmin} className="logout-button admin-logout">Volver a Super Admin</button>
@@ -2110,8 +2125,11 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
             />
             <header className="main-header">
                 <div className="header-title-wrapper">
-                    <h1>Panel de Súper Administrador</h1>
-                    <p>Gestioná las cuentas de los gimnasios y entrenadores.</p>
+                    <Logo />
+                    <div>
+                        <h1>Panel de Súper Administrador</h1>
+                        <p>Gestioná las cuentas de los gimnasios y entrenadores.</p>
+                    </div>
                 </div>
                 <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
             </header>
