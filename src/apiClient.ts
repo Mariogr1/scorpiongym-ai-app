@@ -1,5 +1,6 @@
 
 
+
 // --- Type Definitions ---
 export interface Profile {
     name: string;
@@ -162,7 +163,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null }): Promise<boolean> {
+  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null; password?: string }): Promise<boolean> {
      try {
         const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',

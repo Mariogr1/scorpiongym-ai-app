@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -55,9 +56,7 @@ const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, 
 
 // 0. Logo
 const Logo = () => (
-    <svg className="app-logo" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M16.417 10.242c.31-.38.232-1.121-.242-1.428-1.077-.695-1.155-2.031-.158-2.89 1.01-1.01 2.753-.943 3.651.192.42.529.986.915 1.631.915.99 0 1.631-.963 1.25-1.84a5.95 5.95 0 00-4.632-4.18c-2.88-.677-5.617 1.05-6.627 3.63-.615 1.572-.31 3.39.881 4.545.42.42 1.03.653 1.659.653.677 0 1.296-.292 1.708-.752l.279-.387zm-2.834 2.075a3.149 3.149 0 00-3.149-3.149 3.149 3.149 0 00-3.149 3.149 3.149 3.149 0 003.149 3.149 3.149 3.149 0 003.149-3.149zm-1.121 5.093c-2.321 2.321-6.095 2.321-8.416 0-1.096-1.096-1.708-2.55-1.708-4.093s.612-3.039 1.708-4.135c.42-.42.42-1.121 0-1.542s-1.121-.42-1.542 0c-1.542 1.542-2.398 3.585-2.398 5.72s.856 4.135 2.398 5.677c3.107 3.107 8.144 3.107 11.25 0 .42-.42.42-1.121 0-1.542s-1.121-.377-1.542.042l-.279.279z" />
-    </svg>
+    <img src="/logo.svg" alt="ScorpionGYM AI Logo" className="app-logo" />
 );
 
 
@@ -2147,8 +2146,19 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
         }
     };
     
-    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null) => {
-        const success = await apiClient.updateGym(gymId, { name, logoSvg: logoSvg === undefined ? undefined : logoSvg ?? undefined });
+    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null, password: string) => {
+        const updatePayload: { name: string; logoSvg?: string | null; password?: string; } = { name };
+        
+        if (logoSvg !== undefined) {
+             updatePayload.logoSvg = logoSvg;
+        }
+
+        const trimmedPassword = password.trim();
+        if (trimmedPassword) {
+            updatePayload.password = trimmedPassword;
+        }
+    
+        const success = await apiClient.updateGym(gymId, updatePayload);
         if (success) {
             setEditGym(null);
             fetchGyms();
@@ -2176,12 +2186,14 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
         return <div className="loading-container"><div className="spinner"></div><p>Cargando gimnasios...</p></div>;
     }
     
-    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null) => void }) => {
+    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null, password: string) => void }) => {
         const [name, setName] = useState(gym.name);
         const [logo, setLogo] = useState<string | null>(gym.logoSvg || null);
+        const [password, setPassword] = useState('');
+
 
         const handleSave = () => {
-            onSave(gym._id, name, logo);
+            onSave(gym._id, name, logo, password);
         };
         
         return (
@@ -2202,6 +2214,10 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                             </div>
                         </div>
                      </div>
+                     <div className="form-group">
+                        <label htmlFor="edit-gym-password">Nueva Contraseña (opcional)</label>
+                        <input id="edit-gym-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Dejar en blanco para no cambiar" />
+                    </div>
                     <div className="modal-actions">
                         <button className="cta-button secondary" onClick={onClose}>Cancelar</button>
                         <button className="cta-button" onClick={handleSave}>Guardar Cambios</button>
