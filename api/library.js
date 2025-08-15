@@ -145,9 +145,7 @@ const DEFAULT_EXERCISE_LIBRARY = {
         { name: "Sentadilla sumo con mancuernas", isEnabled: true, youtubeLink: "" }
     ],
     "Gemelos y Sóleos": [
-        { name: "Elevación de talones (gemelos) de pie", isEnabled: true, youtubeLink: "" },
-        { name: "Elevación de talones (gemelos) de sentado", isEnabled: true, youtubeLink: "" },
-        { name: "Extencion de gemelos en prensa", isEnabled: true, youtubeLink: "" }
+        { name: "Elevación de talones (gemelos) de pie", isEnabled: true, youtubeLink: "" }
     ],
     "Aductores y Abductores": [
         { name: "ABductor en maquina", isEnabled: true, youtubeLink: "" },
