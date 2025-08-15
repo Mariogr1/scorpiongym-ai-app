@@ -28,7 +28,7 @@ import {
 } from './apiClient';
 
 
-// --- Utility Function ---
+// --- Utility Functions ---
 const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, category: string, categoryClass: string } => {
     if (isNaN(weight) || weight <= 0 || isNaN(heightCm) || heightCm <= 0) {
         return { bmi: null, category: 'N/A', categoryClass: '' };
@@ -50,6 +50,13 @@ const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, 
 
     return { bmi: bmiValue, category, categoryClass };
 };
+
+const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = error => reject(error);
+});
 
 
 // --- COMPONENTES DE VISTAS ---
@@ -229,31 +236,65 @@ const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBa
 };
 
 // --- Chat Assistant for Client ---
-const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boolean; onClose: () => void; ai: GoogleGenAI | null; clientData: ClientData | null; }) => {
-    const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+const ChatAssistantModal = ({ isOpen, onClose, ai, clientData, onUpdateClientData }: { isOpen: boolean; onClose: () => void; ai: GoogleGenAI | null; clientData: ClientData | null; onUpdateClientData: (updates: Partial<ClientData>) => void; }) => {
+    const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string, image?: string }[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [image, setImage] = useState<{b64: string, mimeType: string} | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (isOpen && clientData) {
-            setMessages([{ role: 'model' as const, text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas rápidas para comidas o ejercicios.` }]);
+            setMessages([{ role: 'model' as const, text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas para comidas, ejercicios, o analizar una foto de tu comida para darte una estimación de sus calorías.` }]);
             setInput('');
+            setImage(null);
         }
     }, [isOpen, clientData]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+    
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            if (file.size > 4 * 1024 * 1024) { // 4MB limit
+                alert("La imagen es muy grande. Por favor, elegí una de menos de 4MB.");
+                return;
+            }
+            const b64 = await toBase64(file);
+            setImage({ b64, mimeType: file.type });
+        }
+    };
+
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim() || isLoading || !ai || !clientData) return;
+        if ((!input.trim() && !image) || isLoading || !ai || !clientData) return;
 
-        const userMessage = { role: 'user' as const, text: input };
+        // --- Daily Question Limit Check ---
+        const limit = clientData.dailyQuestionLimit;
+        if (typeof limit === 'number' && limit >= 0) {
+            const today = new Date().toISOString().split('T')[0];
+            const usage = clientData.aiUsage || { date: today, count: 0 };
+            const currentCount = usage.date === today ? usage.count : 0;
+            
+            if (currentCount >= limit) {
+                setMessages(prev => [...prev, { role: 'model', text: `Llegaste a tu límite de ${limit} consultas por hoy. ¡Nos vemos mañana!` }]);
+                setInput('');
+                setImage(null);
+                return;
+            }
+        }
+        
+        const userMessage = { role: 'user' as const, text: input, image: image ? `data:${image.mimeType};base64,${image.b64}` : undefined };
         setMessages(prev => [...prev, userMessage]);
+        
         const currentInput = input;
+        const currentImage = image;
         setInput('');
+        setImage(null);
         setIsLoading(true);
         
         let modelResponse = '';
@@ -262,6 +303,7 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
         const systemInstruction = `Sos "Scorpion AI", un asistente de IA para un cliente de gimnasio. Tu propósito es dar sugerencias rápidas y útiles sobre el plan de entrenamiento y nutrición del cliente, NUNCA para reemplazar el consejo del entrenador humano.
         - **Tu Identidad:** Sos amigable, motivador y usas voseo (hablás de "vos").
         - **Contexto del Cliente:** El plan actual del cliente es: ${JSON.stringify({ profile: clientData.profile, routine: clientData.routine, dietPlan: clientData.dietPlan })}
+        - **Análisis de Imágenes (NUEVA FUNCIÓN):** Si el usuario sube una imagen de una comida, tu tarea principal es analizarla, identificar los alimentos y dar una estimación de las calorías totales, proteínas, carbohidratos y grasas. Siempre DEBES aclarar que es una estimación aproximada.
         - **Tus Límites (MUY IMPORTANTE):**
             1. NO podés hacer cambios permanentes en el plan. Siempre debés aclarar que tus sugerencias son temporales y que para un cambio definitivo, debe hablar con su entrenador.
             2. NO podés dar consejos médicos. Si te preguntan algo relacionado a una lesión o dolor, tu respuesta DEBE ser: "Para cualquier dolor o posible lesión, es fundamental que lo hables con tu entrenador y consultes a un médico o fisioterapeuta. Yo no puedo darte consejos médicos."
@@ -269,7 +311,15 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
             4. Si te piden algo fuera de tu alcance (ej: "creame una rutina nueva"), negáte amablemente y recordá tu función: "Mi función es darte sugerencias rápidas para el día a día. Para cambios grandes como una rutina nueva, tenés que hablarlo con tu entrenador."`;
         
         const history = messages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
-        const contents = [...history, { role: 'user' as const, parts: [{ text: currentInput }] }];
+        
+        const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [];
+        if (currentImage) {
+            parts.push({ inlineData: { mimeType: currentImage.mimeType, data: currentImage.b64 } });
+        }
+        const promptText = currentImage && !currentInput ? "Analizá esta comida y dame una estimación de sus calorías y macronutrientes (proteínas, carbohidratos, grasas)." : currentInput;
+        parts.push({ text: promptText });
+        
+        const contents = [...history, { role: 'user' as const, parts }];
 
         try {
             const responseStream = await ai.models.generateContentStream({ model: "gemini-2.5-flash", contents, config: { systemInstruction } });
@@ -282,6 +332,16 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
                     return newMessages;
                 });
             }
+
+            // --- Update Usage Count ---
+            const today = new Date().toISOString().split('T')[0];
+            const usage = clientData.aiUsage || { date: today, count: 0 };
+            const newCount = usage.date === today ? usage.count + 1 : 1;
+            const newUsage = { date: today, count: newCount };
+            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
+            onUpdateClientData({ aiUsage: newUsage });
+
+
         } catch (error) {
             console.error("Error with AI chat:", error);
             const errorMessage = { role: 'model' as const, text: 'Oops, algo salió mal. Por favor, intentá de nuevo.' };
@@ -309,6 +369,7 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
                         <div key={index} className={`chat-message ${msg.role}`}>
                             <div className="avatar">{msg.role === 'model' ? 'AI' : 'TÚ'}</div>
                             <div className="message-content">
+                                {msg.image && <img src={msg.image} alt="Adjunto de usuario" />}
                                 {msg.text ? <p>{msg.text}</p> : <div className="chat-typing-indicator"><span></span><span></span><span></span></div>}
                             </div>
                         </div>
@@ -316,7 +377,17 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
                     <div ref={messagesEndRef} />
                 </div>
                 <div className="chat-input-area">
+                    {image && (
+                        <div className="chat-image-preview">
+                            <img src={`data:${image.mimeType};base64,${image.b64}`} alt="Previsualización" />
+                            <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+                        </div>
+                    )}
                     <form onSubmit={handleSendMessage}>
+                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
+                         <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.586 10.414l-8-8A2 2 0 0012 2H4a2 2 0 00-2 2v16a2 2 0 002 2h16a2 2 0 002-2V11a1 1 0 00-1-1zm-9.172 2.172a3 3 0 114.242-4.242 3 3 0 01-4.242 4.242zM7 17a1 1 0 01-1-1 3 3 0 013-3h8a1 1 0 010 2H9a1 1 0 00-1 1 1 1 0 01-1 1z"/></svg>
+                         </button>
                         <input
                             type="text"
                             value={input}
@@ -325,7 +396,7 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData }: { isOpen: boole
                             disabled={isLoading}
                             aria-label="Escribir mensaje al asistente de IA"
                         />
-                        <button type="submit" disabled={isLoading || !input.trim()} aria-label="Enviar mensaje">
+                        <button type="submit" disabled={isLoading || (!input.trim() && !image)} aria-label="Enviar mensaje">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
                         </button>
                     </form>
@@ -826,6 +897,10 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
         };
         loadInitialData();
     }, [clientDni]);
+    
+    const updateClientDataLocally = (updates: Partial<ClientData>) => {
+        setClientData(prev => prev ? { ...prev, ...updates } : null);
+    };
 
     const flatExerciseLibrary = useMemo(() => Object.values(exerciseLibrary).flat(), [exerciseLibrary]);
 
@@ -1156,7 +1231,7 @@ const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout
             <button className="chat-fab" onClick={() => setIsChatOpen(true)} aria-label="Abrir chat de asistencia">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"></path></svg>
             </button>
-            <ChatAssistantModal isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} ai={ai} clientData={clientData} />
+            <ChatAssistantModal isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} ai={ai} clientData={clientData} onUpdateClientData={updateClientDataLocally} />
         </div>
     );
 };
@@ -2099,6 +2174,7 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
     const [newGymUsername, setNewGymUsername] = useState('');
     const [newGymPassword, setNewGymPassword] = useState('');
     const [newGymLogo, setNewGymLogo] = useState<string | null>(null);
+    const [newGymDailyQuestionLimit, setNewGymDailyQuestionLimit] = useState(10);
     const [deleteConfirmation, setDeleteConfirmation] = useState<Gym | null>(null);
     const [editGym, setEditGym] = useState<Gym | null>(null);
 
@@ -2134,20 +2210,21 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
             alert("Todos los campos son obligatorios.");
             return;
         }
-        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLogo);
+        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLogo, newGymDailyQuestionLimit);
         if (success) {
             setNewGymName('');
             setNewGymUsername('');
             setNewGymPassword('');
             setNewGymLogo(null);
+            setNewGymDailyQuestionLimit(10);
             fetchGyms();
         } else {
             alert("Error al crear el gimnasio. Es posible que el nombre de usuario ya exista.");
         }
     };
     
-    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null, password: string) => {
-        const updatePayload: { name: string; logoSvg?: string | null; password?: string; } = { name };
+    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null, password: string, dailyQuestionLimit: number) => {
+        const updatePayload: { name: string; logoSvg?: string | null; password?: string; dailyQuestionLimit?: number; } = { name, dailyQuestionLimit };
         
         if (logoSvg !== undefined) {
              updatePayload.logoSvg = logoSvg;
@@ -2186,14 +2263,15 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
         return <div className="loading-container"><div className="spinner"></div><p>Cargando gimnasios...</p></div>;
     }
     
-    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null, password: string) => void }) => {
+    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null, password: string, limit: number) => void }) => {
         const [name, setName] = useState(gym.name);
         const [logo, setLogo] = useState<string | null>(gym.logoSvg || null);
         const [password, setPassword] = useState('');
+        const [limit, setLimit] = useState(gym.dailyQuestionLimit || 10);
 
 
         const handleSave = () => {
-            onSave(gym._id, name, logo, password);
+            onSave(gym._id, name, logo, password, limit);
         };
         
         return (
@@ -2217,6 +2295,10 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                      <div className="form-group">
                         <label htmlFor="edit-gym-password">Nueva Contraseña (opcional)</label>
                         <input id="edit-gym-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Dejar en blanco para no cambiar" />
+                    </div>
+                     <div className="form-group">
+                        <label htmlFor="edit-gym-limit">Límite de preguntas diarias por cliente</label>
+                        <input id="edit-gym-limit" type="number" value={limit} onChange={e => setLimit(Number(e.target.value))} min="0" />
                     </div>
                     <div className="modal-actions">
                         <button className="cta-button secondary" onClick={onClose}>Cancelar</button>
@@ -2254,6 +2336,7 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                     <input type="text" value={newGymName} onChange={e => setNewGymName(e.target.value)} placeholder="Nombre del Gimnasio" required />
                     <input type="text" value={newGymUsername} onChange={e => setNewGymUsername(e.target.value)} placeholder="Usuario (para login)" required />
                     <input type="password" value={newGymPassword} onChange={e => setNewGymPassword(e.target.value)} placeholder="Contraseña" required />
+                    <input type="number" value={newGymDailyQuestionLimit} onChange={e => setNewGymDailyQuestionLimit(Number(e.target.value))} placeholder="Límite preguntas IA" title="Límite de preguntas diarias a la IA por cliente" required min="0" />
                      <div className="logo-upload-wrapper">
                          <label htmlFor="logo-upload" className="file-input-label">Subir Logo</label>
                          <input id="logo-upload" type="file" accept="image/svg+xml" onChange={(e) => handleLogoUpload(e, setNewGymLogo)} />
@@ -2275,6 +2358,7 @@ const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) =
                              <div className="gym-card-info">
                                 <h3>{gym.name}</h3>
                                 <p>Usuario: {gym.username}</p>
+                                <p>Límite IA: {gym.dailyQuestionLimit ?? 'N/A'} por día</p>
                              </div>
                         </div>
                         <div className="gym-card-actions">

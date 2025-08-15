@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'PUT':
       try {
-        const { name, logoSvg, password } = req.body;
+        const { name, logoSvg, password, dailyQuestionLimit } = req.body;
         const updateData = {};
         if (name) updateData.name = name;
         // Allows setting the logo to null/undefined or a new string
@@ -29,6 +29,10 @@ export default async function handler(req, res) {
         // Following project's current convention of storing plaintext.
         if (password) {
             updateData.password = password;
+        }
+
+        if (dailyQuestionLimit !== undefined) {
+            updateData.dailyQuestionLimit = Number(dailyQuestionLimit);
         }
 
         if (Object.keys(updateData).length === 0) {

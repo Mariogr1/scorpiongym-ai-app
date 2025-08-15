@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
 
 export default async function handler(req, res) {
@@ -13,6 +14,21 @@ export default async function handler(req, res) {
         if (!clientData) {
           return res.status(404).json({ message: 'Client not found' });
         }
+
+        // Fetch gym's dailyQuestionLimit and attach it to the client data
+        if (clientData.gymId) {
+            try {
+                const gymsCollection = db.collection("gyms");
+                const gymObjectId = new ObjectId(clientData.gymId);
+                const gym = await gymsCollection.findOne({ _id: gymObjectId });
+                if (gym) {
+                    clientData.dailyQuestionLimit = gym.dailyQuestionLimit;
+                }
+            } catch (e) {
+                 console.error(`Could not fetch gym details for client ${dni}:`, e);
+            }
+        }
+
         res.status(200).json(clientData);
       } catch (e) {
         console.error(`API /api/clients/${dni} [GET] Error:`, e);
@@ -24,6 +40,8 @@ export default async function handler(req, res) {
       try {
         const dataToUpdate = req.body;
         delete dataToUpdate._id;
+        // Prevent client-side from overwriting the limit
+        delete dataToUpdate.dailyQuestionLimit;
         
         const result = await collection.updateOne(
           { dni: dni },

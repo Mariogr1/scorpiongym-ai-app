@@ -1,6 +1,8 @@
 {
   "name": "ScorpionGYM AI",
   "description": "Una aplicación que genera rutinas de entrenamiento personalizadas para clientes de gimnasio utilizando IA.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "camera"
+  ],
   "prompt": ""
 }

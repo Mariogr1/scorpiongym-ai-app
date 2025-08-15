@@ -1,6 +1,3 @@
-
-
-
 // --- Type Definitions ---
 export interface Profile {
     name: string;
@@ -108,6 +105,8 @@ export interface ClientData {
     termsAccepted?: boolean;
     accessCode: string;
     status?: 'active' | 'archived';
+    dailyQuestionLimit?: number; // Added from Gym
+    aiUsage?: { date: string; count: number }; // Added to track usage
 }
 
 export interface ClientListItem {
@@ -122,6 +121,7 @@ export interface Gym {
     name: string;
     username: string;
     logoSvg?: string;
+    dailyQuestionLimit?: number; // Added
 }
 
 
@@ -149,12 +149,12 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string, logoSvg: string | null): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, logoSvg: string | null, dailyQuestionLimit: number): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, logoSvg }),
+            body: JSON.stringify({ name, username, password, logoSvg, dailyQuestionLimit }),
         });
         return response.ok;
     } catch (error) {
@@ -163,7 +163,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null; password?: string }): Promise<boolean> {
+  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null; password?: string, dailyQuestionLimit?: number }): Promise<boolean> {
      try {
         const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',
