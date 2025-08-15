@@ -1914,37 +1914,47 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
       setError("");
       
       const focusDescription = profile.bodyFocusArea + (profile.bodyFocusSpecific ? ` con un fuerte énfasis en ${profile.bodyFocusSpecific}` : '');
-      const enabledExercises = Object.entries(exerciseLibrary)
-        .flatMap(([group, exercises]) => 
-            exercises.filter(ex => ex.isEnabled).map(ex => ({ name: ex.name, group }))
-        );
+      
+      const enabledExercisesByGroup = Object.entries(exerciseLibrary)
+        .reduce((acc, [group, exercises]) => {
+            const enabledNames = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+            if (enabledNames.length > 0) {
+                acc[group] = enabledNames;
+            }
+            return acc;
+        }, {} as Record<string, string[]>);
 
-      if (enabledExercises.length === 0) {
+      if (Object.keys(enabledExercisesByGroup).length === 0) {
         setError("No hay ejercicios habilitados en la biblioteca. Habilitá algunos antes de generar una rutina.");
         setLoadingRoutine(false);
         return;
       }
       
       const systemInstruction = `
-        Sos un entrenador personal de élite de Argentina. Tu laburo es crear un plan de entrenamiento periodizado (8-12 semanas) en JSON.
+        Sos un entrenador personal de élite de Argentina. Tu trabajo es crear un plan de entrenamiento periodizado (8-12 semanas) en formato JSON.
         Datos del cliente: ${JSON.stringify(profile)}.
-        Lista de ejercicios disponibles (agrupados por músculo): ${JSON.stringify(enabledExercises)}.
-        Principios y Reglas Inquebrantables:
-        1.  **Periodización Creativa:** Usá fases (Adaptación, Hipertrofia, Fuerza, Descarga) con duración flexible.
-        2.  **Intensidad (CRÍTICO):** El cliente eligió una intensidad '${profile.trainingIntensity}'. AJUSTÁ EL VOLUMEN, LA DURACIÓN Y LA CANTIDAD DE EJERCICIOS:
-            - **Extrema:** Nivel MÁS DURO. Entrenamiento brutal de >90 mins antes de cardio. Volumen alto: **9-12 ejercicios/día, 4-6 series/ejercicio**. Reps para músculo enfocado: 15-25. Reps para el resto: 8-12. Descansos: 30-60s. Usá técnicas avanzadas si se permite.
-            - **Alta:** Entrenamiento muy exigente de ~90 mins ANTES del cardio. **7-9 ejercicios/día**. Descansos: 45-60s.
-            - **Moderada:** Entrenamiento estándar de 60-75 mins antes de cardio, **5-6 ejercicios/día**. Descansos: 60-90s.
-            - **Baja:** Entrenamiento corto de 45-60 mins, **4-5 ejercicios básicos/día**. Descansos: 90s+.
-        3.  **Fase de Adaptación:** ${profile.includeAdaptationPhase === 'Sí' ? 'DEBES incluir una fase de adaptación anatómica al principio del plan.' : 'NO incluyas una fase de adaptación anatómica. Arrancá directamente con la fase principal del objetivo.'}
-        4.  **Técnicas Avanzadas:** Si 'useAdvancedTechniques' es 'Sí' y el nivel es 'Intermedio'/'Avanzado', podés incluir con moderación una técnica. **NO USES SUPERSERIES.** El campo 'tecnicaAvanzada' debe contener nombre, detalles y una breve descripción de ejecución. Formato exacto: "Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces." o "Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.". Si es 'No', omití el campo.
-        5.  **Descanso (REGLA):** El campo 'descanso' DEBE ser una cadena con SÓLO el número de segundos (ej: '60', '90'). Entre 30 y 180.
-        6.  **Descarga Activa:** Generá una rutina DETALLADA (4-5 ejercicios compuestos, 2-3 series, 12-15 reps, baja intensidad). NO uses frases genéricas.
-        7.  **Cardio:** Agregá "15-25 min de cardio moderado" al final de cada día.
-        8.  **Enfoque:** El enfoque principal es '${focusDescription}'. Si se especifica un músculo, ese grupo DEBE tener más volumen/prioridad.
-        9.  **Regla de Coherencia Muscular (CRÍTICA):** Para cada día, los ejercicios que elijas DEBEN pertenecer al 'grupoMuscular' de ese día, según la lista de ejercicios que te he proporcionado. Sé extremadamente estricto. Por ejemplo, en un día de 'Pecho', no podés incluir 'Sentadillas'.
-        10. **Regla de No Repetición (CRÍTICA):** Dentro de la lista de 'ejercicios' para un mismo día, NUNCA repitas el mismo ejercicio. Cada 'nombre' de ejercicio debe ser único en ese día.
-        11. **Regla de Variedad:** Utilizá una amplia gama de los ejercicios disponibles en la lista para el grupo muscular correspondiente. Evitá usar siempre los mismos ejercicios en todos los planes que generes.
+        Ejercicios disponibles (organizados por grupo muscular): ${JSON.stringify(enabledExercisesByGroup)}.
+
+        --- REGLAS INQUEBRANTABLES ---
+        1.  **COHERENCIA MUSCULAR (LA REGLA MÁS IMPORTANTE):** Para cada día, primero definís un 'grupoMuscular' (ej: "Pecho y Tríceps"). Luego, para ESE día, SÓLO podés seleccionar ejercicios de las listas que corresponden a esos grupos musculares en el JSON de ejercicios que te di (en este ejemplo, de las listas "Pecho" y "Brazos (Bíceps y Tríceps)").
+            - **Mapeo de Grupos:**
+                - Si el día es de 'Tren Inferior', usá ejercicios de: 'Cuádriceps', 'Femorales e Isquiotibiales', 'Glúteos', 'Gemelos y Sóleos', 'Aductores y Abductores'.
+                - Si el día es de 'Tren Superior', usá ejercicios de: 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'.
+                - Si el día es 'Full Body', podés combinar de varios grupos.
+            - **PROHIBIDO MEZCLAR:** Es absolutamente inaceptable que un ejercicio de 'Pecho' aparezca en un día de 'Tren Inferior'. Revisa tu trabajo para asegurar que esto NUNCA suceda.
+        2.  **NO REPETIR EJERCICIOS:** Dentro de un mismo día de entrenamiento, cada ejercicio debe ser único. No repitas el mismo ejercicio dos veces.
+        3.  **VARIEDAD:** Utilizá una amplia gama de los ejercicios disponibles en las listas correspondientes. No uses siempre los mismos.
+        4.  **INTENSIDAD:** La intensidad elegida es '${profile.trainingIntensity}'. Ajustá el volumen (cantidad de ejercicios y series) estrictamente según esto:
+            - **Extrema:** 9-12 ejercicios/día, 4-6 series. Entrenamientos largos y brutales.
+            - **Alta:** 7-9 ejercicios/día, 3-5 series. Muy exigente.
+            - **Moderada:** 5-6 ejercicios/día, 3-4 series. Estándar.
+            - **Baja:** 4-5 ejercicios básicos/día, 2-3 series. Corto y conciso.
+        5.  **ENFOQUE:** El enfoque es '${focusDescription}'. Si hay un músculo específico, dale más volumen (más ejercicios o series).
+        6.  **ADAPTACIÓN:** ${profile.includeAdaptationPhase === 'Sí' ? 'DEBES incluir una fase de adaptación anatómica al principio.' : 'NO incluyas fase de adaptación.'}
+        7.  **TÉCNICAS AVANZADAS:** Si 'useAdvancedTechniques' es 'Sí' y el nivel lo permite, incluí UNA técnica avanzada por día en un ejercicio clave. Formato exacto: "Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.". NO uses superseries. Si es 'No', omití el campo 'tecnicaAvanzada'.
+        8.  **FORMATO DE NÚMEROS:** Los campos 'series', 'repeticiones' y 'descanso' DEBEN ser strings. 'descanso' debe contener solo el número de segundos (ej: "60").
+        9.  **CARDIO:** Agregá "15-25 min de cardio moderado" al final de cada día.
+        10. **DESCARGA:** La fase de descarga debe tener una rutina DETALLADA de 4-5 ejercicios, 2-3 series, 12-15 reps, baja intensidad.
       `;
       
       const finalSystemInstruction = systemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
