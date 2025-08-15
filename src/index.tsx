@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -63,7 +64,10 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
 
 // 0. Logo
 const Logo = () => (
-    <img src="/logo.svg" alt="ScorpionGYM AI Logo" className="app-logo" />
+    <svg className="app-logo" width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 95C74.8528 95 95 74.8528 95 50C95 25.1472 74.8528 5 50 5C25.1472 5 5 25.1472 5 50C5 74.8528 25.1472 95 50 95Z" stroke="currentColor" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M62.5 70C62.5 70 52.5 57.5 52.5 47.5C52.5 37.5 60 30 60 30M37.5 70C37.5 70 47.5 57.5 47.5 47.5C47.5 37.5 40 30 40 30M60 30C60 30 65 37.5 65 42.5C65 47.5 60 47.5 60 47.5M40 30C40 30 35 37.5 35 42.5C35 47.5 40 47.5 40 47.5M60 30L40 47.5L25 55M40 30L60 47.5L75 55M40 72.5L35 82.5L45 80L50 85L55 80L65 82.5L60 72.5" stroke="currentColor" strokeWidth="10" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
 );
 
 
@@ -245,12 +249,14 @@ const ChatAssistantModal = ({ isOpen, onClose, ai, clientData, onUpdateClientDat
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // This effect should only run when the modal is opened, not on every data update.
         if (isOpen && clientData) {
             setMessages([{ role: 'model' as const, text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas para comidas, ejercicios, o analizar una foto de tu comida para darte una estimación de sus calorías.` }]);
             setInput('');
             setImage(null);
         }
-    }, [isOpen, clientData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
