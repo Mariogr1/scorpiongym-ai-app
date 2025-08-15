@@ -126,7 +126,7 @@ export interface Gym {
 
 
 // --- Constants ---
-export const SUPER_ADMIN_PASSWORD = "admin";
+export const SUPER_ADMIN_PASSWORD = "admin986101";
 
 export const advancedTechniqueOptions = [
       { value: '', label: 'Ninguna' },
