@@ -1558,15 +1558,58 @@ body {
     cursor: not-allowed;
 }
 
+/* --- Library Accordion --- */
+.library-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.library-accordion-item {
+    background-color: var(--surface-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+.library-accordion-header {
+    background: none;
+    border: none;
+    width: 100%;
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-color);
+    transition: background-color 0.2s;
+}
+.library-accordion-header:hover {
+    background-color: var(--secondary-button-hover);
+}
+.library-accordion-header.active {
+    color: var(--primary-color);
+}
+.library-accordion-header .icon {
+    font-size: 1.5rem;
+    color: var(--text-secondary-color);
+    transition: transform 0.3s ease-in-out;
+}
+.library-accordion-header.active .icon {
+    transform: rotate(45deg);
+}
 
-.muscle-group-section {
-    margin-bottom: 2.5rem;
+.library-accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
 }
-.muscle-group-section h2 {
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
+.library-accordion-content.open {
+    max-height: 4000px;
+    padding: 0 1.5rem 1.5rem 1.5rem;
 }
+
+
 .exercise-entry-list {
     display: flex;
     flex-direction: column;
@@ -1584,7 +1627,7 @@ body {
     padding: 0 1rem;
 }
 .exercise-entry-row {
-    background-color: var(--surface-color);
+    background-color: var(--background-color);
     padding: 0.75rem 1rem;
     border-radius: 8px;
 }
@@ -1595,7 +1638,7 @@ body {
     width: 100%;
     padding: 0.6rem;
     font-size: 0.9rem;
-    background-color: var(--background-color);
+    background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
     border-radius: 6px;

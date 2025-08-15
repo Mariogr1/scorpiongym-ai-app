@@ -1297,6 +1297,7 @@ const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSa
     const [editingText, setEditingText] = useState('');
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ group: string; index: number; name: string } | null>(null);
     const [isUnsavedChangesModalOpen, setUnsavedChangesModalOpen] = useState(false);
+    const [openGroup, setOpenGroup] = useState<string | null>(null);
     
     const isDirty = useMemo(() => {
         if (!library || !originalLibrary) return false;
@@ -1311,7 +1312,9 @@ const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSa
                 const deepCopy = JSON.parse(JSON.stringify(data));
                 setLibrary(data);
                 setOriginalLibrary(deepCopy);
-                setSelectedMuscleGroup(Object.keys(data)[0] || '');
+                const firstGroup = Object.keys(data)[0];
+                setSelectedMuscleGroup(firstGroup || '');
+                setOpenGroup(firstGroup || null);
             } else {
                 setLibrary({});
                 setOriginalLibrary({});
@@ -1509,7 +1512,7 @@ const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSa
                             value={selectedMuscleGroup} 
                             onChange={(e) => setSelectedMuscleGroup(e.target.value)}
                         >
-                            {Object.keys(library).map(group => (
+                            {Object.keys(library).sort().map(group => (
                                 <option key={group} value={group}>{group}</option>
                             ))}
                         </select>
@@ -1525,67 +1528,81 @@ const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSa
                 </div>
             </div>
 
-            {Object.entries(library).map(([group, exercises]) => (
-                <div key={group} className="muscle-group-section">
-                    <h2>{group}</h2>
-                    <div className="exercise-entry-list">
-                         <div className="exercise-entry-header">
-                            <span>Habilitado</span>
-                            <span>Nombre del Ejercicio</span>
-                            <span>Link de YouTube</span>
-                            <span>Acciones</span>
-                        </div>
-                        {exercises.map((exercise, index) => (
-                            <div key={`${group}-${index}`} className="exercise-entry-row">
-                                <label className="switch">
-                                    <input
-                                        type="checkbox"
-                                        checked={exercise.isEnabled}
-                                        onChange={(e) => handleEnabledChange(group, index, e.target.checked)}
-                                    />
-                                    <span className="slider round"></span>
-                                </label>
-
-                                {editingExercise?.group === group && editingExercise?.index === index ? (
-                                    <input 
-                                        type="text" 
-                                        value={editingText}
-                                        onChange={(e) => setEditingText(e.target.value)}
-                                        className="editing-input"
-                                        autoFocus
-                                        onBlur={handleSaveEdit}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                                    />
-                                ) : (
-                                    <span className="exercise-name-lib">{exercise.name}</span>
-                                )}
-                                
-                                <input
-                                    type="text"
-                                    className="link-input"
-                                    placeholder="Pegá el link de YouTube acá..."
-                                    value={exercise.youtubeLink}
-                                    onChange={(e) => handleLinkChange(group, index, e.target.value)}
-                                />
-
-                                <div className="exercise-row-actions">
-                                    {editingExercise?.group === group && editingExercise?.index === index ? (
-                                        <>
-                                            <button onClick={handleSaveEdit} className="action-btn save">Guardar</button>
-                                            <button onClick={handleCancelEdit} className="action-btn cancel">Cancelar</button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button onClick={() => handleStartEdit(group, index)} className="action-btn edit">Editar</button>
-                                            <button onClick={() => handleDeleteRequest(group, index)} className="action-btn delete">Borrar</button>
-                                        </>
-                                    )}
+             <div className="library-accordion">
+                {Object.entries(library).sort(([groupA], [groupB]) => groupA.localeCompare(groupB)).map(([group, exercises]) => (
+                    <div key={group} className="library-accordion-item">
+                        <button 
+                            className={`library-accordion-header ${openGroup === group ? 'active' : ''}`} 
+                            onClick={() => setOpenGroup(openGroup === group ? null : group)}
+                            aria-expanded={openGroup === group}
+                            aria-controls={`content-${group}`}
+                        >
+                            <span>{group} ({exercises.length})</span>
+                            <span className="icon">+</span>
+                        </button>
+                        <div id={`content-${group}`} className={`library-accordion-content ${openGroup === group ? 'open' : ''}`}>
+                             <div className="exercise-entry-list">
+                                 <div className="exercise-entry-header">
+                                    <span>Habilitado</span>
+                                    <span>Nombre del Ejercicio</span>
+                                    <span>Link de YouTube</span>
+                                    <span>Acciones</span>
                                 </div>
+                                {exercises.map((exercise, index) => (
+                                    <div key={`${group}-${index}`} className="exercise-entry-row">
+                                        <label className="switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={exercise.isEnabled}
+                                                onChange={(e) => handleEnabledChange(group, index, e.target.checked)}
+                                            />
+                                            <span className="slider round"></span>
+                                        </label>
+
+                                        {editingExercise?.group === group && editingExercise?.index === index ? (
+                                            <input 
+                                                type="text" 
+                                                value={editingText}
+                                                onChange={(e) => setEditingText(e.target.value)}
+                                                className="editing-input"
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEdit();
+                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                }}
+                                            />
+                                        ) : (
+                                            <span className="exercise-name-lib">{exercise.name}</span>
+                                        )}
+                                        
+                                        <input
+                                            type="text"
+                                            className="link-input"
+                                            placeholder="Pegá el link de YouTube acá..."
+                                            value={exercise.youtubeLink}
+                                            onChange={(e) => handleLinkChange(group, index, e.target.value)}
+                                        />
+
+                                        <div className="exercise-row-actions">
+                                            {editingExercise?.group === group && editingExercise?.index === index ? (
+                                                <>
+                                                    <button onClick={handleSaveEdit} className="action-btn save">Guardar</button>
+                                                    <button onClick={handleCancelEdit} className="action-btn cancel">Cancelar</button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button onClick={() => handleStartEdit(group, index)} className="action-btn edit">Editar</button>
+                                                    <button onClick={() => handleDeleteRequest(group, index)} className="action-btn delete">Borrar</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 };
@@ -1897,7 +1914,10 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
       setError("");
       
       const focusDescription = profile.bodyFocusArea + (profile.bodyFocusSpecific ? ` con un fuerte énfasis en ${profile.bodyFocusSpecific}` : '');
-      const enabledExercises = Object.values(exerciseLibrary).flat().filter(ex => ex.isEnabled).map(ex => ex.name);
+      const enabledExercises = Object.entries(exerciseLibrary)
+        .flatMap(([group, exercises]) => 
+            exercises.filter(ex => ex.isEnabled).map(ex => ({ name: ex.name, group }))
+        );
 
       if (enabledExercises.length === 0) {
         setError("No hay ejercicios habilitados en la biblioteca. Habilitá algunos antes de generar una rutina.");
@@ -1907,26 +1927,24 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
       
       const systemInstruction = `
         Sos un entrenador personal de élite de Argentina. Tu laburo es crear un plan de entrenamiento periodizado (8-12 semanas) en JSON.
-        Datos: ${JSON.stringify(profile)}.
-        Principios:
+        Datos del cliente: ${JSON.stringify(profile)}.
+        Lista de ejercicios disponibles (agrupados por músculo): ${JSON.stringify(enabledExercises)}.
+        Principios y Reglas Inquebrantables:
         1.  **Periodización Creativa:** Usá fases (Adaptación, Hipertrofia, Fuerza, Descarga) con duración flexible.
         2.  **Intensidad (CRÍTICO):** El cliente eligió una intensidad '${profile.trainingIntensity}'. AJUSTÁ EL VOLUMEN, LA DURACIÓN Y LA CANTIDAD DE EJERCICIOS:
-            - **Extrema:** Este es el nivel MÁS DURO. Diseñá un entrenamiento brutalmente exigente de más de 90 mins antes de cardio. Mantené el volumen alto con **entre 9 y 12 ejercicios por día y cada ejercicio debe tener entre 4 y 6 series**. Para los ejercicios que trabajen directamente el grupo muscular del ENFOQUE ESPECÍFICO ('${profile.bodyFocusSpecific}') o el ÁREA DE ENFOQUE ('${profile.bodyFocusArea}'), las repeticiones DEBEN estar en un rango de 15 a 25 para maximizar la congestión y la resistencia muscular. Para el resto de ejercicios, mantené un rango de hipertrofia normal (ej. 8-12). Los descansos deben ser cortos (30-60s). Usá técnicas avanzadas liberalmente si el cliente lo permite.
-            - **Alta:** Diseñá un entrenamiento muy exigente de ~90 mins ANTES del cardio. Aumentá significativamente el volumen. **Cada día de entrenamiento DEBE tener entre 7 y 9 ejercicios.** Acortá los descansos (45-60s) y usá técnicas avanzadas (si está permitido).
-            - **Moderada:** Diseñá un entrenamiento estándar de 60-75 mins antes de cardio, con **5 a 6 ejercicios por día**. Volumen y descansos equilibrados (60-90s).
-            - **Baja:** Diseñá un entrenamiento más corto y tranqui de 45-60 mins, con **4 a 5 ejercicios básicos por día**. Menor volumen, descansos más largos (90s+).
-        3.  **Fase de Adaptación:** ${profile.includeAdaptationPhase === 'Sí' ? 'DEBES incluir una fase de adaptación anatómica al principio del plan.' : 'NO incluyas una fase de adaptación anatómica. Arrancá directamente con la fase principal del objetivo (ej. Hipertrofia).'}
-        4.  **Complejidad Controlada y Técnicas Avanzadas:** Si 'useAdvancedTechniques' es 'Sí' y el nivel es 'Intermedio' o 'Avanzado', podés incluir con moderación una de las siguientes técnicas. **NO USES SUPERSERIES.** Al aplicar una, es CRÍTICO que el campo 'tecnicaAvanzada' contenga el nombre de la técnica (ej: 'Drop Set'), los detalles específicos (ej: '2 descensos') Y una breve descripción de cómo ejecutarla. Usá un guion para separar el nombre/detalles de la descripción. Ejemplos de formato EXACTO:
-            - "Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces."
-            - "Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie."
-            - "Myo-reps (3 pasadas) - Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas."
-            - "Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos."
-        Si 'useAdvancedTechniques' es 'No', no incluyas el campo 'tecnicaAvanzada'.
-        5.  **Descanso (REGLA IMPORTANTE):** El campo 'descanso' DEBE ser una cadena de texto que represente únicamente el número de segundos (ej: '60', '90'). NO incluyas la letra 's' ni la palabra 'segundos'. El valor debe estar entre 30 y 180 segundos, dependiendo de la intensidad del ejercicio.
-        6.  **Descarga Activa:** TENÉS QUE generar una rutina detallada de cuerpo completo (4-5 ejercicios compuestos, 2-3 series, 12-15 reps, baja intensidad) para los días de esta fase. NO uses frases genéricas, poné los ejercicios.
+            - **Extrema:** Nivel MÁS DURO. Entrenamiento brutal de >90 mins antes de cardio. Volumen alto: **9-12 ejercicios/día, 4-6 series/ejercicio**. Reps para músculo enfocado: 15-25. Reps para el resto: 8-12. Descansos: 30-60s. Usá técnicas avanzadas si se permite.
+            - **Alta:** Entrenamiento muy exigente de ~90 mins ANTES del cardio. **7-9 ejercicios/día**. Descansos: 45-60s.
+            - **Moderada:** Entrenamiento estándar de 60-75 mins antes de cardio, **5-6 ejercicios/día**. Descansos: 60-90s.
+            - **Baja:** Entrenamiento corto de 45-60 mins, **4-5 ejercicios básicos/día**. Descansos: 90s+.
+        3.  **Fase de Adaptación:** ${profile.includeAdaptationPhase === 'Sí' ? 'DEBES incluir una fase de adaptación anatómica al principio del plan.' : 'NO incluyas una fase de adaptación anatómica. Arrancá directamente con la fase principal del objetivo.'}
+        4.  **Técnicas Avanzadas:** Si 'useAdvancedTechniques' es 'Sí' y el nivel es 'Intermedio'/'Avanzado', podés incluir con moderación una técnica. **NO USES SUPERSERIES.** El campo 'tecnicaAvanzada' debe contener nombre, detalles y una breve descripción de ejecución. Formato exacto: "Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces." o "Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.". Si es 'No', omití el campo.
+        5.  **Descanso (REGLA):** El campo 'descanso' DEBE ser una cadena con SÓLO el número de segundos (ej: '60', '90'). Entre 30 y 180.
+        6.  **Descarga Activa:** Generá una rutina DETALLADA (4-5 ejercicios compuestos, 2-3 series, 12-15 reps, baja intensidad). NO uses frases genéricas.
         7.  **Cardio:** Agregá "15-25 min de cardio moderado" al final de cada día.
-        8.  **Personalización del Enfoque:** El enfoque principal es '${focusDescription}'. Si se especifica un músculo, ese grupo DEBE tener más volumen o prioridad en el plan.
-        9.  **Selección de Ejercicios (REGLA FUNDAMENTAL):** Debés usar ÚNICAMENTE ejercicios de la siguiente lista aprobada: ${enabledExercises.join(', ')}. No inventes ni uses ejercicios que no estén en esta lista.
+        8.  **Enfoque:** El enfoque principal es '${focusDescription}'. Si se especifica un músculo, ese grupo DEBE tener más volumen/prioridad.
+        9.  **Regla de Coherencia Muscular (CRÍTICA):** Para cada día, los ejercicios que elijas DEBEN pertenecer al 'grupoMuscular' de ese día, según la lista de ejercicios que te he proporcionado. Sé extremadamente estricto. Por ejemplo, en un día de 'Pecho', no podés incluir 'Sentadillas'.
+        10. **Regla de No Repetición (CRÍTICA):** Dentro de la lista de 'ejercicios' para un mismo día, NUNCA repitas el mismo ejercicio. Cada 'nombre' de ejercicio debe ser único en ese día.
+        11. **Regla de Variedad:** Utilizá una amplia gama de los ejercicios disponibles en la lista para el grupo muscular correspondiente. Evitá usar siempre los mismos ejercicios en todos los planes que generes.
       `;
       
       const finalSystemInstruction = systemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
@@ -2061,7 +2079,8 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                       <div className="form-group"><label>Días por semana</label><input type="number" name="trainingDays" value={profile.trainingDays} min="1" max="7" onChange={handleInputChange}/></div>
                       <div className="form-group"><label>Factor de Actividad (fuera del gym)</label><select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}><option value="Sedentario">Sedentario (trabajo de oficina)</option><option value="Ligero">Ligero (trabajo de pie, caminatas)</option><option value="Activo">Activo (trabajo físico moderado)</option><option value="Muy Activo">Muy Activo (trabajo físico intenso)</option></select></div>
                       <div className="form-group"><label>Área de Enfoque</label><select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}><option value="Cuerpo completo">Cuerpo completo</option><option value="Tren Superior">Tren Superior</option><option value="Tren Inferior">Tren Inferior</option></select></div>
-                      {profile.bodyFocusArea && profile.bodyFocusArea !== 'Cuerpo completo' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General</option>{profile.bodyFocusArea === 'Tren Superior' && (<><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos">Brazos</option></>)}{profile.bodyFocusArea === 'Tren Inferior' && (<><option value="Piernas">Piernas (Cuádriceps/Femorales)</option><option value="Glúteos">Glúteos</option></>)}</select></div>)}
+                      {profile.bodyFocusArea === 'Tren Inferior' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General en Piernas/Glúteos</option><option value="Cuádriceps">Cuádriceps</option><option value="Femorales e Isquiotibiales">Femorales e Isquiotibiales</option><option value="Glúteos">Glúteos</option><option value="Gemelos y Sóleos">Gemelos y Sóleos</option></select></div>)}
+                      {profile.bodyFocusArea === 'Tren Superior' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General en Tren Superior</option><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos (Bíceps y Tríceps)">Brazos</option></select></div>)}
                       <div className="form-group"><label>Intensidad del entrenamiento</label><select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}><option value="Baja">Baja</option><option value="Moderada">Moderada</option><option value="Alta">Alta</option><option value="Extrema">Extrema</option></select></div>
                       <div className="form-group"><label>Fase de adaptación</label><select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}><option value="Sí">Incluir fase de adaptación</option><option value="No">Empezar directo sin adaptación</option></select></div>
                       <div className="form-group"><label>Complejidad de la rutina</label><select name="useAdvancedTechniques" value={profile.useAdvancedTechniques} onChange={handleInputChange}><option value="No">Ejercicios simples</option><option value="Sí">Incluir técnicas avançadas</option></select></div>
