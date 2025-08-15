@@ -36,8 +36,7 @@ body {
 
 /* --- Logo --- */
 .app-logo {
-  color: var(--primary-color);
-  transition: color 0.2s ease-in-out;
+  /* color y transition ya no son necesarios */
 }
 .login-container .app-logo {
     width: 80px;
