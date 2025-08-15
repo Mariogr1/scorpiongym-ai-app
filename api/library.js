@@ -1,4 +1,5 @@
 
+
 import clientPromise from './util/mongodb.js';
 
 const DEFAULT_EXERCISE_LIBRARY = {
@@ -48,6 +49,14 @@ const DEFAULT_EXERCISE_LIBRARY = {
         { name: "Abducción de cadera en máquina", isEnabled: true, youtubeLink: "" },
         { name: "Peso muerto sumo con mancuerna", isEnabled: true, youtubeLink: "" },
         { name: "Puente de glúteos con disco", isEnabled: true, youtubeLink: "" }
+    ],
+    "Abdominales": [
+        { name: "Encogimientos (Crunches)", isEnabled: true, youtubeLink: "" },
+        { name: "Plancha abdominal (Plank)", isEnabled: true, youtubeLink: "" },
+        { name: "Elevación de piernas colgado", isEnabled: true, youtubeLink: "" },
+        { name: "Giros rusos (Russian twists)", isEnabled: true, youtubeLink: "" },
+        { name: "Rueda abdominal (Ab wheel rollout)", isEnabled: true, youtubeLink: "" },
+        { name: "Encogimientos en polea alta", isEnabled: true, youtubeLink: "" }
     ],
     "Brazos (Bíceps y Tríceps)": [
         { name: "Curl de bíceps con barra recta", isEnabled: true, youtubeLink: "" },
