@@ -102,13 +102,12 @@ const DEFAULT_EXERCISE_LIBRARY = {
         { name: "Elevación de talones (gemelos) de pie", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla búlgara con mancuernas", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla cossack con peso", isEnabled: true, youtubeLink: "" },
-        { name: "Estocada paso atras con mancuernas", isEnabled: true, youtubeLin: "" },
+        { name: "Estocada paso atras con mancuernas", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla goblet", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla sumo belt scuat", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla sumo con mancuernas", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla frontal con barra", isEnabled: true, youtubeLink: "" },
         { name: "Estocada trasera con barra", isEnabled: true, youtubeLink: "" },
-        { name: "Sentadilla búlgara con mancuernas", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla pendulo", isEnabled: true, youtubeLink: "" },
         { name: "Estocadas en Ladmine", isEnabled: true, youtubeLink: "" },
         { name: "Sentadilla sussy", isEnabled: true, youtubeLink: "" },
@@ -180,26 +179,26 @@ const DEFAULT_EXERCISE_LIBRARY = {
         { name: "Curl de bíceps concentrado", isEnabled: true, youtubeLink: "" },
         { name: "Fondos entre bancos", isEnabled: true, youtubeLink: "" },
         { name: "Curl predicador (Scott) con barra Z", isEnabled: true, youtubeLink: "" },
-        { name: "Patada de tríceps con mancuerna", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps sentado alternado", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps alrtenado en banco inclinado", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps alterno parado", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps 21", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps con mancuerna unilateral a 45 grados", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps con barra romana", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps en polea unilateral", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps en polea", isEnabled: true, youtubeLink: "" }
-        { name: "Curl de biceps en polea invertido", isEnabled: true, youtubeLink: "" }
-        { name: "Banco scott a disco", isEnabled: true, youtubeLink: "" }
-        { name: "Jalon para biceps", isEnabled: true, youtubeLink: "" }
-        { name: "Press Frances", isEnabled: true, youtubeLink: "" }
-        { name: "Press frances sentado", isEnabled: true, youtubeLink: "" }
-        { name: "Press frances snetado a una mano", isEnabled: true, youtubeLink: "" }
-        { name: "Crush triceps barra", isEnabled: true, youtubeLink: "" }
-        { name: "Fondos en maquina", isEnabled: true, youtubeLink: "" }
-        { name: "Patada de tríceps con polea", isEnabled: true, youtubeLink: "" }
-        { name: "Triceps trasnuca en polea baja", isEnabled: true, youtubeLink: "" }
-        { name: "Triceps trasnuca en polea", isEnabled: true, youtubeLink: "" }
+        { name: "Patada de tríceps con mancuerna", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps sentado alternado", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps alrtenado en banco inclinado", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps alterno parado", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps 21", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps con mancuerna unilateral a 45 grados", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps con barra romana", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps en polea unilateral", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps en polea", isEnabled: true, youtubeLink: "" },
+        { name: "Curl de biceps en polea invertido", isEnabled: true, youtubeLink: "" },
+        { name: "Banco scott a disco", isEnabled: true, youtubeLink: "" },
+        { name: "Jalon para biceps", isEnabled: true, youtubeLink: "" },
+        { name: "Press Frances", isEnabled: true, youtubeLink: "" },
+        { name: "Press frances sentado", isEnabled: true, youtubeLink: "" },
+        { name: "Press frances snetado a una mano", isEnabled: true, youtubeLink: "" },
+        { name: "Crush triceps barra", isEnabled: true, youtubeLink: "" },
+        { name: "Fondos en maquina", isEnabled: true, youtubeLink: "" },
+        { name: "Patada de tríceps con polea", isEnabled: true, youtubeLink: "" },
+        { name: "Triceps trasnuca en polea baja", isEnabled: true, youtubeLink: "" },
+        { name: "Triceps trasnuca en polea", isEnabled: true, youtubeLink: "" },
         { name: "Extencion de codo en polea unilateral", isEnabled: true, youtubeLink: "" }
     ]
 };
