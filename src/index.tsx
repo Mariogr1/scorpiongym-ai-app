@@ -61,7 +61,7 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
 // --- COMPONENTES DE VISTAS ---
 
 // 0. Logo
-const Logo = () => <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHBhdGggZD0iTTUwIDBDMjIuNCAwIDAgMjIuNCAwIDUwczIyLjQgNTAgNTAgNTBzNTAtMjIuNCA1MC01MFM3Ny42IDAgNTAgMHptMCA5MUMyNy4zIDkxIDkgNzIuNyA5IDUwUzI3LjMgOSA1MCA5czQxIDI3LjMgNDEgNDEtMTguMyA0MS00MSA0MXoiIGZpbGw9IiNFNTA5MTQiLz4KICA8cGF0aCBkPSJNNzguOCAzMy4zYy0uMS0uMi0uMy0uMy0uNS0uNGwtNC43LTEuNWMtMS4xLS40LTIuMy0uMS0zLjIgLjdsLTQuMSA0Yy0uNi42LTEuNS43LTIuMi4zbC0xLjgtMS4xYy0uNi0uNC0xLjQtLjQtMiAwTDQ4LjUgNDBjLS43LjQtMS4xIDEuMy0uOSAyLjFsLjkgMi43Yy4xLjQgMCAuOC0uMyAxLjFsLTIuNCAyLjVjLS42LjYtMS40LjgtMi4xLjZsLTQuMy0uOGMtLjgtLjItMS41LjEtMS45LjdsLTIuNiA0Yy0uMy41LS4yIDEuMS4yIDEuNWwxLjYgMS40Yy40LjMuOC4zIDEuMiAwbDEuMy0xLjEgMS42IDEuOWMwIDAgLjEgMCAuMS4xbDIuMS0xLjVjLjQtLjMuOS0uMiAxLjIuMmwzLjEgMy4zYzAgMCAuMS4xLjEuMWwyLjcgMy4yYzAgMCAuMS4xLjEuMWwzLjQgNC4zYzAgMCAuMS4xLjEuMWwzLjQgNC4xYzAgMCAuMSAwIC4xIDBsMi0xLjVjLjQtLjMuOS0uMiAxLjIuMmwyLjkgMy4xcy4xLjEuMS4ybDEuOCAyLjFzLjEuMS4xLjFsMi45IDMuNmMwIDAgLjEgMCAuMS4xbDIuOCAzLjVzLjEuMS4yLjFsLjEuMWMuMSAwIC4xIDAgLjIgMHMzLjIgMCAzLjIgMGMuMSAwIC4yIDAgLjMgMHMxLjIgMCAxLjIgMGMwIDAgLjEgMCAuMS4xcy40LjEuNC4xYy4xIDAgLjEgMCAuMiAwIDEuMS4yIDIuMy0uNCAyLjctMS41bDEuNy00LjVjLjItLjYtLjEtMS4zLS43LTEuNWwtMS45LS44Yy0uMy0uMS0uNy0uMS0uOS4xbC0yLjkgMS4zYy0uMi4xLS40IDAtLjYtLjJsLS44LTEuMWMtLjEtLjItLjEtLjQtMC0uNWwxLjgtMi40Yy4zLS40LjItMS0uMS0xLjM2bC0xLjctMi4yYy0uMy0uNC0uOC0uNi0xLjMtLjVsLTIuNC40Yy0uMy4xLS42IDAtLjgtLjJsLTEuMi0xLjVjLS4xLS4yLS4xLS40IDAtLjVsMS41LTEuOWMuMy0uNC4yLTEtLjEtMS4zN2wtMS45LTIuN2MtLjMtLjQtLjktLjYtMS40LS40bC0yLjkuOGMtLjIgMC0uNS0uMS0uNy0uM2wtMS41LTIuMmMtLjEtLjItLjEtLjQgMC0uNWwxLjktMi42Yy4zLS40LjItMS0uMi0xLjM3bC0xLjktMi44Yy0uMy0uNC0uOS0uNS0xLjQtLjNsLTMgLjljLS4yIDAtLjUtLjEtLjctLjNsLTEuMy0yLjFjLS4yLS4yLS4yLS41LS4xLS43bDEuNi0yLjggMCAwYzAgMC00LjIgNC4zLTQuMiA0LjNjLS42LjYtMS42LjYtMi4yIDBsLTEuOS0xLjljLS42LS42LS42LTEuNiAwLTIuMmwxLjktMS45Yy4zLS4zLjYtLjUuOS0uN3oiIGZpbGw9IiNGRkZGRkYiLz4KPC9zdmc+" alt="ScorpionGYM AI Logo" className="app-logo" />
+const Logo = () => <span style={{ fontSize: '40px' }} role="img" aria-label="Scorpion Emoji">🦂</span>;
 
 // 1. Modal de Confirmación
 const ConfirmationModal = ({
@@ -1798,7 +1798,15 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
 
     // --- Funciones de Gestión de Cliente Individual (dentro del panel) ---
     const handleProfileChange = (field: keyof Profile, value: string) => {
-        setProfile(prev => prev ? { ...prev, [field]: value } : null);
+        setProfile(prev => {
+            if (!prev) return null;
+            const newProfile = { ...prev, [field]: value };
+            // Si cambia el foco principal, reseteamos el específico
+            if (field === 'bodyFocusArea') {
+                newProfile.bodyFocusSpecific = '';
+            }
+            return newProfile;
+        });
     };
 
     const handleSaveChanges = async () => {
@@ -1853,7 +1861,7 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            phaseName: { type: Type.STRING, description: "Nombre de la fase (ej: 'Fase de Adaptación', 'Fase de Hipertrofia')." },
+                            phaseName: { type: Type.STRING, description: "Nombre de la fase (ej: 'Fase de Adaptación', 'Fase de Hipertrofia', 'Semana de Descarga')." },
                             durationWeeks: { type: Type.INTEGER, description: "Duración de esta fase en semanas." },
                             routine: {
                                 type: Type.OBJECT,
@@ -1897,17 +1905,23 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
             required: ["planName", "totalDurationWeeks", "phases"]
         };
         
-        const systemInstruction = `Tu única y más importante directiva es generar un plan de entrenamiento en formato JSON para un cliente de gimnasio.
-- **REGLA INQUEBRANTABLE Y MÁS IMPORTANTE:** JAMÁS mezcles ejercicios de grupos musculares que no correspondan al día de entrenamiento. Es un error CRÍTICO y no debe ocurrir. Por ejemplo, si un día es 'Pecho y Tríceps', SOLO puede contener ejercicios de 'Pecho' y 'Brazos (Bíceps y Tríceps)'. NUNCA incluyas un ejercicio de 'Cuádriceps' en un día de pecho. La adherencia a los grupos musculares del día es tu máxima prioridad por sobre cualquier otra instrucción.
-- **Formato:** El JSON de salida DEBE ser perfecto y validar con el esquema proporcionado. No incluyas "json" ni ningún otro texto fuera del objeto JSON.
+        const systemInstruction = `Sos un experto en fitness y tu única función es generar un plan de entrenamiento en formato JSON.
+- **REGLA INQUEBRANTABLE Y MÁS IMPORTANTE:** JAMÁS mezcles ejercicios de grupos musculares que no correspondan al día de entrenamiento. Es un error CRÍTICO y no debe ocurrir. Por ejemplo, si un día es 'Pecho y Tríceps', SOLO puede contener ejercicios de 'Pecho' y 'Brazos (Bíceps y Tríceps)'. NUNCA incluyas un ejercicio de 'Cuádriceps' en un día de pecho. La adherencia a los grupos musculares del día es tu máxima prioridad.
+- **REGLAS DE INTENSIDAD Y VOLUMEN (CRÍTICO - DEBES SEGUIRLAS ESTRICTAMENTE):**
+  - **Baja:** 4-5 ejercicios por día. Repeticiones en el rango de 12-15.
+  - **Moderada:** 5-7 ejercicios por día. Repeticiones principalmente 8-12.
+  - **Alta:** 7-10 ejercicios por día. Mezclá rangos de repeticiones: algunos ejercicios pesados (5-8 reps) y otros de hipertrofia (8-12 reps).
+  - **Extrema:** 10-13 ejercicios por día. Incorporá técnicas avanzadas, y una mezcla de rangos de fuerza (4-6 reps), hipertrofia (8-12 reps) y resistencia (15-20 reps).
+- **SEMANA DE DESCARGA (OBLIGATORIO):** Al final de TODAS las fases de trabajo, agregá una fase final llamada 'Semana de Descarga'. Debe durar 1 semana. En esta fase, el volumen debe ser un 50% del de la última fase de trabajo (ej, si eran 4 series, ahora son 2) y la intensidad debe ser baja (ejercicios básicos, sin fallo muscular).
+- **Formato:** El JSON de salida DEBE ser perfecto y validar con el esquema. No incluyas "json" ni ningún otro texto fuera del objeto JSON.
 - **Lenguaje:** Utilizá voseo (hablá de "vos").
-- **Creatividad y Variedad:** Sé creativo. No uses siempre los mismos ejercicios. Rotá los ejercicios disponibles para dar variedad a la rutina.
-- **Fases:** La duración total de la rutina se divide en fases. La suma de las semanas de cada fase debe ser igual a la duración total.
+- **Creatividad y Variedad:** Rotá los ejercicios disponibles para dar variedad.
+- **Fases:** La duración total de la rutina se divide en fases. La suma de las semanas de cada fase (incluida la descarga) debe ser igual a la duración total.
 - **Fase de Adaptación:** Si se solicita, la primera fase debe ser de 2 semanas, con ejercicios básicos, menor volumen y sin técnicas avanzadas.
-- **Técnicas Avanzadas:** Aplica estas técnicas solo si el perfil lo solicita y en las fases finales. Sé coherente (ej: Drop Sets en ejercicios de aislamiento, no en sentadillas).
+- **Técnicas Avanzadas:** Aplicalas solo si el perfil lo solicita y en las fases finales. Sé coherente.
 - **Foco Corporal:** Si se especifica un área de foco, asigna más volumen (más ejercicios o más series) a esos grupos musculares.
-- **Cardio:** Añadí una recomendación de cardio al final de cada día, ajustando la intensidad y duración según el objetivo del cliente.
-- **Instrucciones Adicionales:** El entrenador puede darte instrucciones adicionales. Tenelas muy en cuenta, pero NUNCA deben sobreescribir la REGLA INQUEBRANTABLE de los grupos musculares.`;
+- **Cardio:** Añadí una recomendación de cardio al final de cada día.
+- **Instrucciones Adicionales:** Tenelas en cuenta, pero NUNCA deben sobreescribir la REGLA INQUEBRANTABLE de los grupos musculares o las reglas de intensidad.`;
         
         const prompt = `Generá una rutina de entrenamiento basada en este perfil: ${JSON.stringify(profile)}. Los ejercicios disponibles, agrupados por músculo, son: ${JSON.stringify(enabledExercises)}. Instrucciones adicionales del entrenador: "${additionalInstructions || 'Ninguna'}".`;
         
@@ -2029,6 +2043,20 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
             setLoadingDiet(false);
         }
     };
+
+    const upperBodyFocusOptions = [
+        { value: '', label: 'Seleccionar foco...' },
+        { value: 'Pecho y Hombros', label: 'Pecho y Hombros' },
+        { value: 'Espalda y Brazos', label: 'Espalda y Brazos' },
+        { value: 'Hombros (énfasis en deltoides)', label: 'Hombros (énfasis en deltoides)' },
+    ];
+
+    const lowerBodyFocusOptions = [
+        { value: '', label: 'Seleccionar foco...' },
+        { value: 'Glúteos y Femorales', label: 'Glúteos y Femorales' },
+        { value: 'Cuádriceps y Gemelos', label: 'Cuádriceps y Gemelos' },
+        { value: 'Énfasis en Glúteos', label: 'Énfasis en Glúteos' },
+    ];
     
     // --- Renderizado del Componente ---
 
@@ -2044,7 +2072,7 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                 />
                 <header className="main-header">
                      <div className="header-title-wrapper">
-                        {gym.logoSvg && <img src={gym.logoSvg} alt={`${gym.name} Logo`} className="gym-logo" />}
+                        {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} Logo`} className="gym-logo" /> : <Logo />}
                         <h1>Panel de {gym.name}</h1>
                     </div>
                     <nav className="admin-header-nav">
@@ -2137,8 +2165,16 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                                  </select>
                              </div>
                               <div className="form-group">
-                                 <label>Foco Específico (Opcional)</label>
-                                 <input type="text" placeholder="Ej: Glúteos y femorales" value={profile.bodyFocusSpecific} onChange={e => handleProfileChange('bodyFocusSpecific', e.target.value)} />
+                                <label>Foco Específico (Opcional)</label>
+                                <select 
+                                    value={profile.bodyFocusSpecific} 
+                                    onChange={e => handleProfileChange('bodyFocusSpecific', e.target.value)}
+                                    disabled={profile.bodyFocusArea === 'Cuerpo completo'}
+                                >
+                                    {profile.bodyFocusArea === 'Tren Superior' && upperBodyFocusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    {profile.bodyFocusArea === 'Tren Inferior' && lowerBodyFocusOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    {profile.bodyFocusArea === 'Cuerpo completo' && <option value="">N/A</option>}
+                                </select>
                              </div>
                          </form>
                          <div className="access-code-display">
@@ -2148,9 +2184,9 @@ const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: {
                     </div>
 
                     <div className="main-content-wrapper">
-                        <header className="main-header">
-                             <div className="header-title-wrapper">
-                                <button onClick={() => setView('dashboard')} className="back-button">← Volver</button>
+                         <header className="main-header">
+                            <div className="header-title-wrapper">
+                                <button onClick={() => { setView('dashboard'); setSelectedClientDNI(null); }} className="back-button">← Volver</button>
                             </div>
                         </header>
                         <div className="main-content">
@@ -2404,7 +2440,7 @@ const SuperAdminPortal = ({ ai, onLogout }: { ai: GoogleGenAI | null; onLogout: 
             {isEditModalOpen && editingGym && (
                  <div className="modal-overlay" onClick={handleCloseModal}>
                      <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
-                          <h3>{editingGym._id !== null ? `Editar ${editingGym.name}` : 'Agregar Nuevo Gimnasio'}</h3>
+                          <h3>{editingGym._id !== null ? `Editar ${(editingGym as Gym).name}` : 'Agregar Nuevo Gimnasio'}</h3>
                           <form onSubmit={handleSaveGym}>
                              <div className="form-group">
                                  <label>Nombre del Gimnasio</label>
