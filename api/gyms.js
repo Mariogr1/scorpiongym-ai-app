@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password, logoSvg, dailyQuestionLimit } = req.body;
+        const { name, username, password, dailyQuestionLimit } = req.body;
         if (!name || !username || !password) {
           return res.status(400).json({ message: 'Name, username, and password are required' });
         }
@@ -35,7 +35,6 @@ export default async function handler(req, res) {
           name,
           username,
           password,
-          logoSvg: logoSvg || null,
           dailyQuestionLimit: Number(dailyQuestionLimit) || 10, // Default to 10 if not provided or invalid
         };
         
