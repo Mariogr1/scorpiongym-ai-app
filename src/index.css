@@ -691,7 +691,7 @@ body {
 }
 .cta-button.regenerate {
     display: block;
-    margin: 2rem auto 0 auto;
+    margin: 1.5rem auto 0 auto;
     width: fit-content;
 }
 
@@ -727,13 +727,28 @@ body {
     background-color: var(--primary-color);
 }
 
+.generation-container, .regeneration-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    width: 100%;
+    margin-top: 2rem;
+}
+
 .admin-instructions-box {
+    width: 100%;
+    max-width: 600px;
     margin-bottom: 1.5rem;
     padding: 1.5rem;
     background-color: var(--background-color);
     border: 1px dashed var(--border-color);
     border-radius: 10px;
 }
+.generation-container .admin-instructions-box {
+    margin-bottom: 0;
+}
+
 .admin-instructions-box label {
     display: block;
     margin-bottom: 0.75rem;
@@ -769,7 +784,7 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 1.5rem;
-    padding: 4rem 2rem;
+    padding: 2rem;
 }
 
 .loading-container, .error-container {

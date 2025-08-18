@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1058,7 +1059,8 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
     const [ai, setAi] = useState<GoogleGenAI | null>(null);
     const [currentTab, setCurrentTab] = useState<'routine' | 'diet'>('routine');
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
-    const [adminInstructions, setAdminInstructions] = useState('');
+    const [routineInstructions, setRoutineInstructions] = useState('');
+    const [dietInstructions, setDietInstructions] = useState('');
 
     useEffect(() => {
         const initialize = async () => {
@@ -1181,7 +1183,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             return acc;
         }, {} as Record<string, string[]>);
         
-        const baseSystemInstruction = `Sos un entrenador personal de élite creando un plan para un cliente. Tu nombre es Scorpion AI. Usá un tono profesional pero motivador y siempre hablale de "vos" al cliente. El plan debe ser detallado, estructurado y fácil de seguir. NO inventes ejercicios, solo usá los de la lista proporcionada. El plan debe estar en formato JSON.`;
+        const baseSystemInstruction = `Sos un entrenador personal de élite creando un plan para un cliente. Tu nombre es Scorpion AI. Usá un tono profesional pero motivador y siempre hablale de "vos" al cliente. El plan debe ser detallado, estructurado y fácil de seguir. NO inventes ejercicios, solo usá los de la lista proporcionada. El plan debe estar en formato JSON. IMPORTANTE: El JSON de salida DEBE ser sintácticamente perfecto, sin comas sueltas, y con todas las comillas correctamente escapadas dentro de los strings.`;
         
         const profileContext = `Aquí está el perfil del cliente para el que estás creando el plan: ${JSON.stringify(profile)}.`;
         
@@ -1192,24 +1194,22 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         
         if (type === 'routine') {
              specificInstructions = `
-                Creá un plan de entrenamiento completo.
-                - **Estructura del Plan:** El plan debe tener un nombre ("planName"). La duración total en semanas ("totalDurationWeeks") se basa en las fases.
-                - **Fases:**
-                    - Si "includeAdaptationPhase" es "Sí", la primera fase DEBE ser una "Fase de Adaptación" de 2 semanas.
-                    - Las fases subsiguientes ("Fase de Hipertrofia", "Fase de Fuerza", "Fase de Resistencia", etc.) deben durar 4 semanas cada una. El nombre de las fases debe reflejar el objetivo principal ("goal").
-                    - **MUY IMPORTANTE:** Al final del plan, DEBES añadir OBLIGATORIAMENTE una fase de 1 semana llamada "Semana de Descarga", con menos volumen (menos series) y menor intensidad.
-                - **Estructura de la Rutina Diaria:**
-                    - Cada día ("dia") debe tener un "grupoMuscular" principal y el número del día como string (ej: "1", "2").
-                    - La cantidad de ejercicios por día debe respetar la "trainingIntensity":
-                        - Baja: 4-6 ejercicios.
-                        - Moderada: 5-8 ejercicios.
-                        - Alta: 7-10 ejercicios.
-                        - Extrema: 10-13 ejercicios.
-                    - **Series y Repeticiones:** Adapta las series y repeticiones al nivel ("level") y objetivo ("goal") del cliente. Para intensidad "Alta" o "Extrema", DEBES mezclar rangos de repeticiones (ej: series de fuerza 4-6 reps, hipertrofia 8-12 reps, y resistencia 15-20 reps) para un estímulo completo.
-                    - **Descanso:** El descanso ("descanso") debe estar en segundos (ej: "60s").
-                    - Si "useAdvancedTechniques" es "Sí", incluí una "tecnicaAvanzada" en el último ejercicio del grupo muscular principal de cada día. Usá una de estas opciones: ${advancedTechniqueOptions.filter(o=>o.value).map(o=>`"${o.label}"`).join(', ')}.
-                    - El cardio ("cardio") debe ser apropiado para el objetivo (ej: HIIT para pérdida de grasa, LISS para hipertrofia).
+                Creá un plan de entrenamiento completo y bien estructurado.
+                - **Estructura General (Regla Crítica):** La respuesta JSON DEBE tener una propiedad raíz llamada "phases", que TIENE que ser un array (lista) de objetos. CADA objeto en el array "phases" representa una fase del entrenamiento. Si el array "phases" está vacío o no existe, la respuesta es inválida. El plan debe tener también un "planName" y una "totalDurationWeeks".
+                - **Fases del Plan:**
+                    - Si el perfil indica "includeAdaptationPhase", la primera fase debe ser de "Adaptación" y durar 2 semanas.
+                    - Las siguientes fases deben durar entre 3 y 4 semanas cada una, con nombres que reflejen el objetivo principal del cliente (ej: "Fase de Hipertrofia y Fuerza").
+                    - **Importante:** El plan debe concluir con una "Semana de Descarga" de 1 semana, caracterizada por un volumen e intensidad reducidos.
+                - **Rutina Diaria:**
+                    - Cada día de entrenamiento ("dia") debe tener un número de día como string (ej: "1") y un "grupoMuscular" enfocado.
+                    - El número de ejercicios por día debe ser coherente con la "trainingIntensity" del perfil (Baja: ~5, Moderada: ~7, Alta: ~9, Extrema: ~11).
+                    - **Series, Reps y Descanso:** Adapta estos valores al nivel y objetivo del cliente. Varía los rangos de repeticiones para un estímulo completo. El descanso ("descanso") debe ser un string en segundos (ej: "60s").
+                    - **Técnicas Avanzadas:** Si el perfil lo indica ("useAdvancedTechniques"), asigna una "tecnicaAvanzada" a 1 o 2 ejercicios clave por día, usando una de estas opciones: ${advancedTechniqueOptions.filter(o=>o.value).map(o=>`"${o.label}"`).join(', ')}.
+                    - **Cardio:** Incluí una recomendación de "cardio" apropiada para el objetivo del cliente.
             `;
+             if (routineInstructions) {
+                specificInstructions += `\n- **Instrucciones Adicionales del Entrenador (MUY IMPORTANTE):** El entrenador ha añadido estas notas. DEBES seguirlas al pie de la letra: "${routineInstructions}"`;
+            }
             responseSchema = {
                 type: Type.OBJECT,
                 properties: {
@@ -1265,8 +1265,8 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                 - **Recomendaciones:** Incluí una sección de "recommendations" con 3-5 consejos generales sobre hidratación, timing de nutrientes, etc.
                 - **Consideraciones:** Basá las cantidades y tipos de alimentos en el objetivo del cliente (ej: más proteína para hipertrofia, déficit calórico para pérdida de grasa).
             `;
-             if (adminInstructions) {
-                specificInstructions += `\n- **Instrucciones Adicionales del Entrenador (MUY IMPORTANTE):** El entrenador ha añadido estas notas. DEBES seguirlas al pie de la letra: "${adminInstructions}"`;
+             if (dietInstructions) {
+                specificInstructions += `\n- **Instrucciones Adicionales del Entrenador (MUY IMPORTANTE):** El entrenador ha añadido estas notas. DEBES seguirlas al pie de la letra: "${dietInstructions}"`;
             }
 
             responseSchema = {
@@ -1312,7 +1312,11 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         }
 
         try {
-            const finalSystemInstruction = `${baseSystemInstruction}\n${profileContext}\n${exerciseListContext}\n${specificInstructions}`;
+            let finalSystemInstruction = `${baseSystemInstruction}\n${profileContext}\n${specificInstructions}`;
+            if (type === 'routine') {
+                finalSystemInstruction += `\n${exerciseListContext}`;
+            }
+
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: "Generá el plan solicitado.",
@@ -1323,8 +1327,19 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                 }
             });
             
-            const jsonText = response.text.trim();
+            let jsonText = response.text.trim();
+            // Clean markdown fences if they exist
+            if (jsonText.startsWith("```json")) {
+                jsonText = jsonText.substring(7, jsonText.length - 3).trim();
+            } else if (jsonText.startsWith("```")) {
+                jsonText = jsonText.substring(3, jsonText.length - 3).trim();
+            }
+            
             const planData = JSON.parse(jsonText);
+            
+            if (type === 'routine' && (!planData || !Array.isArray(planData.phases) || planData.phases.length === 0)) {
+                throw new Error("La estructura de la rutina es inválida (falta el array 'phases').");
+            }
 
             const updatedClientData = { ...clientData };
             const updatePayload: Partial<ClientData> = {};
@@ -1345,7 +1360,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
 
         } catch (error: any) {
             console.error(`Error generating ${type}:`, error);
-            setError(`Hubo un error al generar el plan de ${type}. Detalles: ${error.message || 'Error desconocido'}`);
+            setError(`La respuesta de la IA contenía un error de formato. Por favor, intentá de nuevo. Si el problema persiste, probá simplificando las instrucciones adicionales.`);
         } finally {
             setIsGenerating(false);
         }
@@ -1515,65 +1530,102 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                         {error && <div className="error-container" style={{marginBottom: '1rem'}}>{error}</div>}
 
                         {currentTab === 'routine' && (
-                            clientData.routine ?
-                            <RoutinePlanViewer 
-                                routine={clientData.routine} 
-                                library={exerciseLibrary}
-                                editable={true}
-                                onExerciseChange={handleExerciseChange}
-                                onAddExercise={handleAddExercise}
-                                onDeleteExercise={handleDeleteExercise}
-                             /> :
-                            <div className="placeholder-action">
-                                <h3>Este cliente aún no tiene una rutina.</h3>
-                                <p>Revisá y guardá el perfil, luego generá una nueva rutina personalizada.</p>
-                                <button className="cta-button" onClick={() => generatePlan('routine')} disabled={isGenerating}>
-                                    {isGenerating ? <><span className="spinner small" /> Generando...</> : 'Generar Rutina con IA'}
-                                </button>
-                            </div>
+                            <>
+                                {clientData.routine ? (
+                                    <RoutinePlanViewer 
+                                        routine={clientData.routine} 
+                                        library={exerciseLibrary}
+                                        editable={true}
+                                        onExerciseChange={handleExerciseChange}
+                                        onAddExercise={handleAddExercise}
+                                        onDeleteExercise={handleDeleteExercise}
+                                     />
+                                ) : (
+                                    <div className="placeholder-action">
+                                        <h3>Este cliente aún no tiene una rutina.</h3>
+                                        <p>Revisá y guardá el perfil, luego generá una nueva rutina personalizada.</p>
+                                    </div>
+                                )}
+                                
+                                {clientData.routine ? (
+                                     <div className="regeneration-container">
+                                        <div className="admin-instructions-box">
+                                            <label htmlFor="routineInstructions">Instrucciones Adicionales (para regenerar)</label>
+                                            <textarea
+                                                id="routineInstructions"
+                                                rows={3}
+                                                placeholder="Ej: El cliente tiene una leve molestia en el hombro derecho, evitar press sobre la cabeza. Priorizar espalda."
+                                                value={routineInstructions}
+                                                onChange={e => setRoutineInstructions(e.target.value)}
+                                            />
+                                        </div>
+                                        <button className="cta-button regenerate" onClick={() => generatePlan('routine')} disabled={isGenerating}>
+                                            {isGenerating ? <><span className="spinner small" /> Regenerando...</> : 'Regenerar Rutina con IA'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="generation-container">
+                                        <div className="admin-instructions-box">
+                                            <label htmlFor="routineInstructions">Instrucciones Adicionales (Opcional)</label>
+                                            <textarea
+                                                id="routineInstructions"
+                                                rows={3}
+                                                placeholder="Ej: El cliente tiene una leve molestia en el hombro derecho, evitar press sobre la cabeza. Priorizar espalda."
+                                                value={routineInstructions}
+                                                onChange={e => setRoutineInstructions(e.target.value)}
+                                            />
+                                        </div>
+                                        <button className="cta-button" onClick={() => generatePlan('routine')} disabled={isGenerating}>
+                                            {isGenerating ? <><span className="spinner small" /> Generando...</> : 'Generar Rutina con IA'}
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
+                        
 
                         {currentTab === 'diet' && (
-                            clientData.dietPlan ?
-                            <DietPlanViewer dietPlan={clientData.dietPlan} /> :
-                             <div className="placeholder-action">
-                                <h3>Este cliente aún no tiene un plan de nutrición.</h3>
-                                <div className="admin-instructions-box">
-                                     <label htmlFor="adminInstructions">Instrucciones Adicionales (Opcional)</label>
-                                     <textarea
-                                        id="adminInstructions"
-                                        rows={3}
-                                        placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carne roja."
-                                        value={adminInstructions}
-                                        onChange={e => setAdminInstructions(e.target.value)}
-                                     />
-                                </div>
-                                <button className="cta-button" onClick={() => generatePlan('diet')} disabled={isGenerating}>
-                                    {isGenerating ? <><span className="spinner small" /> Generando...</> : 'Generar Plan de Nutrición'}
-                                </button>
-                            </div>
-                        )}
-                         
-                        {(currentTab === 'routine' && clientData.routine) && (
-                             <button className="cta-button regenerate" onClick={() => generatePlan('routine')} disabled={isGenerating}>
-                                {isGenerating ? <><span className="spinner small" /> Regenerando...</> : 'Regenerar Rutina'}
-                             </button>
-                        )}
-                        {(currentTab === 'diet' && clientData.dietPlan) && (
-                            <>
-                             <div className="admin-instructions-box">
-                                     <label htmlFor="adminInstructions">Instrucciones Adicionales (Opcional)</label>
-                                     <textarea
-                                        id="adminInstructions"
-                                        rows={3}
-                                        placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carne roja."
-                                        value={adminInstructions}
-                                        onChange={e => setAdminInstructions(e.target.value)}
-                                     />
-                                </div>
-                                <button className="cta-button regenerate" onClick={() => generatePlan('diet')} disabled={isGenerating}>
-                                    {isGenerating ? <><span className="spinner small" /> Regenerando...</> : 'Regenerar Plan de Nutrición'}
-                                </button>
+                             <>
+                                {clientData.dietPlan ? (
+                                    <DietPlanViewer dietPlan={clientData.dietPlan} />
+                                ) : (
+                                    <div className="placeholder-action">
+                                        <h3>Este cliente aún no tiene un plan de nutrición.</h3>
+                                    </div>
+                                )}
+                                {clientData.dietPlan ? (
+                                     <div className="regeneration-container">
+                                        <div className="admin-instructions-box">
+                                            <label htmlFor="dietInstructions">Instrucciones Adicionales (para regenerar)</label>
+                                            <textarea
+                                                id="dietInstructions"
+                                                rows={3}
+                                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carne roja."
+                                                value={dietInstructions}
+                                                onChange={e => setDietInstructions(e.target.value)}
+                                            />
+                                        </div>
+                                        <button className="cta-button regenerate" onClick={() => generatePlan('diet')} disabled={isGenerating}>
+                                            {isGenerating ? <><span className="spinner small" /> Regenerando...</> : 'Regenerar Plan de Nutrición'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="generation-container">
+                                        <div className="admin-instructions-box">
+                                            <label htmlFor="dietInstructions">Instrucciones Adicionales (Opcional)</label>
+                                            <textarea
+                                                id="dietInstructions"
+                                                rows={3}
+                                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carne roja."
+                                                value={dietInstructions}
+                                                onChange={e => setDietInstructions(e.target.value)}
+                                            />
+                                        </div>
+                                        <button className="cta-button" onClick={() => generatePlan('diet')} disabled={isGenerating}>
+                                            {isGenerating ? <><span className="spinner small" /> Generando...</> : 'Generar Plan de Nutrición'}
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
@@ -1645,6 +1697,16 @@ const RoutinePlanViewer = ({
         return <div className="placeholder">Fase de rutina no válida.</div>;
     }
     const activeDay = activePhase.routine.dias[activeDayIndex];
+    
+    // Correction for "Día Día 1" bug
+    const cleanDayString = (day: string) => {
+        const lowerCaseDay = day.toLowerCase();
+        if(lowerCaseDay.startsWith('día ')) {
+            return day.substring(4);
+        }
+        return day;
+    }
+
 
     return (
         <div className={`plan-container routine-plan ${editable ? 'editable' : ''}`}>
@@ -1675,13 +1737,13 @@ const RoutinePlanViewer = ({
                                                 setActiveDayIndex(dayIndex);
                                             }}
                                         >
-                                            Día {day.dia.replace('Día ', '')}
+                                            Día {cleanDayString(day.dia)}
                                         </button>
                                     ))}
                                 </nav>
                                 {activePhaseIndex === phaseIndex && activeDay && (
                                     <div className="day-card animated-fade-in">
-                                        <h3>Día {activeDay.dia.replace('Día ', '')}: <span className="muscle-group">{activeDay.grupoMuscular}</span></h3>
+                                        <h3>Día {cleanDayString(activeDay.dia)}: <span className="muscle-group">{activeDay.grupoMuscular}</span></h3>
                                         <ul className="exercise-list">
                                             {activeDay.ejercicios.map((ex, exIndex) => (
                                                 <li key={exIndex} className={`exercise-item ${editable ? 'editable' : ''}`}>
