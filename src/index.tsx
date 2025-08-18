@@ -1183,7 +1183,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             return acc;
         }, {} as Record<string, string[]>);
         
-        const baseSystemInstruction = `Sos un entrenador personal de élite creando un plan para un cliente. Tu nombre es Scorpion AI. Usá un tono profesional pero motivador y siempre hablale de "vos" al cliente. El plan debe ser detallado, estructurado y fácil de seguir. NO inventes ejercicios, solo usá los de la lista proporcionada. El plan debe estar en formato JSON. IMPORTANTE: El JSON de salida DEBE ser sintácticamente perfecto, sin comas sueltas, y con todas las comillas correctamente escapadas dentro de los strings.`;
+        const baseSystemInstruction = `Sos un entrenador personal de élite creando un plan para un cliente. Tu nombre es Scorpion AI. Usá un tono profesional pero motivador y siempre hablale de "vos" al cliente. El plan debe ser detallado, estructurado y fácil de seguir. NO inventes ejercicios, solo usá los de la lista proporcionada. Tu respuesta DEBE ser EXCLUSIVAMENTE un objeto JSON válido. No incluyas texto explicativo, notas, ni envolturas de markdown como \`\`\`json. La respuesta DEBE empezar con '{' y terminar con '}'. Es CRÍTICO que el JSON sea sintácticamente perfecto: sin comas finales (trailing commas) y con todas las comillas dentro de los strings debidamente escapadas.`;
         
         const profileContext = `Aquí está el perfil del cliente para el que estás creando el plan: ${JSON.stringify(profile)}.`;
         
@@ -1328,11 +1328,9 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             });
             
             let jsonText = response.text.trim();
-            // Clean markdown fences if they exist
-            if (jsonText.startsWith("```json")) {
-                jsonText = jsonText.substring(7, jsonText.length - 3).trim();
-            } else if (jsonText.startsWith("```")) {
-                jsonText = jsonText.substring(3, jsonText.length - 3).trim();
+            // Robustly clean markdown fences if they exist
+            if (jsonText.startsWith("```") && jsonText.endsWith("```")) {
+                 jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
             }
             
             const planData = JSON.parse(jsonText);
@@ -1359,7 +1357,8 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             setInitialClientData(JSON.parse(JSON.stringify(updatedClientData))); // Update baseline after generation
 
         } catch (error: any) {
-            console.error(`Error generating ${type}:`, error);
+            console.error(`Error generating ${type}:`, error.message);
+            console.error("Raw text from AI that failed to parse:", error.response?.text ? error.response.text : 'N/A');
             setError(`La respuesta de la IA contenía un error de formato. Por favor, intentá de nuevo. Si el problema persiste, probá simplificando las instrucciones adicionales.`);
         } finally {
             setIsGenerating(false);
