@@ -1195,7 +1195,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         if (type === 'routine') {
              specificInstructions = `
                 Creá un plan de entrenamiento completo y bien estructurado.
-                - **Estructura General:** El plan debe tener un nombre ("planName") y una duración total en semanas ("totalDurationWeeks") que refleje la suma de las fases.
+                - **Estructura General (Regla Crítica):** La respuesta JSON DEBE tener una propiedad raíz llamada "phases", que TIENE que ser un array (lista) de objetos. CADA objeto en el array "phases" representa una fase del entrenamiento. Si el array "phases" está vacío o no existe, la respuesta es inválida. El plan debe tener también un "planName" y una "totalDurationWeeks".
                 - **Fases del Plan:**
                     - Si el perfil indica "includeAdaptationPhase", la primera fase debe ser de "Adaptación" y durar 2 semanas.
                     - Las siguientes fases deben durar entre 3 y 4 semanas cada una, con nombres que reflejen el objetivo principal del cliente (ej: "Fase de Hipertrofia y Fuerza").
@@ -1325,6 +1325,10 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             
             const jsonText = response.text.trim();
             const planData = JSON.parse(jsonText);
+            
+            if (type === 'routine' && (!planData || !Array.isArray(planData.phases) || planData.phases.length === 0)) {
+                throw new Error("La estructura de la rutina es inválida (falta el array 'phases').");
+            }
 
             const updatedClientData = { ...clientData };
             const updatePayload: Partial<ClientData> = {};
@@ -1345,7 +1349,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
 
         } catch (error: any) {
             console.error(`Error generating ${type}:`, error);
-            setError(`Hubo un error al generar el plan de ${type}. Detalles: ${error.message || 'Error desconocido'}`);
+            setError(`La respuesta de la IA no fue válida y no se pudo aplicar el plan. Por favor, intentá de nuevo. (Detalle: ${error.message || 'Error desconocido'})`);
         } finally {
             setIsGenerating(false);
         }
