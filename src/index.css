@@ -949,35 +949,79 @@ body {
     border-left: 4px solid var(--primary-color);
 }
 .exercise-item.editable {
-    padding: 1.5rem;
+    padding: 1rem;
     border: 1px solid var(--border-color);
+    border-left: 4px solid var(--archive-color);
 }
 
-.exercise-item-header {
+/* --- Routine Editor Styles --- */
+.exercise-item-editor {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 1rem;
+}
+.editor-row {
+    display: flex;
+    gap: 1rem;
     align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
 }
-.exercise-item-header h4 {
-    font-size: 1.1rem;
+.editor-row-main {
+    justify-content: space-between;
+}
+.exercise-select {
+    flex-grow: 1;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
     color: var(--text-color);
-    margin: 0;
+    padding: 0.6rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
 }
-
-.exercise-item.editable .form-group {
-    margin-bottom: 1rem;
+.delete-exercise-btn {
+    background-color: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
 }
-.exercise-item.editable .form-group:last-child {
-    margin-bottom: 0;
+.delete-exercise-btn:hover {
+    background-color: var(--primary-color-hover);
 }
-
-.exercise-input.name-select {
+.form-group-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+}
+.form-group-inline.full-width {
+    flex-basis: 100%;
+}
+.form-group-inline label {
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+}
+.form-group-inline input, .form-group-inline select {
     width: 100%;
-    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 6px;
 }
+.form-group-inline input:focus, .form-group-inline select:focus {
+    outline: none;
+    border-color: var(--archive-color);
+}
+
+
 .exercise-name-wrapper {
     display: flex;
     justify-content: space-between;
@@ -1009,14 +1053,7 @@ body {
     color: var(--text-secondary-color);
     flex-wrap: wrap;
 }
-.exercise-details.editable {
-    gap: 1rem;
-    align-items: center;
-}
-.exercise-details.editable input {
-    width: 60px;
-    padding: 0.4rem;
-}
+
 .exercise-details span {
     font-size: 0.9rem;
 }

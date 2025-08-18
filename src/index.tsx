@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -517,7 +515,7 @@ const SuperAdminPortal = ({ onLogout }: { onLogout: () => void }) => {
             {isEditModalOpen && editingGym && (
                  <div className="modal-overlay">
                     <div className="modal-content edit-modal">
-                        <h3>Editar Gimnasio: {editingGym.name}</h3>
+                        <h3>Editar Gimnasio: {(editingGym as Gym).name}</h3>
                         <form onSubmit={handleUpdateGym}>
                             <div className="form-group">
                                 <label>Nombre del Gimnasio</label>
@@ -1051,7 +1049,7 @@ const ExerciseLibraryManager = ({ gymId }: { gymId: string }) => {
 // --- Portal de Gestión de Cliente ---
 const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: () => void; gymId: string; }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
-    const [initialProfile, setInitialProfile] = useState<Profile | null>(null);
+    const [initialClientData, setInitialClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -1070,7 +1068,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                 const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
                 if (fetchedClientData) {
                     setClientData(fetchedClientData);
-                    setInitialProfile(fetchedClientData.profile);
+                    setInitialClientData(JSON.parse(JSON.stringify(fetchedClientData)));
                 } else {
                     setError('No se pudo encontrar el cliente.');
                 }
@@ -1099,6 +1097,35 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         });
     };
     
+    // --- Handlers for Routine Editing ---
+    const handleExerciseChange = (phaseIdx: number, dayIdx: number, exIdx: number, field: keyof Exercise, value: string) => {
+        if (!clientData || !clientData.routine) return;
+        const newClientData = JSON.parse(JSON.stringify(clientData));
+        newClientData.routine.phases[phaseIdx].routine.dias[dayIdx].ejercicios[exIdx][field] = value;
+        setClientData(newClientData);
+    };
+
+    const handleAddExercise = (phaseIdx: number, dayIdx: number) => {
+        if (!clientData || !clientData.routine) return;
+        const newClientData = JSON.parse(JSON.stringify(clientData));
+        newClientData.routine.phases[phaseIdx].routine.dias[dayIdx].ejercicios.push({
+            nombre: 'Seleccionar ejercicio',
+            series: '3',
+            repeticiones: '10',
+            descanso: '60s',
+            tecnicaAvanzada: '',
+        });
+        setClientData(newClientData);
+    };
+    
+    const handleDeleteExercise = (phaseIdx: number, dayIdx: number, exIdx: number) => {
+        if (!clientData || !clientData.routine) return;
+        const newClientData = JSON.parse(JSON.stringify(clientData));
+        newClientData.routine.phases[phaseIdx].routine.dias[dayIdx].ejercicios.splice(exIdx, 1);
+        setClientData(newClientData);
+    };
+
+
     const bodyFocusOptions = useMemo(() => {
         if (clientData?.profile.bodyFocusArea === 'Tren Superior') {
             return ["Pecho y Espalda", "Hombros y Brazos", "Énfasis en Pecho", "Énfasis en Espalda", "Énfasis en Hombros"];
@@ -1117,16 +1144,22 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
     }, [clientData?.profile.bodyFocusArea, bodyFocusOptions]);
 
 
-    const isProfileChanged = useMemo(() => {
-        return JSON.stringify(clientData?.profile) !== JSON.stringify(initialProfile);
-    }, [clientData?.profile, initialProfile]);
+    const isDataChanged = useMemo(() => {
+        return JSON.stringify(clientData) !== JSON.stringify(initialClientData);
+    }, [clientData, initialClientData]);
 
     const handleSaveChanges = async () => {
-        if (!clientData || !isProfileChanged) return;
+        if (!clientData || !isDataChanged) return;
         setIsSaving(true);
-        const success = await apiClient.saveClientData(dni, { profile: clientData.profile });
+        // We only need to send the parts that can be changed on this screen
+        const dataToSave: Partial<ClientData> = {
+            profile: clientData.profile,
+            routine: clientData.routine,
+            dietPlan: clientData.dietPlan,
+        };
+        const success = await apiClient.saveClientData(dni, dataToSave);
         if (success) {
-            setInitialProfile(clientData.profile);
+            setInitialClientData(JSON.parse(JSON.stringify(clientData))); // Update baseline
             setSaveStatus('saved');
             setTimeout(() => setSaveStatus('idle'), 2000);
         } else {
@@ -1166,7 +1199,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                     - Las fases subsiguientes ("Fase de Hipertrofia", "Fase de Fuerza", "Fase de Resistencia", etc.) deben durar 4 semanas cada una. El nombre de las fases debe reflejar el objetivo principal ("goal").
                     - **MUY IMPORTANTE:** Al final del plan, DEBES añadir OBLIGATORIAMENTE una fase de 1 semana llamada "Semana de Descarga", con menos volumen (menos series) y menor intensidad.
                 - **Estructura de la Rutina Diaria:**
-                    - Cada día ("dia") debe tener un "grupoMuscular" principal.
+                    - Cada día ("dia") debe tener un "grupoMuscular" principal y el número del día como string (ej: "1", "2").
                     - La cantidad de ejercicios por día debe respetar la "trainingIntensity":
                         - Baja: 4-6 ejercicios.
                         - Moderada: 5-8 ejercicios.
@@ -1308,6 +1341,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             
             await apiClient.saveClientData(dni, updatePayload);
             setClientData(updatedClientData);
+            setInitialClientData(JSON.parse(JSON.stringify(updatedClientData))); // Update baseline after generation
 
         } catch (error: any) {
             console.error(`Error generating ${type}:`, error);
@@ -1466,7 +1500,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                          <button
                             className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}
                             onClick={handleSaveChanges}
-                            disabled={!isProfileChanged || isSaving}
+                            disabled={!isDataChanged || isSaving}
                         >
                             {isSaving ? <><span className="spinner small"/> Guardando...</> : saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios'}
                         </button>
@@ -1482,7 +1516,14 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
 
                         {currentTab === 'routine' && (
                             clientData.routine ?
-                            <RoutinePlanViewer routine={clientData.routine} library={exerciseLibrary} /> :
+                            <RoutinePlanViewer 
+                                routine={clientData.routine} 
+                                library={exerciseLibrary}
+                                editable={true}
+                                onExerciseChange={handleExerciseChange}
+                                onAddExercise={handleAddExercise}
+                                onDeleteExercise={handleDeleteExercise}
+                             /> :
                             <div className="placeholder-action">
                                 <h3>Este cliente aún no tiene una rutina.</h3>
                                 <p>Revisá y guardá el perfil, luego generá una nueva rutina personalizada.</p>
@@ -1545,14 +1586,33 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
 
 
 // --- Visores de Planes ---
-const RoutinePlanViewer = ({ routine, library, editable = false }: { routine: Routine, library: ExerciseLibrary, editable?: boolean }) => {
+const RoutinePlanViewer = ({ 
+    routine, 
+    library, 
+    editable = false,
+    onExerciseChange,
+    onAddExercise,
+    onDeleteExercise
+}: { 
+    routine: Routine, 
+    library: ExerciseLibrary, 
+    editable?: boolean,
+    onExerciseChange?: (phaseIdx: number, dayIdx: number, exIdx: number, field: keyof Exercise, value: string) => void,
+    onAddExercise?: (phaseIdx: number, dayIdx: number) => void,
+    onDeleteExercise?: (phaseIdx: number, dayIdx: number, exIdx: number) => void
+}) => {
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
-
-    const activePhase = routine.phases[activePhaseIndex];
-    const activeDay = activePhase?.routine.dias[activeDayIndex];
     
     const [openPhases, setOpenPhases] = useState<Set<number>>(new Set([0]));
+
+    const allExercises = useMemo(() => {
+        return Object.entries(library).map(([group, exercises]) => (
+            <optgroup label={group} key={group}>
+                {exercises.map(ex => <option key={ex.name} value={ex.name}>{ex.name}</option>)}
+            </optgroup>
+        ));
+    }, [library]);
     
     const togglePhase = (index: number) => {
         const newSet = new Set(openPhases);
@@ -1575,6 +1635,16 @@ const RoutinePlanViewer = ({ routine, library, editable = false }: { routine: Ro
         }
         return null;
     };
+    
+    if (!routine || !routine.phases || routine.phases.length === 0) {
+        return <div className="placeholder">La rutina generada no es válida.</div>;
+    }
+
+    const activePhase = routine.phases[activePhaseIndex];
+    if (!activePhase || !activePhase.routine || !activePhase.routine.dias) {
+        return <div className="placeholder">Fase de rutina no válida.</div>;
+    }
+    const activeDay = activePhase.routine.dias[activeDayIndex];
 
     return (
         <div className={`plan-container routine-plan ${editable ? 'editable' : ''}`}>
@@ -1605,38 +1675,78 @@ const RoutinePlanViewer = ({ routine, library, editable = false }: { routine: Ro
                                                 setActiveDayIndex(dayIndex);
                                             }}
                                         >
-                                            Día {day.dia}
+                                            Día {day.dia.replace('Día ', '')}
                                         </button>
                                     ))}
                                 </nav>
                                 {activePhaseIndex === phaseIndex && activeDay && (
                                     <div className="day-card animated-fade-in">
-                                        <h3>Día {activeDay.dia}: <span className="muscle-group">{activeDay.grupoMuscular}</span></h3>
+                                        <h3>Día {activeDay.dia.replace('Día ', '')}: <span className="muscle-group">{activeDay.grupoMuscular}</span></h3>
                                         <ul className="exercise-list">
                                             {activeDay.ejercicios.map((ex, exIndex) => (
-                                                <li key={exIndex} className="exercise-item">
-                                                    <div className="exercise-name-wrapper">
-                                                        <span className="exercise-name">{ex.nombre}</span>
-                                                        {getYoutubeLink(ex.nombre) && (
-                                                            <a href={getYoutubeLink(ex.nombre) || ''} target="_blank" rel="noopener noreferrer" className="video-link" title="Ver video en YouTube">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 15.274l6-3.774-6-3.774v7.548z"/><path d="M21.583 6.478a2.498 2.498 0 0 0-1.75-1.75C18.253 4.5 12 4.5 12 4.5s-6.253 0-7.833.228a2.498 2.498 0 0 0-1.75 1.75C2.228 8.058 2 12 2 12s.228 3.942.417 5.522a2.498 2.498 0 0 0 1.75 1.75C5.747 19.5 12 19.5 12 19.5s6.253 0 7.833-.228a2.498 2.498 0 0 0 1.75-1.75C21.772 15.942 22 12 22 12s-.228-3.942-.417-5.522zM12 17.5c-5.145 0-6.843-.19-7.5-.373A.5.5 0 0 1 4.127 16.75c-.183-.657-.373-2.355-.373-4.75s.19-4.093.373-4.75a.5.5 0 0 1 .373-.373c.657-.183 2.355-.373 4.75-.373s4.093.19 4.75.373a.5.5 0 0 1 .373.373c.183.657.373 2.355.373 4.75s-.19 4.093-.373 4.75a.5.5 0 0 1-.373.373c-.657.183-2.355.373-4.75.373z"/></svg>
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                    <div className="exercise-details">
-                                                        <span><strong>Series:</strong> {ex.series}</span>
-                                                        <span><strong>Reps:</strong> {ex.repeticiones}</span>
-                                                        <span><strong>Descanso:</strong> {ex.descanso}</span>
-                                                    </div>
-                                                     {ex.tecnicaAvanzada && (
-                                                        <div className="advanced-technique">
-                                                            <span role="img" aria-label="fire">🔥</span>
-                                                            <strong>Técnica Avanzada:</strong> {ex.tecnicaAvanzada}
+                                                <li key={exIndex} className={`exercise-item ${editable ? 'editable' : ''}`}>
+                                                    {editable && onExerciseChange && onDeleteExercise ? (
+                                                        <div className="exercise-item-editor">
+                                                            <div className="editor-row editor-row-main">
+                                                                 <select 
+                                                                    className="exercise-select"
+                                                                    value={ex.nombre}
+                                                                    onChange={(e) => onExerciseChange(phaseIndex, activeDayIndex, exIndex, 'nombre', e.target.value)}
+                                                                >
+                                                                    <option disabled>Seleccionar ejercicio</option>
+                                                                    {allExercises}
+                                                                </select>
+                                                                <button className="delete-exercise-btn" onClick={() => onDeleteExercise(phaseIndex, activeDayIndex, exIndex)}>
+                                                                    &times;
+                                                                </button>
+                                                            </div>
+                                                            <div className="editor-row">
+                                                                <div className="form-group-inline"><label>Series</label><input type="text" value={ex.series} onChange={e => onExerciseChange(phaseIndex, activeDayIndex, exIndex, 'series', e.target.value)} /></div>
+                                                                <div className="form-group-inline"><label>Reps</label><input type="text" value={ex.repeticiones} onChange={e => onExerciseChange(phaseIndex, activeDayIndex, exIndex, 'repeticiones', e.target.value)} /></div>
+                                                                <div className="form-group-inline"><label>Descanso</label><input type="text" value={ex.descanso} onChange={e => onExerciseChange(phaseIndex, activeDayIndex, exIndex, 'descanso', e.target.value)} /></div>
+                                                            </div>
+                                                            <div className="editor-row">
+                                                                <div className="form-group-inline full-width">
+                                                                    <label>Técnica Avanzada</label>
+                                                                     <select value={ex.tecnicaAvanzada || ''} onChange={e => onExerciseChange(phaseIndex, activeDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>
+                                                                        {advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}
+                                                                    </select>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                     )}
+                                                    ) : (
+                                                         <>
+                                                            <div className="exercise-name-wrapper">
+                                                                <span className="exercise-name">{ex.nombre}</span>
+                                                                {getYoutubeLink(ex.nombre) && (
+                                                                    <a href={getYoutubeLink(ex.nombre) || ''} target="_blank" rel="noopener noreferrer" className="video-link" title="Ver video en YouTube">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 15.274l6-3.774-6-3.774v7.548z"/><path d="M21.583 6.478a2.498 2.498 0 0 0-1.75-1.75C18.253 4.5 12 4.5 12 4.5s-6.253 0-7.833.228a2.498 2.498 0 0 0-1.75 1.75C2.228 8.058 2 12 2 12s.228 3.942.417 5.522a2.498 2.498 0 0 0 1.75 1.75C5.747 19.5 12 19.5 12 19.5s6.253 0 7.833-.228a2.498 2.498 0 0 0 1.75-1.75C21.772 15.942 22 12 22 12s-.228-3.942-.417-5.522zM12 17.5c-5.145 0-6.843-.19-7.5-.373A.5.5 0 0 1 4.127 16.75c-.183-.657-.373-2.355-.373-4.75s.19-4.093.373-4.75a.5.5 0 0 1 .373-.373c.657-.183 2.355-.373 4.75-.373s4.093.19 4.75.373a.5.5 0 0 1 .373.373c.183.657.373 2.355.373 4.75s-.19 4.093-.373 4.75a.5.5 0 0 1-.373.373c-.657.183-2.355.373-4.75-.373z"/></svg>
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                            <div className="exercise-details">
+                                                                <span><strong>Series:</strong> {ex.series}</span>
+                                                                <span><strong>Reps:</strong> {ex.repeticiones}</span>
+                                                                <span><strong>Descanso:</strong> {ex.descanso}</span>
+                                                            </div>
+                                                            {ex.tecnicaAvanzada && (
+                                                                <div className="advanced-technique">
+                                                                    <span role="img" aria-label="fire">🔥</span>
+                                                                    <strong>Técnica Avanzada:</strong> {ex.tecnicaAvanzada}
+                                                                </div>
+                                                            )}
+                                                         </>
+                                                    )}
                                                 </li>
                                             ))}
                                         </ul>
+                                         {editable && onAddExercise && (
+                                            <div className="add-exercise-action">
+                                                <button className="add-exercise-button" onClick={() => onAddExercise(phaseIndex, activeDayIndex)}>
+                                                    + Agregar Ejercicio
+                                                </button>
+                                            </div>
+                                        )}
                                         {activeDay.cardio && activeDay.cardio !== "N/A" && (
                                             <div className="cardio-note">
                                                 <p><strong>Cardio:</strong> {activeDay.cardio}</p>
