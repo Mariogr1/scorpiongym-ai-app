@@ -778,7 +778,12 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
 
     const handleProfileChange = (field: keyof Profile, value: string) => {
         if (profile) {
-            setProfile(prev => ({ ...prev!, [field]: value }));
+            const newProfile = { ...profile!, [field]: value };
+            // Si se cambia el área corporal principal, se resetea el enfoque muscular específico.
+            if (field === 'bodyFocusArea') {
+                newProfile.muscleFocus = 'General';
+            }
+            setProfile(newProfile);
             if (!isDirty) setIsDirty(true);
         }
     };
@@ -843,7 +848,7 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
                 - Nivel de actividad diaria: ${currentProfile.activityFactor}
                 - ¿Usar técnicas avanzadas?: ${currentProfile.useAdvancedTechniques}
                 - Enfoque corporal general: ${currentProfile.bodyFocusArea}
-                - Enfoque específico (si lo hay): ${currentProfile.bodyFocusSpecific || 'Ninguno'}
+                - Músculo específico a priorizar: ${currentProfile.muscleFocus || 'General'}
                 - ¿Incluir fase de adaptación inicial?: ${currentProfile.includeAdaptationPhase}
                 - Intensidad deseada: ${currentProfile.trainingIntensity}
 
@@ -852,20 +857,28 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
 
                 **Reglas y Formato de Salida:**
                 1.  **Formato JSON Estricto:** La respuesta DEBE ser un único objeto JSON válido, sin texto antes o después.
-                2.  **Estructura del Plan:**
+                2.  **Volumen de Entrenamiento por Intensidad:** El número total de ejercicios por día DEBE seguir estas reglas ESTRICTAMENTE:
+                    -   Intensidad 'Baja': 5 a 6 ejercicios.
+                    -   Intensidad 'Moderada': 6 a 7 ejercicios.
+                    -   Intensidad 'Alta': 7 a 10 ejercicios.
+                    -   Intensidad 'Extrema': 10 a 13 ejercicios.
+                3.  **Inteligencia Muscular:**
+                    -   Incluso si se prioriza un músculo específico (ej. "Glúteos"), DEBES incluir ejercicios para los otros músculos principales del grupo (ej. cuádriceps, femorales, gemelos) para asegurar un entrenamiento balanceado. El músculo enfocado debe tener un poco más de volumen (más series o un ejercicio extra), pero NUNCA a expensas de un entrenamiento completo del día (ej. un día de pierna SIEMPRE debe tener trabajo de gemelos).
+                    -   Si la intensidad es 'Extrema', el plan debe ser una mezcla inteligente de estilos de entrenamiento. Incorpora ejercicios con rangos de repeticiones de fuerza (ej. 3-5 reps), hipertrofia (ej. 8-12 reps) y resistencia (ej. 15-20 reps). Varía los tiempos de descanso de acuerdo a esto.
+                4.  **Estructura del Plan:**
                     -   El plan debe tener un "planName" descriptivo (ej. "Plan de Hipertrofia - 4 Días").
                     -   Debe tener "totalDurationWeeks" (número total de semanas).
                     -   Debe contener un array "phases".
-                3.  **Fases del Plan:**
+                5.  **Fases del Plan:**
                     -   Si se solicitó una fase de adaptación, la primera fase debe ser "Fase de Adaptación". Las siguientes fases deben tener nombres como "Fase de Hipertrofia", "Fase de Fuerza", etc.
                     -   Cada fase debe tener "phaseName", "durationWeeks" (duración en semanas), y un objeto "routine".
-                4.  **Rutina de la Fase:**
+                6.  **Rutina de la Fase:**
                     -   La rutina debe contener un array "dias".
                     -   El número de objetos en "dias" DEBE coincidir con los días de entrenamiento por semana del cliente.
-                5.  **Días de Entrenamiento:**
+                7.  **Días de Entrenamiento:**
                     -   Cada día debe tener un "dia" (ej. "Día 1", "Día 2"), "grupoMuscular" (ej. "Pecho y Tríceps", "Pierna Completa"), un array de "ejercicios" y una recomendación de "cardio".
                     -   El cardio debe ser una string (ej. "25 minutos de cinta a ritmo moderado post-entrenamiento").
-                6.  **Ejercicios:**
+                8.  **Ejercicios:**
                     -   Cada ejercicio debe tener "nombre", "series", "repeticiones", y "descanso".
                     -   **IMPORTANTE:** El "nombre" de cada ejercicio DEBE ser seleccionado EXCLUSIVAMENTE de esta lista de ejercicios disponibles: ${enabledExercises}. No inventes ejercicios. Si un grupo muscular necesita un ejercicio no listado, elige la mejor alternativa de la lista.
                     -   Si se usan técnicas avanzadas, añade el campo opcional "tecnicaAvanzada" con el nombre de la técnica (ej. "Drop Set").
@@ -1055,6 +1068,11 @@ const ProfileForm = ({ profile, onProfileChange }: {
 
     const { bmi, category, categoryClass } = getBmiDetails(parseFloat(profile.weight), parseFloat(profile.height));
 
+    const muscleGroups = {
+        'Tren Superior': ['General', 'Pecho', 'Espalda', 'Hombros', 'Bíceps', 'Tríceps'],
+        'Tren Inferior': ['General', 'Cuádriceps', 'Femorales', 'Glúteos', 'Gemelos', 'Aductores'],
+    };
+
     return (
         <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
             <div className="form-group">
@@ -1135,10 +1153,18 @@ const ProfileForm = ({ profile, onProfileChange }: {
                     <option>Tren Inferior</option>
                 </select>
             </div>
-            <div className="form-group">
-                <label>Enfoque Específico (opcional)</label>
-                <input type="text" placeholder="Ej: Pecho y hombros, glúteos..." value={profile.bodyFocusSpecific} onChange={e => onProfileChange('bodyFocusSpecific', e.target.value)} />
-            </div>
+            
+            {(profile.bodyFocusArea === 'Tren Superior' || profile.bodyFocusArea === 'Tren Inferior') && (
+                <div className="form-group">
+                    <label>Músculo a Priorizar</label>
+                    <select value={profile.muscleFocus} onChange={e => onProfileChange('muscleFocus', e.target.value)}>
+                        {muscleGroups[profile.bodyFocusArea].map(muscle => (
+                            <option key={muscle} value={muscle}>{muscle}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
              <div className="form-group">
                 <label>¿Incluir fase de adaptación?</label>
                 <select value={profile.includeAdaptationPhase} onChange={e => onProfileChange('includeAdaptationPhase', e.target.value)}>

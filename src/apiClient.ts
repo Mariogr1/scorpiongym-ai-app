@@ -11,7 +11,7 @@ export interface Profile {
     activityFactor: 'Sedentario' | 'Ligero' | 'Activo' | 'Muy Activo';
     useAdvancedTechniques: 'Sí' | 'No';
     bodyFocusArea: 'Cuerpo completo' | 'Tren Superior' | 'Tren Inferior';
-    bodyFocusSpecific: string;
+    muscleFocus: string; // e.g., 'General', 'Cuádriceps', 'Pecho'
     includeAdaptationPhase: 'Sí' | 'No';
     trainingIntensity: 'Baja' | 'Moderada' | 'Alta' | 'Extrema';
 }
