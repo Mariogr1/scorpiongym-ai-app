@@ -4,7 +4,7 @@ declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import "./index.css";
 
 import {
@@ -1312,13 +1312,14 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         }
 
         let jsonText = ''; // Declarada aquí para estar disponible en el catch
+        let response: GenerateContentResponse | null = null;
         try {
             let finalSystemInstruction = `${baseSystemInstruction}\n${profileContext}\n${specificInstructions}`;
             if (type === 'routine') {
                 finalSystemInstruction += `\n${exerciseListContext}`;
             }
 
-            const response = await ai.models.generateContent({
+            response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: "Generá el plan solicitado.",
                 config: {
@@ -1329,11 +1330,20 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             });
             
             let rawText = response.text.trim();
-            // Limpieza robusta de 'code fences' de markdown si existen
-            if (rawText.startsWith("```") && rawText.endsWith("```")) {
-                 jsonText = rawText.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
+            
+            // More robust JSON extraction to handle cases where the model adds conversational text
+            const startIndex = rawText.indexOf('{');
+            const endIndex = rawText.lastIndexOf('}');
+
+            if (startIndex > -1 && endIndex > -1 && endIndex > startIndex) {
+                jsonText = rawText.substring(startIndex, endIndex + 1);
             } else {
-                jsonText = rawText;
+                // Fallback to original logic if no object is found, to handle markdown fences
+                if (rawText.startsWith("```") && rawText.endsWith("```")) {
+                    jsonText = rawText.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
+                } else {
+                    jsonText = rawText;
+                }
             }
             
             const planData = JSON.parse(jsonText);
@@ -1362,7 +1372,10 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
         } catch (error: any) {
             console.error(`Error al generar ${type}:`, error.message);
             // Log del texto exacto que falló para facilitar la depuración
-            console.error(`Texto recibido de la IA que falló el parseo para ${type}:`, jsonText);
+            console.error(`Texto procesado que falló el parseo para ${type}:`, jsonText);
+            if (response) {
+                console.error(`Texto original completo de la IA:`, response.text);
+            }
             setError(`La respuesta de la IA contenía un error de formato. Por favor, intentá de nuevo. Si el problema persiste, probá simplificando las instrucciones adicionales.`);
         } finally {
             setIsGenerating(false);
