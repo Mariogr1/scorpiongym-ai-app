@@ -753,7 +753,10 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
     // Form state and change tracking
     const [profile, setProfile] = useState<Profile | null>(null);
     const [isDirty, setIsDirty] = useState(false);
-    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    
+    // State for plan generation
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationError, setGenerationError] = useState('');
 
 
     const fetchClientData = async () => {
@@ -772,34 +775,24 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
     useEffect(() => {
         fetchClientData();
     }, [dni]);
-    
-    useEffect(() => {
-        if (saveStatus === 'saved') {
-            const timer = setTimeout(() => setSaveStatus('idle'), 2000);
-            return () => clearTimeout(timer);
-        }
-    }, [saveStatus]);
 
     const handleProfileChange = (field: keyof Profile, value: string) => {
         if (profile) {
             setProfile(prev => ({ ...prev!, [field]: value }));
             if (!isDirty) setIsDirty(true);
-            if (saveStatus === 'saved') setSaveStatus('idle');
         }
     };
     
-    const handleSaveChanges = async () => {
-        if (!profile || !clientData) return;
-        setSaveStatus('saving');
+    const handleSaveChanges = async (): Promise<boolean> => {
+        if (!profile || !clientData) return false;
         const success = await apiClient.saveClientData(dni, { profile });
         if (success) {
             setClientData(prev => ({ ...prev!, profile }));
             setIsDirty(false);
-            setSaveStatus('saved');
         } else {
-            alert("Error al guardar los cambios.");
-            setSaveStatus('idle');
+            alert("Error al guardar los cambios del perfil.");
         }
+        return success;
     };
     
      const handleRoutineUpdate = (newRoutine: Routine | null, generatedDate: string) => {
@@ -808,6 +801,180 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
 
     const handleDietUpdate = (newDiet: DietPlan | null) => {
         setClientData(prev => prev ? { ...prev, dietPlan: newDiet } : null);
+    };
+
+    const handleGenerateRoutine = async (instructions: string) => {
+        setGenerationError('');
+        if (isDirty) {
+            const saveSuccess = await handleSaveChanges();
+            if (!saveSuccess) {
+                setGenerationError("No se pudieron guardar los cambios del perfil. La generación fue cancelada.");
+                return;
+            }
+        }
+
+        setIsGenerating(true);
+        const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+
+        try {
+            // Use the most up-to-date profile from state
+            const currentProfile = profile;
+            if (!currentProfile) throw new Error("Client profile is not loaded.");
+
+            const exerciseLibrary = await apiClient.getExerciseLibrary(clientData!.gymId);
+            const enabledExercises = Object.entries(exerciseLibrary)
+              .flatMap(([group, exercises]) => 
+                exercises.filter(ex => ex.isEnabled).map(ex => ({ group, name: ex.name }))
+              )
+              .map(ex => `${ex.group}: ${ex.name}`)
+              .join('; ');
+
+            const prompt = `
+                Eres un entrenador personal de élite. Crea un plan de entrenamiento completo y detallado en JSON para el siguiente cliente.
+                
+                **Datos del Cliente:**
+                - Edad: ${currentProfile.age} años
+                - Peso: ${currentProfile.weight} kg
+                - Altura: ${currentProfile.height} cm
+                - Género: ${currentProfile.gender}
+                - Nivel: ${currentProfile.level}
+                - Objetivo: ${currentProfile.goal}
+                - Días de entrenamiento por semana: ${currentProfile.trainingDays}
+                - Nivel de actividad diaria: ${currentProfile.activityFactor}
+                - ¿Usar técnicas avanzadas?: ${currentProfile.useAdvancedTechniques}
+                - Enfoque corporal general: ${currentProfile.bodyFocusArea}
+                - Enfoque específico (si lo hay): ${currentProfile.bodyFocusSpecific || 'Ninguno'}
+                - ¿Incluir fase de adaptación inicial?: ${currentProfile.includeAdaptationPhase}
+                - Intensidad deseada: ${currentProfile.trainingIntensity}
+
+                **Instrucciones Adicionales del Entrenador:**
+                ${instructions || 'Ninguna'}
+
+                **Reglas y Formato de Salida:**
+                1.  **Formato JSON Estricto:** La respuesta DEBE ser un único objeto JSON válido, sin texto antes o después.
+                2.  **Estructura del Plan:**
+                    -   El plan debe tener un "planName" descriptivo (ej. "Plan de Hipertrofia - 4 Días").
+                    -   Debe tener "totalDurationWeeks" (número total de semanas).
+                    -   Debe contener un array "phases".
+                3.  **Fases del Plan:**
+                    -   Si se solicitó una fase de adaptación, la primera fase debe ser "Fase de Adaptación". Las siguientes fases deben tener nombres como "Fase de Hipertrofia", "Fase de Fuerza", etc.
+                    -   Cada fase debe tener "phaseName", "durationWeeks" (duración en semanas), y un objeto "routine".
+                4.  **Rutina de la Fase:**
+                    -   La rutina debe contener un array "dias".
+                    -   El número de objetos en "dias" DEBE coincidir con los días de entrenamiento por semana del cliente.
+                5.  **Días de Entrenamiento:**
+                    -   Cada día debe tener un "dia" (ej. "Día 1", "Día 2"), "grupoMuscular" (ej. "Pecho y Tríceps", "Pierna Completa"), un array de "ejercicios" y una recomendación de "cardio".
+                    -   El cardio debe ser una string (ej. "25 minutos de cinta a ritmo moderado post-entrenamiento").
+                6.  **Ejercicios:**
+                    -   Cada ejercicio debe tener "nombre", "series", "repeticiones", y "descanso".
+                    -   **IMPORTANTE:** El "nombre" de cada ejercicio DEBE ser seleccionado EXCLUSIVAMENTE de esta lista de ejercicios disponibles: ${enabledExercises}. No inventes ejercicios. Si un grupo muscular necesita un ejercicio no listado, elige la mejor alternativa de la lista.
+                    -   Si se usan técnicas avanzadas, añade el campo opcional "tecnicaAvanzada" con el nombre de la técnica (ej. "Drop Set").
+                    -   Las series, repeticiones y descanso deben ser strings (ej. "4", "8-12", "60-90 segundos").
+
+                Genera el plan completo siguiendo estas reglas al pie de la letra.
+            `;
+
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+            const jsonString = extractJson(response.text);
+            if (!jsonString) throw new Error("La IA no devolvió un JSON válido.");
+            const newRoutine: Routine = JSON.parse(jsonString);
+
+            for (const phase of newRoutine.phases) {
+                for (const day of phase.routine.dias) {
+                    for (const exercise of day.ejercicios) {
+                        const muscleGroup = Object.keys(exerciseLibrary).find(group => exerciseLibrary[group].some(libEx => libEx.name === exercise.nombre));
+                        if (muscleGroup) {
+                            const libExercise = exerciseLibrary[muscleGroup].find(libEx => libEx.name === exercise.nombre);
+                            if (libExercise && libExercise.youtubeLink) exercise.youtubeLink = libExercise.youtubeLink;
+                        }
+                    }
+                }
+            }
+
+            const generatedDate = new Date().toISOString();
+            const success = await apiClient.saveClientData(dni, { routine: newRoutine, routineGeneratedDate: generatedDate });
+            if (success) {
+                handleRoutineUpdate(newRoutine, generatedDate);
+            } else {
+                setGenerationError("La rutina se generó pero no se pudo guardar. Inténtalo de nuevo.");
+            }
+        } catch (e) {
+            console.error(e);
+            setGenerationError("Ocurrió un error al generar la rutina. Revisa la consola para más detalles.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+    
+    const handleGenerateDiet = async (instructions: string) => {
+        setGenerationError('');
+        if (isDirty) {
+            const saveSuccess = await handleSaveChanges();
+            if (!saveSuccess) {
+                setGenerationError("No se pudieron guardar los cambios del perfil. La generación fue cancelada.");
+                return;
+            }
+        }
+        
+        setIsGenerating(true);
+        const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+
+        try {
+            const currentProfile = profile;
+             if (!currentProfile) throw new Error("Client profile is not loaded.");
+
+            const prompt = `
+                Eres un nutricionista deportivo de élite. Crea un plan de alimentación detallado en JSON para el siguiente cliente.
+
+                **Datos del Cliente:**
+                - Edad: ${currentProfile.age} años
+                - Peso: ${currentProfile.weight} kg
+                - Altura: ${currentProfile.height} cm
+                - Género: ${currentProfile.gender}
+                - Nivel de Experiencia: ${currentProfile.level}
+                - Objetivo Principal: ${currentProfile.goal}
+                - Días de Entrenamiento: ${currentProfile.trainingDays}
+                - Nivel de Actividad Diaria (fuera del gimnasio): ${currentProfile.activityFactor}
+
+                **Instrucciones Adicionales del Entrenador:**
+                ${instructions || 'Ninguna'}
+
+                **Reglas y Formato de Salida:**
+                1.  **Formato JSON Estricto:** La respuesta DEBE ser un único objeto JSON válido, sin texto antes o después.
+                2.  **Estructura del Plan:**
+                    -   "planTitle": Un título descriptivo (ej. "Plan Nutricional para Hipertrofia").
+                    -   "summary": Un objeto con "totalCalories", y un objeto "macronutrients" con "proteinGrams", "carbsGrams", y "fatGrams". Todos deben ser números.
+                    -   "meals": Un array de objetos, cada uno representando una comida del día (ej. Desayuno, Almuerzo, Merienda, Cena).
+                    -   "recommendations": Un array de strings con 3 a 5 recomendaciones generales (ej. "Beber al menos 3 litros de agua al día.").
+                3.  **Estructura de Comidas ("meals"):**
+                    -   Cada comida debe tener "mealName" (string) y "foodItems" (un array).
+                4.  **Estructura de Alimentos ("foodItems"):**
+                    -   Cada item debe tener "food" (string, ej. "Pechuga de pollo a la plancha") y "amount" (string, ej. "200g", "1 taza", "2 unidades").
+                5.  **Consideraciones Nutricionales:**
+                    -   Calcula las calorías y macros basándote en los datos del cliente, su objetivo y nivel de actividad.
+                    -   Proporciona comidas balanceadas y variadas. Usa alimentos comunes y accesibles.
+                    -   El plan debe ser coherente con el objetivo (ej. superávit calórico para hipertrofia, déficit para pérdida de grasa).
+
+                Genera el plan completo siguiendo estas reglas al pie de la letra.
+            `;
+            
+             const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
+             const jsonString = extractJson(response.text);
+             if (!jsonString) throw new Error("La IA no devolvió un JSON válido.");
+             const newDiet: DietPlan = JSON.parse(jsonString);
+
+             const success = await apiClient.saveClientData(dni, { dietPlan: newDiet });
+             if (success) {
+                handleDietUpdate(newDiet);
+             } else {
+                 setGenerationError("La dieta se generó pero no se pudo guardar. Inténtalo de nuevo.");
+             }
+        } catch (e) {
+            console.error(e);
+            setGenerationError("Ocurrió un error al generar la dieta. Revisa la consola para más detalles.");
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
 
@@ -833,9 +1000,6 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
                     <ProfileForm
                         profile={profile}
                         onProfileChange={handleProfileChange}
-                        isDirty={isDirty}
-                        saveStatus={saveStatus}
-                        onSaveChanges={handleSaveChanges}
                     />
                     <div className="access-code-display">
                         <span>Código de Acceso del Cliente</span>
@@ -861,12 +1025,18 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
                            <RoutineManager
                                 clientData={clientData}
                                 onRoutineUpdate={handleRoutineUpdate}
+                                isGenerating={isGenerating}
+                                generationError={generationError}
+                                onGenerate={handleGenerateRoutine}
                            />
                        )}
                        {activeTab === 'diet' && (
                            <DietManager
                                clientData={clientData}
                                onDietUpdate={handleDietUpdate}
+                               isGenerating={isGenerating}
+                               generationError={generationError}
+                               onGenerate={handleGenerateDiet}
                            />
                        )}
                     </div>
@@ -878,33 +1048,15 @@ const ClientManagementView = ({ dni, onBack }: { dni: string, onBack: () => void
 
 
 // 5a. Formulario de Perfil de Cliente
-const ProfileForm = ({ profile, onProfileChange, isDirty, saveStatus, onSaveChanges }: {
+const ProfileForm = ({ profile, onProfileChange }: {
     profile: Profile;
     onProfileChange: (field: keyof Profile, value: string) => void;
-    isDirty: boolean;
-    saveStatus: 'idle' | 'saving' | 'saved';
-    onSaveChanges: () => void;
 }) => {
 
     const { bmi, category, categoryClass } = getBmiDetails(parseFloat(profile.weight), parseFloat(profile.height));
 
-    const getSaveButtonText = () => {
-        switch (saveStatus) {
-            case 'saving': return <span className="spinner small"></span>;
-            case 'saved': return '¡Guardado!';
-            default: return 'Guardar Cambios';
-        }
-    };
-
     return (
-        <form className="profile-form" onSubmit={(e) => { e.preventDefault(); onSaveChanges(); }}>
-             <button
-                type="submit"
-                className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}
-                disabled={!isDirty || saveStatus === 'saving'}
-            >
-                {getSaveButtonText()}
-            </button>
+        <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
             <div className="form-group">
                 <label>Nombre</label>
                 <input type="text" value={profile.name} onChange={e => onProfileChange('name', e.target.value)} />
@@ -1009,137 +1161,36 @@ const ProfileForm = ({ profile, onProfileChange, isDirty, saveStatus, onSaveChan
 
 
 // 6. Gestor de Rutinas
-const RoutineManager = ({ clientData, onRoutineUpdate }: {
+const RoutineManager = ({ clientData, onRoutineUpdate, isGenerating, generationError, onGenerate }: {
     clientData: ClientData;
     onRoutineUpdate: (routine: Routine | null, generatedDate: string) => void;
+    isGenerating: boolean;
+    generationError: string;
+    onGenerate: (instructions: string) => void;
 }) => {
     const [routine, setRoutine] = useState<Routine | null>(clientData.routine);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleGenerateRoutine = async (instructions?: string) => {
-        setIsLoading(true);
-        setError('');
-        
-        const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-
-        try {
-            const exerciseLibrary = await apiClient.getExerciseLibrary(clientData.gymId);
-            const enabledExercises = Object.entries(exerciseLibrary)
-              .flatMap(([group, exercises]) => 
-                exercises.filter(ex => ex.isEnabled).map(ex => ({ group, name: ex.name }))
-              )
-              .map(ex => `${ex.group}: ${ex.name}`)
-              .join('; ');
-
-            const prompt = `
-                Eres un entrenador personal de élite. Crea un plan de entrenamiento completo y detallado en JSON para el siguiente cliente.
-                
-                **Datos del Cliente:**
-                - Edad: ${clientData.profile.age} años
-                - Peso: ${clientData.profile.weight} kg
-                - Altura: ${clientData.profile.height} cm
-                - Género: ${clientData.profile.gender}
-                - Nivel: ${clientData.profile.level}
-                - Objetivo: ${clientData.profile.goal}
-                - Días de entrenamiento por semana: ${clientData.profile.trainingDays}
-                - Nivel de actividad diaria: ${clientData.profile.activityFactor}
-                - ¿Usar técnicas avanzadas?: ${clientData.profile.useAdvancedTechniques}
-                - Enfoque corporal general: ${clientData.profile.bodyFocusArea}
-                - Enfoque específico (si lo hay): ${clientData.profile.bodyFocusSpecific || 'Ninguno'}
-                - ¿Incluir fase de adaptación inicial?: ${clientData.profile.includeAdaptationPhase}
-                - Intensidad deseada: ${clientData.profile.trainingIntensity}
-
-                **Instrucciones Adicionales del Entrenador:**
-                ${instructions || 'Ninguna'}
-
-                **Reglas y Formato de Salida:**
-                1.  **Formato JSON Estricto:** La respuesta DEBE ser un único objeto JSON válido, sin texto antes o después.
-                2.  **Estructura del Plan:**
-                    -   El plan debe tener un "planName" descriptivo (ej. "Plan de Hipertrofia - 4 Días").
-                    -   Debe tener "totalDurationWeeks" (número total de semanas).
-                    -   Debe contener un array "phases".
-                3.  **Fases del Plan:**
-                    -   Si se solicitó una fase de adaptación, la primera fase debe ser "Fase de Adaptación". Las siguientes fases deben tener nombres como "Fase de Hipertrofia", "Fase de Fuerza", etc.
-                    -   Cada fase debe tener "phaseName", "durationWeeks" (duración en semanas), y un objeto "routine".
-                4.  **Rutina de la Fase:**
-                    -   La rutina debe contener un array "dias".
-                    -   El número de objetos en "dias" DEBE coincidir con los días de entrenamiento por semana del cliente.
-                5.  **Días de Entrenamiento:**
-                    -   Cada día debe tener un "dia" (ej. "Día 1", "Día 2"), "grupoMuscular" (ej. "Pecho y Tríceps", "Pierna Completa"), un array de "ejercicios" y una recomendación de "cardio".
-                    -   El cardio debe ser una string (ej. "25 minutos de cinta a ritmo moderado post-entrenamiento").
-                6.  **Ejercicios:**
-                    -   Cada ejercicio debe tener "nombre", "series", "repeticiones", y "descanso".
-                    -   **IMPORTANTE:** El "nombre" de cada ejercicio DEBE ser seleccionado EXCLUSIVAMENTE de esta lista de ejercicios disponibles: ${enabledExercises}. No inventes ejercicios. Si un grupo muscular necesita un ejercicio no listado, elige la mejor alternativa de la lista.
-                    -   Si se usan técnicas avanzadas, añade el campo opcional "tecnicaAvanzada" con el nombre de la técnica (ej. "Drop Set").
-                    -   Las series, repeticiones y descanso deben ser strings (ej. "4", "8-12", "60-90 segundos").
-
-                Genera el plan completo siguiendo estas reglas al pie de la letra.
-            `;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                }
-            });
-
-            const jsonString = extractJson(response.text);
-            if (!jsonString) throw new Error("La IA no devolvió un JSON válido.");
-            
-            const newRoutine: Routine = JSON.parse(jsonString);
-
-            // Fetch the youtube links and add them to the routine
-            for (const phase of newRoutine.phases) {
-                for (const day of phase.routine.dias) {
-                    for (const exercise of day.ejercicios) {
-                        const muscleGroup = Object.keys(exerciseLibrary).find(group => 
-                            exerciseLibrary[group].some(libEx => libEx.name === exercise.nombre)
-                        );
-                        if (muscleGroup) {
-                            const libExercise = exerciseLibrary[muscleGroup].find(libEx => libEx.name === exercise.nombre);
-                            if (libExercise && libExercise.youtubeLink) {
-                                exercise.youtubeLink = libExercise.youtubeLink;
-                            }
-                        }
-                    }
-                }
-            }
-
-            const generatedDate = new Date().toISOString();
-            const success = await apiClient.saveClientData(clientData.dni, { routine: newRoutine, routineGeneratedDate: generatedDate });
-            if (success) {
-                setRoutine(newRoutine);
-                onRoutineUpdate(newRoutine, generatedDate);
-            } else {
-                setError("La rutina se generó pero no se pudo guardar. Inténtalo de nuevo.");
-            }
-
-        } catch (e) {
-            console.error(e);
-            setError("Ocurrió un error al generar la rutina. Revisa la consola para más detalles.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    useEffect(() => {
+        setRoutine(clientData.routine);
+    }, [clientData.routine]);
     
     const handleSaveChanges = async () => {
         if (!routine) return;
-        setIsLoading(true);
+        setIsSaving(true);
         const success = await apiClient.saveClientData(clientData.dni, { routine });
         if(success) {
             onRoutineUpdate(routine, clientData.routineGeneratedDate || new Date().toISOString());
             setIsEditing(false);
         } else {
-            setError("No se pudieron guardar los cambios en la rutina.");
+            alert("No se pudieron guardar los cambios en la rutina.");
         }
-        setIsLoading(false);
+        setIsSaving(false);
     };
 
-    if (isLoading) {
+    if (isGenerating) {
         return (
             <div className="loading-container">
                 <div className="spinner"></div>
@@ -1149,12 +1200,12 @@ const RoutineManager = ({ clientData, onRoutineUpdate }: {
         );
     }
     
-    if (error) {
+    if (generationError) {
         return (
             <div className="error-container">
                 <h2>Error</h2>
-                <p>{error}</p>
-                <button onClick={() => setError('')} className="cta-button">Intentar de Nuevo</button>
+                <p>{generationError}</p>
+                <button onClick={() => onGenerate(adminInstructions)} className="cta-button">Intentar de Nuevo</button>
             </div>
         );
     }
@@ -1174,7 +1225,7 @@ const RoutineManager = ({ clientData, onRoutineUpdate }: {
                             onChange={(e) => setAdminInstructions(e.target.value)}
                         />
                     </div>
-                    <button onClick={() => handleGenerateRoutine(adminInstructions)} className="cta-button" disabled={isLoading}>
+                    <button onClick={() => onGenerate(adminInstructions)} className="cta-button" disabled={isGenerating}>
                         Generar Plan con IA
                     </button>
                 </div>
@@ -1191,8 +1242,8 @@ const RoutineManager = ({ clientData, onRoutineUpdate }: {
                     </button>
                 )}
                  {isEditing && (
-                    <button onClick={handleSaveChanges} className="save-changes-button">
-                        Guardar Cambios
+                    <button onClick={handleSaveChanges} className="save-changes-button" disabled={isSaving}>
+                        {isSaving ? <span className="spinner small"></span> : 'Guardar Cambios'}
                     </button>
                 )}
             </div>
@@ -1210,7 +1261,7 @@ const RoutineManager = ({ clientData, onRoutineUpdate }: {
                         onChange={(e) => setAdminInstructions(e.target.value)}
                     />
                 </div>
-                <button onClick={() => handleGenerateRoutine(adminInstructions)} className="cta-button regenerate" disabled={isLoading}>
+                <button onClick={() => onGenerate(adminInstructions)} className="cta-button regenerate" disabled={isGenerating}>
                     Regenerar Plan Completo con IA
                 </button>
             </div>
@@ -1451,85 +1502,22 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
 
 
 // 7. Gestor de Dieta
-const DietManager = ({ clientData, onDietUpdate }: {
+const DietManager = ({ clientData, onDietUpdate, isGenerating, generationError, onGenerate }: {
     clientData: ClientData;
     onDietUpdate: (diet: DietPlan | null) => void;
+    isGenerating: boolean;
+    generationError: string;
+    onGenerate: (instructions: string) => void;
 }) => {
     const [dietPlan, setDietPlan] = useState<DietPlan | null>(clientData.dietPlan);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
 
-    const handleGenerateDiet = async (instructions?: string) => {
-        setIsLoading(true);
-        setError('');
-        
-        const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    useEffect(() => {
+        setDietPlan(clientData.dietPlan);
+    }, [clientData.dietPlan]);
 
-        try {
-            const prompt = `
-                Eres un nutricionista deportivo de élite. Crea un plan de alimentación detallado en JSON para el siguiente cliente.
 
-                **Datos del Cliente:**
-                - Edad: ${clientData.profile.age} años
-                - Peso: ${clientData.profile.weight} kg
-                - Altura: ${clientData.profile.height} cm
-                - Género: ${clientData.profile.gender}
-                - Nivel de Experiencia: ${clientData.profile.level}
-                - Objetivo Principal: ${clientData.profile.goal}
-                - Días de Entrenamiento: ${clientData.profile.trainingDays}
-                - Nivel de Actividad Diaria (fuera del gimnasio): ${clientData.profile.activityFactor}
-
-                **Instrucciones Adicionales del Entrenador:**
-                ${instructions || 'Ninguna'}
-
-                **Reglas y Formato de Salida:**
-                1.  **Formato JSON Estricto:** La respuesta DEBE ser un único objeto JSON válido, sin texto antes o después.
-                2.  **Estructura del Plan:**
-                    -   "planTitle": Un título descriptivo (ej. "Plan Nutricional para Hipertrofia").
-                    -   "summary": Un objeto con "totalCalories", y un objeto "macronutrients" con "proteinGrams", "carbsGrams", y "fatGrams". Todos deben ser números.
-                    -   "meals": Un array de objetos, cada uno representando una comida del día (ej. Desayuno, Almuerzo, Merienda, Cena).
-                    -   "recommendations": Un array de strings con 3 a 5 recomendaciones generales (ej. "Beber al menos 3 litros de agua al día.").
-                3.  **Estructura de Comidas ("meals"):**
-                    -   Cada comida debe tener "mealName" (string) y "foodItems" (un array).
-                4.  **Estructura de Alimentos ("foodItems"):**
-                    -   Cada item debe tener "food" (string, ej. "Pechuga de pollo a la plancha") y "amount" (string, ej. "200g", "1 taza", "2 unidades").
-                5.  **Consideraciones Nutricionales:**
-                    -   Calcula las calorías y macros basándote en los datos del cliente, su objetivo y nivel de actividad.
-                    -   Proporciona comidas balanceadas y variadas. Usa alimentos comunes y accesibles.
-                    -   El plan debe ser coherente con el objetivo (ej. superávit calórico para hipertrofia, déficit para pérdida de grasa).
-
-                Genera el plan completo siguiendo estas reglas al pie de la letra.
-            `;
-            
-             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                }
-            });
-
-            const jsonString = extractJson(response.text);
-            if (!jsonString) throw new Error("La IA no devolvió un JSON válido.");
-            const newDiet: DietPlan = JSON.parse(jsonString);
-
-            const success = await apiClient.saveClientData(clientData.dni, { dietPlan: newDiet });
-            if (success) {
-                setDietPlan(newDiet);
-                onDietUpdate(newDiet);
-            } else {
-                 setError("La dieta se generó pero no se pudo guardar. Inténtalo de nuevo.");
-            }
-        } catch (e) {
-            console.error(e);
-            setError("Ocurrió un error al generar la dieta. Revisa la consola para más detalles.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    if (isLoading) {
+    if (isGenerating) {
         return (
             <div className="loading-container">
                 <div className="spinner"></div>
@@ -1538,12 +1526,12 @@ const DietManager = ({ clientData, onDietUpdate }: {
         );
     }
 
-     if (error) {
+     if (generationError) {
         return (
             <div className="error-container">
                 <h2>Error</h2>
-                <p>{error}</p>
-                <button onClick={() => setError('')} className="cta-button">Intentar de Nuevo</button>
+                <p>{generationError}</p>
+                <button onClick={() => onGenerate(adminInstructions)} className="cta-button">Intentar de Nuevo</button>
             </div>
         );
     }
@@ -1563,7 +1551,7 @@ const DietManager = ({ clientData, onDietUpdate }: {
                             onChange={(e) => setAdminInstructions(e.target.value)}
                         />
                     </div>
-                    <button onClick={() => handleGenerateDiet(adminInstructions)} className="cta-button" disabled={isLoading}>
+                    <button onClick={() => onGenerate(adminInstructions)} className="cta-button" disabled={isGenerating}>
                         Generar Plan de Nutrición con IA
                     </button>
                 </div>
@@ -1585,7 +1573,7 @@ const DietManager = ({ clientData, onDietUpdate }: {
                         onChange={(e) => setAdminInstructions(e.target.value)}
                     />
                 </div>
-                <button onClick={() => handleGenerateDiet(adminInstructions)} className="cta-button regenerate" disabled={isLoading}>
+                <button onClick={() => onGenerate(adminInstructions)} className="cta-button regenerate" disabled={isGenerating}>
                     Regenerar Plan de Nutrición
                 </button>
             </div>
