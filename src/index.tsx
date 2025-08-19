@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1225,9 +1226,8 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
     isEditing: boolean,
     gymId: string
 }) => {
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [activePhaseIndex, setActivePhaseIndex] = useState<number | null>(routine?.phases?.length > 0 ? 0 : null);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
-
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
 
      useEffect(() => {
@@ -1240,15 +1240,13 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
         }
     }, [isEditing, gymId]);
 
-    const activePhase = routine.phases[activePhaseIndex];
-    const activeDay = activePhase?.routine.dias[activeDayIndex];
-    
-     // Reset day index if phase changes and day index is out of bounds
+    // Reset day index if phase changes and day index is out of bounds
     useEffect(() => {
-        if (activePhase && activeDayIndex >= activePhase.routine.dias.length) {
+        const currentPhase = activePhaseIndex !== null ? routine.phases[activePhaseIndex] : null;
+        if (currentPhase && activeDayIndex >= currentPhase.routine.dias.length) {
             setActiveDayIndex(0);
         }
-    }, [activePhaseIndex, activePhase, activeDayIndex]);
+    }, [activePhaseIndex, routine.phases, activeDayIndex]);
 
 
     const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
@@ -1291,8 +1289,17 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
             return newRoutine;
         });
     };
+    
+    const handleAccordionClick = (index: number) => {
+        if (activePhaseIndex === index) {
+            setActivePhaseIndex(null); // Close it
+        } else {
+            setActivePhaseIndex(index); // Open another one
+            setActiveDayIndex(0); // Reset day
+        }
+    };
 
-    if (!activePhase || !activeDay) {
+    if (!routine?.phases?.length) {
         return <p>Este plan de entrenamiento parece estar incompleto.</p>;
     }
     
@@ -1320,16 +1327,19 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
                     <div key={phaseIndex} className="accordion-item">
                         <button 
                             className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
-                            onClick={() => {
-                                setActivePhaseIndex(phaseIndex);
-                                setActiveDayIndex(0); // Reset day when changing phase
-                            }}
+                            onClick={() => handleAccordionClick(phaseIndex)}
                         >
                             <span>{phase.phaseName} ({phase.durationWeeks} semanas)</span>
                              <span className="accordion-header-icon">+</span>
                         </button>
                         <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
-                            {activePhaseIndex === phaseIndex && (
+                            {activePhaseIndex === phaseIndex && (() => {
+                                const activePhase = routine.phases[activePhaseIndex];
+                                const activeDay = activePhase?.routine.dias[activeDayIndex];
+
+                                if (!activeDay) return null;
+
+                                return (
                                 <>
                                     <nav className="day-tabs-nav">
                                         {phase.routine.dias.map((day, dayIndex) => (
@@ -1429,7 +1439,8 @@ const RoutinePlan = ({ routine, setRoutine, isEditing, gymId } : {
                                         {activeDay.cardio && <p className="cardio-note"><strong>Cardio:</strong> {activeDay.cardio}</p>}
                                     </div>
                                 </>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                 ))}
@@ -1659,6 +1670,7 @@ const ExerciseLibraryManager = ({ gymId, onBack }: { gymId: string; onBack: () =
         setLibrary(lib);
         if (Object.keys(lib).length > 0) {
             setSelectedMuscleGroup(Object.keys(lib)[0]);
+            setActiveAccordion(Object.keys(lib)[0]); // Open first group by default
         }
         setIsLoading(false);
     };
@@ -2051,16 +2063,27 @@ const ClientRoutineView = ({ clientData, onProgressUpdate }: {
     onProgressUpdate: (updatedLog: ProgressLog, updatedWeightLog: BodyWeightEntry[]) => void;
 }) => {
     const { routine } = clientData;
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [activePhaseIndex, setActivePhaseIndex] = useState<number | null>(routine?.phases?.length > 0 ? 0 : null);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
 
-    if (!routine) return null;
-    
-    const activePhase = routine.phases[activePhaseIndex];
-    if (!activePhase) return <p>Fase no encontrada.</p>;
-    
-    const activeDay = activePhase.routine.dias[activeDayIndex];
-     if (!activeDay) return <p>Día no encontrado.</p>;
+    // Reset day index if phase changes and day index is out of bounds
+    useEffect(() => {
+        const currentPhase = activePhaseIndex !== null && routine ? routine.phases[activePhaseIndex] : null;
+        if (currentPhase && activeDayIndex >= currentPhase.routine.dias.length) {
+            setActiveDayIndex(0);
+        }
+    }, [activePhaseIndex, routine, activeDayIndex]);
+
+    const handleAccordionClick = (index: number) => {
+        if (activePhaseIndex === index) {
+            setActivePhaseIndex(null); // Close it
+        } else {
+            setActivePhaseIndex(index); // Open another one
+            setActiveDayIndex(0); // Reset day
+        }
+    };
+
+    if (!routine?.phases?.length) return null;
 
     return (
         <div className="plan-container">
@@ -2073,16 +2096,19 @@ const ClientRoutineView = ({ clientData, onProgressUpdate }: {
                     <div key={phaseIndex} className="accordion-item">
                         <button 
                             className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
-                            onClick={() => {
-                                setActivePhaseIndex(phaseIndex);
-                                setActiveDayIndex(0);
-                            }}
+                            onClick={() => handleAccordionClick(phaseIndex)}
                         >
                             <span>{phase.phaseName} ({phase.durationWeeks} semanas)</span>
                             <span className="accordion-header-icon">+</span>
                         </button>
                         <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
-                             {activePhaseIndex === phaseIndex && (
+                             {activePhaseIndex === phaseIndex && (() => {
+                                const activePhase = routine.phases[activePhaseIndex];
+                                const activeDay = activePhase?.routine.dias[activeDayIndex];
+
+                                if (!activeDay) return null;
+
+                                return (
                                 <>
                                     <nav className="day-tabs-nav">
                                         {phase.routine.dias.map((day, dayIndex) => (
@@ -2109,7 +2135,8 @@ const ClientRoutineView = ({ clientData, onProgressUpdate }: {
                                          {activeDay.cardio && <p className="cardio-note"><strong>Cardio:</strong> {activeDay.cardio}</p>}
                                     </div>
                                 </>
-                            )}
+                                );
+                            })()}
                         </div>
                     </div>
                 ))}
