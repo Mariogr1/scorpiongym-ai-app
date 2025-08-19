@@ -1183,7 +1183,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             return acc;
         }, {} as Record<string, string[]>);
         
-        const baseSystemInstruction = `Sos un entrenador personal de élite creando un plan para un cliente. Tu nombre es Scorpion AI. Usá un tono profesional pero motivador y siempre hablale de "vos" al cliente. El plan debe ser detallado, estructurado y fácil de seguir. NO inventes ejercicios, solo usá los de la lista proporcionada. Tu respuesta DEBE ser EXCLUSIVAMENTE un objeto JSON válido. No incluyas texto explicativo, notas, ni envolturas de markdown como \`\`\`json. La respuesta DEBE empezar con '{' y terminar con '}'. Es CRÍTICO que el JSON sea sintácticamente perfecto: sin comas finales (trailing commas) y con todas las comillas dentro de los strings debidamente escapadas.`;
+        const baseSystemInstruction = `Sos un entrenador personal de élite, Scorpion AI. Tu tarea es crear un plan para un cliente. Tu respuesta DEBE ser EXCLUSIVAMENTE un objeto JSON válido, sin ningún otro texto, explicación o markdown como \`\`\`json. La respuesta DEBE empezar con '{' y terminar con '}'. Es CRÍTICO que el JSON sea sintácticamente perfecto: sin comas finales (trailing commas) y con todas las comillas dentro de los strings debidamente escapadas. Internamente, usá un tono profesional y motivador (hablando de "vos"). NO inventes ejercicios, solo usá los de la lista proporcionada.`;
         
         const profileContext = `Aquí está el perfil del cliente para el que estás creando el plan: ${JSON.stringify(profile)}.`;
         
@@ -1311,6 +1311,7 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             };
         }
 
+        let jsonText = ''; // Declarada aquí para estar disponible en el catch
         try {
             let finalSystemInstruction = `${baseSystemInstruction}\n${profileContext}\n${specificInstructions}`;
             if (type === 'routine') {
@@ -1327,10 +1328,12 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
                 }
             });
             
-            let jsonText = response.text.trim();
-            // Robustly clean markdown fences if they exist
-            if (jsonText.startsWith("```") && jsonText.endsWith("```")) {
-                 jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
+            let rawText = response.text.trim();
+            // Limpieza robusta de 'code fences' de markdown si existen
+            if (rawText.startsWith("```") && rawText.endsWith("```")) {
+                 jsonText = rawText.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
+            } else {
+                jsonText = rawText;
             }
             
             const planData = JSON.parse(jsonText);
@@ -1354,11 +1357,12 @@ const ClientManagementPortal = ({ dni, onBack, gymId }: { dni: string; onBack: (
             
             await apiClient.saveClientData(dni, updatePayload);
             setClientData(updatedClientData);
-            setInitialClientData(JSON.parse(JSON.stringify(updatedClientData))); // Update baseline after generation
+            setInitialClientData(JSON.parse(JSON.stringify(updatedClientData))); // Actualizar base tras generar
 
         } catch (error: any) {
-            console.error(`Error generating ${type}:`, error.message);
-            console.error("Raw text from AI that failed to parse:", error.response?.text ? error.response.text : 'N/A');
+            console.error(`Error al generar ${type}:`, error.message);
+            // Log del texto exacto que falló para facilitar la depuración
+            console.error(`Texto recibido de la IA que falló el parseo para ${type}:`, jsonText);
             setError(`La respuesta de la IA contenía un error de formato. Por favor, intentá de nuevo. Si el problema persiste, probá simplificando las instrucciones adicionales.`);
         } finally {
             setIsGenerating(false);
