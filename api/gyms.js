@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password, dailyQuestionLimit } = req.body;
+        const { name, username, password, dailyQuestionLimit, logoSvg } = req.body;
         if (!name || !username || !password) {
           return res.status(400).json({ message: 'Name, username, and password are required' });
         }
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
           username,
           password,
           dailyQuestionLimit: Number(dailyQuestionLimit) || 10, // Default to 10 if not provided or invalid
+          logoSvg: logoSvg || null,
         };
         
         const result = await gymsCollection.insertOne(newGym);

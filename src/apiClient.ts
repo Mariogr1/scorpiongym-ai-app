@@ -122,6 +122,7 @@ export interface Gym {
     name: string;
     username: string;
     dailyQuestionLimit?: number; // Added
+    logoSvg?: string;
 }
 
 
@@ -148,12 +149,12 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, dailyQuestionLimit }),
+            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg }),
         });
         return response.ok;
     } catch (error) {
@@ -162,7 +163,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: { name?: string; password?: string, dailyQuestionLimit?: number }): Promise<boolean> {
+  async updateGym(gymId: string, data: { name?: string; password?: string, dailyQuestionLimit?: number, logoSvg?: string | null }): Promise<boolean> {
      try {
         const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',

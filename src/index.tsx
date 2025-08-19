@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -231,12 +232,15 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
     const [newGymUsername, setNewGymUsername] = useState('');
     const [newGymPassword, setNewGymPassword] = useState('');
     const [newGymLimit, setNewGymLimit] = useState(10);
-    
+    const [newGymLogoSvg, setNewGymLogoSvg] = useState<string | null>(null);
+
     // Edit Modal state
     const [editingGym, setEditingGym] = useState<Gym | null>(null);
     const [editName, setEditName] = useState('');
     const [editPassword, setEditPassword] = useState('');
     const [editLimit, setEditLimit] = useState(10);
+    const [editLogoSvg, setEditLogoSvg] = useState<string | null>(null);
+
 
     // Confirm Modal state
     const [showConfirmModal, setShowConfirmModal] = useState<{
@@ -249,6 +253,20 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
     // Super admin password state
     const [newSuperAdminPassword, setNewSuperAdminPassword] = useState('');
     const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+    const handleFileRead = async (e: React.ChangeEvent<HTMLInputElement>, setSvgContent: (svg: string | null) => void) => {
+        const file = e.target.files?.[0];
+        if (file && file.type === 'image/svg+xml') {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setSvgContent(event.target?.result as string);
+            };
+            reader.readAsText(file);
+        } else {
+            setSvgContent(null);
+            if (file) alert("Por favor, sube un archivo .svg válido.");
+        }
+    };
 
 
     const fetchGyms = async () => {
@@ -265,12 +283,13 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
     
     const handleAddGym = async (e: React.FormEvent) => {
         e.preventDefault();
-        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLimit);
+        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLimit, newGymLogoSvg);
         if (success) {
             setNewGymName('');
             setNewGymUsername('');
             setNewGymPassword('');
             setNewGymLimit(10);
+            setNewGymLogoSvg(null);
             setShowAddForm(false);
             fetchGyms(); // Refresh list
         } else {
@@ -283,15 +302,17 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
         setEditName(gym.name);
         setEditPassword(''); // Clear password for security
         setEditLimit(gym.dailyQuestionLimit ?? 10);
+        setEditLogoSvg(gym.logoSvg || null);
     };
 
     const handleUpdateGym = async () => {
         if (!editingGym) return;
         
-        const updateData: { name?: string; password?: string, dailyQuestionLimit?: number } = {};
+        const updateData: { name?: string; password?: string, dailyQuestionLimit?: number, logoSvg?: string | null } = {};
         if (editName && editName !== editingGym.name) updateData.name = editName;
         if (editPassword) updateData.password = editPassword;
         if (editLimit !== (editingGym.dailyQuestionLimit ?? 10)) updateData.dailyQuestionLimit = editLimit;
+        if (editLogoSvg !== editingGym.logoSvg) updateData.logoSvg = editLogoSvg;
 
 
         const success = await apiClient.updateGym(editingGym._id, updateData);
@@ -395,6 +416,16 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
                             <label htmlFor="gymLimit">Límite Preguntas/Día</label>
                             <input id="gymLimit" type="number" value={newGymLimit} onChange={e => setNewGymLimit(Number(e.target.value))} required min="0" />
                         </div>
+                         <div className="form-group">
+                            <label>Logo (SVG)</label>
+                            <div className="file-input-wrapper">
+                                <label htmlFor="gymLogo" className="file-input-label">Subir SVG</label>
+                                <input id="gymLogo" type="file" accept=".svg, image/svg+xml" onChange={e => handleFileRead(e, setNewGymLogoSvg)} />
+                                <div className="file-input-preview">
+                                    {newGymLogoSvg ? <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: newGymLogoSvg }} /> : '...'}
+                                </div>
+                            </div>
+                        </div>
                         <div className="add-gym-actions">
                             <button type="submit" className="cta-button">Crear</button>
                             <button type="button" onClick={() => setShowAddForm(false)} className="cta-button secondary">Cancelar</button>
@@ -411,7 +442,12 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
                         <div key={gym._id} className="gym-card">
                             <div>
                                 <div className="gym-card-header">
-                                    <div className="gym-card-logo"><Logo/></div>
+                                    <div className="gym-card-logo">
+                                      {gym.logoSvg ? 
+                                            <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} /> :
+                                            <Logo />
+                                        }
+                                    </div>
                                     <div className="gym-card-info">
                                         <h3>{gym.name}</h3>
                                         <p>Usuario: {gym.username}</p>
@@ -446,6 +482,17 @@ const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: {
                          <div className="form-group">
                             <label htmlFor="editLimit">Límite Preguntas/Día</label>
                             <input id="editLimit" type="number" value={editLimit} onChange={e => setEditLimit(Number(e.target.value))} min="0" />
+                        </div>
+                         <div className="form-group">
+                            <label>Logo (SVG)</label>
+                            <div className="file-input-wrapper">
+                                <label htmlFor="editGymLogo" className="file-input-label">Cambiar Logo</label>
+                                <input id="editGymLogo" type="file" accept=".svg, image/svg+xml" onChange={e => handleFileRead(e, setEditLogoSvg)} />
+                                <div className="file-input-preview">
+                                    {editLogoSvg ? <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: editLogoSvg }} /> : '...'}
+                                </div>
+                                 <button onClick={() => setEditLogoSvg(null)} className="action-btn delete" style={{marginLeft: '1rem'}}>Quitar Logo</button>
+                            </div>
                         </div>
                         <div className="modal-actions">
                             <button onClick={() => setEditingGym(null)} className="cta-button secondary">Cancelar</button>
