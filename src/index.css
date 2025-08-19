@@ -1082,6 +1082,7 @@ body {
     display: flex;
     gap: 1rem;
     align-items: center;
+    flex-wrap: wrap;
 }
 .editor-row-main {
     justify-content: space-between;
