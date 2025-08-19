@@ -9,7 +9,6 @@ import "./index.css";
 
 import {
     apiClient,
-    SUPER_ADMIN_PASSWORD,
     advancedTechniqueOptions,
     // Types
     Profile,
@@ -105,8 +104,8 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
 // 0. Logo
 const Logo = ({ className = '' }: { className?: string }) => (
     <img 
-      src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgICA8ZyBmaWxsPSIjZTUwOTE0Ij4KICAgICAgICA8cGF0aCBkPSJNNzkuNjIgNjEuNDhjLTIuNzItMS44My02LjAzLTIuMy05LjI2LTIuNjIgMS43NC0uNzEgMy41MS0xLjkzIDQuOC0zLjU2IDIuNDktMy4xNiAzLjIxLTcuMDkgMi4yLTEwLjg2LS42Ni0yLjQ2LTIuMDYtNC42MS00LjA4LTYuMjEtMy45MS0zLjExLTkuNjQtMy45MS0xNC40OS0yLjQxLTIuNjYuODItMy40MSAzLjM4LTEuNzggNS41NiAxLjM4IDEuODIgMy44MyAyLjY2IDYuMDcgMi4xMyAyLjA1LS40OCAzLjM0LTEuNzUgMy43OC0zLjM5MS0xLjY0LTEuNTctNC4zNi0xLjc2LTYuNTMtLjgtMi41NCAxLjEyLTMuNzMgMy40MS0zLjYzIDUuOTkuMTEgMi45OSAxLjY2IDUuNTYgNC4wNiA3LjA4IDIuMjMgMS40MSIDQuODcgMS44MiA3LjQyIDEuMjUgMi4xMy0uNDggMy40Ny0xLjg0IDQuMDktMy42NC41My0xLjU4LjI3LTMuMi0uNzQtNC4zNC0uOTMtMS4wMi0yLjQ0LTEuMzYtMy44LTEuMDMtMS41NS4zNy0yLjU3IDEuMzItMi43MSAyLjcxLS4yIDItLjcgMy42Ny0xLjk2IDQuOTgtMS4yIDEuMjQtMi43MyAxLjg5LTQuNDEgMi4wNC0yLjcxLjI0LTUuNTgtLjI5LTcuODktMS41NC0xLjkyLTEuMDQtMy40Ny0yLjctNC4zOC00LjY3LS44Ni0xLjg4LTEuMTUtMy45OC0uODYtNS45OS4yOC0xLjkzIDEuMTMtMy43MSAyLjQ4LTUuMTcgMy4zOC0zLjY5IDguODctNS4xMiAxMy42LTQuMDIgMy4xOC43MyA1LjgxIDIuNSAzLjQzIDYuNjMtMS4zMiAyLjMxLTMuODggMi40OC02LjA4IDEuNTMtMS45OC0uODQtMy4xMS0yLjYxLTIuOTYtNC42NS4xNS0yLjA1IDEuNTMtMy42NyAzLjQ2LTQuNDcgMS45OC0uODIgNC4xMy0uOSAzLjYxIDIuMTItLjI5IDEuNzItMS40OSAyLjY5LTMuMDkgMy4xNS0yLjExLjYtNC4wMS0uMDItNS4zNC0xLjM2LTEuODMtMS44Ny0yLjM5LTQuNTQtMS40NS02Ljg1LjkzLTIuMyAyLjk4LTMuOTQgNS4zNC00LjY4IDYuNjUtMi4xIDEzLjg4LS4yNyAxNy45MyA0LjM1IDIuMDggMi4zNiAzLjI2IDUuMzUgMy4xNCAxMC4xNC0xLjggMi4yOS00LjIzIDMuODktNi45OCA0LjU5LTMuMDQuNzctNi4yMS41OS05LjE4LS4xNy0xLjM4LS4zNS0yLjgxLS44Ni00LjE2LTEuNTYtMi44OS0xLjQ5LTUuMy0zLjc0LTYuNzctNi41My0xLjQyLTIuNzEtMi4wMi01Ljc0LTEuNjgtOC42NS4zNS0yLjk4IDEuNjYtNS43NiAzLjc1LTcuOTIgMy4wNC0zLjE1IDcuMzMtNC44IDEwLjU3LTYuOTggMS45My0xLjMgMy44NC0yLjczIDUuMzgtNC4zOCAxLjQ5LTEuNTYgMi40My0zLjUgMi42OS01LjU1LjI4LTIuMTgtLjEtNC4zOC0xLjA3LTYuMzMtMy4xMS02LjM1LTkuOTQtOS4xLTE2LjYtNy42Ny04LjM0IDEuNzktMTQuNjUgNy44LTE2LjM0IDE2LjA3LTEuMTQgNS42My4yOCA5LjQ1IDMuOTMgMTMuMjMgMy41NCAzLjY4IDguOTIgNS4xMyAxMy41OCA0LjA0IDMuMTktLjczIDUuODEtMi41IDMuNDMtNi42My0xLjMyLTIuMzEtMy44OC0yLjQ4LTYuMDgtMS41My0xLjk4LjgzLTMuMTEgMi42MS0yLjk2IDQuNjUuMTUgMi4wNSAxLjUzIDMuNjcgMy40NiA0LjQ3IDEuOTguODIgNC4xMy45IDMuNjEtMi4xMi0uMjgtMS43MS0xLjQ5LTIuNjktMy4wOS0zLjE1LTEuNzQtLjUtMy4zNC4xMS00LjU4IDEuMjctMi4xIDEuOTktMi43MyA0Ljg2LTEuNjUgNy4zNyAxLjA3IDIuNDggMy4yNSAzLjg3IDUuNjcgNC40MSAyLjI0LjUyIDQuNTUuMzMgNi42Ny0uNTIgMi41LTEuMDEgNC41NC0yLjgxIDUuODEtNS4xNy45OC0xLjg0IDEuNDMtMy44NyAxLjMyLTUuODctLjA5LTEuNTQtLjYtMy4wNC0xLjQ1LTQuMzUtLjgyLTEuMjMtMi0yLjA0LTMuMzctMi4zMy0xLjU1LS4zMy0zLjE0LjA5LTMuODUgMS4zNi0xLjU3IDIuNzQtLjA1IDUuOTYgMi43NyA3LjMxIDIuNiAyLjIgNi4wOCAyLjY4IDkuMjkgMS42OCAyLjIyLS42OSAzLjkxLTIuMTIgNC45NS0zLjk5IDEuNDItMi41OCAxLjgxLTUuNjEuOTYtOC4zNC0uODMtMi42Ny0yLjgxLTQuODQtNS4yNy02LjIyLTQuMDQtMi4zLTYuODItMy40MS0xMS45NS0yLjY1LTYuOTEuMDItMTMuMDkgMi43MS0xNy4wNCA3LjczLTQuNDIgNS42My01LjMyIDEzLjEzLTIuNCAxOS41MSAyLjkyIDYuMzkgOS40NyAxMC4zMSAxNi43NCA5LjQ1IDYuNDktLjc2IDEyLjA1LTUuMSAxNC4zOC0xMC41OCAxLjA0LTIuNDYgMS40MS01LjEyIDEuMDMtNy42NC0uMjQtMS42MS0uODctMy4xNC0xLjgxLTQuNDYtLjg5LTEuMjQtMi4wOS0yLjEtMy40My0yLjQ4LTEuNTUtLjQzLTMuMTYuMDMtMy44NiAxLjM2LTEuNzEgMy4yMS4xNiA2LjQ4IDMuNDQgNy45OCAzLjA5IDEuNDEgNi43Ni45MSA5LjQ0LTEuMTcgMi42OC0yLjA4IDMuNzMtNS4xNyAzLjEtNy45OC0uNjMtMi44MS0yLjg4LTQuOTctNS41LTUuOTgtNC42OC0xLjc5LTkuOTEuMjEtMTIuOTMgNC4yLTEuODUgMS4yMy0zLjM1IDIuODktNC4zNiA0LjgtMS4wNyAyLTguMDcgMTUuNzctMS42OCAxNS41MSAxLjM4LS4wNiAyLjctLjQ3IDMuOTYtMS4xNyAzLjM4LTEuODkgNS42OC00Ljg2IDYuODktOC4zMy44My0yLjQgMS4yMi01LjA0IDEuMDMtNy41Ny0uMTUtMS45OS0uNzUtMy45Mi0xLjcyLTUuNjMtMS45OC0zLjUtNS42MS01LjU1LTkuNDQtNS43LTYuNjQtLjM0LTEyLjc1IDMuNDQtMTUuMTkgOS4xNS0yLjM5IDUuNi0uNjUgMTIuMTIgMy44MSAxNi41MiA0LjI0IDQuMjEgMTAuNTIgNS42IDE2LjI4IDMuNDEgNS4xMy0xLjk1IDkuMTctNi40MiAxMC40LTEyLjA3LjgxLTMuNjItLjExLTcuMTYtMS42MS0xMC4zNi0xLjI4LTIuNjYtMy4zMy00LjktNS44OC02LjUxLTMuNTgtMi45NS04LjE0LTQuMjMtMTIuNjctMy42Ny02LjA4Ljc3LTExLjIgNC42OC0xMy42MyAxMC4yNy0yLjg1IDYuNjUgMS4zNiAxMy42MiA0Ljk1IDE2Ljg1IDIuNDYgMi4yNCA1LjgxIDMuMjcgOS4xIDMuMDQgMy4yLS4yMyA2LjE5LTEuNjYgOC4xMS0zLjk5IDIuMDUtMi40NyAyLjg5LTUuNjQgMi4zMy04LjY3LS4zOS0yLjAzLTEuNDgtMy43OC0zLjA4LTQuOTUtMS4zOC0uOTktMy4wMS0xLjI0LTQuNTYtLjc2LTEuNzQuNTQtMy4xMyAyLjA1LTMuNDkgMy44Mi0uNjMgMy4xNSAxLjUgNi4xNyA0LjM5IDYuOTggMy4wNS44NyA2LjI2LS4zMyA4LjA5LTIuNjkgMS45Ny0yLjUzIDIuNTItNS43NyAxLjQtOC42Ni0xLjA3LTIuNzktMy40Ni00LjY4LTYuMjEtNS4zMy01LjA3LTEuMTktMTAuMiAxLjk4LTEyLjQyIDYuNjYtMS40MyAzLjAyLTEuODcgNi40NC0xLjE0IDkuNjEuNzMgMy4xNiAzLjAxIDUuODIgNS44NyA3LjM2IDIuNjUgMS40MiA1LjczIDEuNDUgOC4zOC4xIDIuNzUtMS40IDQuMzYtNC4wMiA0LjU2LTcuMDQuMTItMS43NS0uNDEtMy40OS0xLjQ4LTQuODctMS0xLjI5LTIuNDgtMi00LjA3LTEuODctMS41LjEyLTIuNzIgMS4xMy0yLjk4IDIuNTktLjMxIDEuNzYuNTggMy41NCAxLjk5IDQuNDcgMS42MiAxLjA2IDMuNzYuODQgNS4yMy0uNTcgMi40OS0yLjM5IDMuMTMtNS44MSAxLjU4LTguNTctMS42My0yLjkzLTQuNjQtNC41OC03Ljg0LTQuNjUtMy4xNy0uMDgtNi4zMyAxLjMtOC42MyAzLjk5LTIuMyAyLjctMy40MyA2LjEyLTMuMDkgOS41LjM2IDMuNTQgMi41MyA2LjY0IDUuNDEgOC4zNCAzLjAzIDEuODIgNi43NSAyLjA4IDkuOTguNzYgMy4xOC0xLjMgNS41OC0zLjg0IDYuNjYtNy4wMy44OS0yLjY1Ljk2LTUuNTUuMjQtOC4xOC0uOTEtMy4zMi0zLjQ0LTUuOTYtNi40OC03LjA4LTQuMzYtMS41OC05LjE5LS4yMS0xMS45NSA0LjA4LTIuMjkgMy41Ny0yLjU1IDcuOTQtLjY4IDExLjczIDEuNjMgMy4zNCA0Ljk0IDUuNDcgOC41MyA1LjgxIDMuNTIuMzMgNi45NC0xLjA5IDkuMTYtMy44OCAyLjI2LTIuODUgMy4xMS02LjUzIDIuMzctMTAuMDUtLjcxLTMuNDUtMy4yOC02LjI5LTYuNDItNy40LTUuNTktMS45OC0xMS41Ni45Ny0xNC40MiA2LjA3LTIuMjYgNC4wMi0yLjEzIDguOTguMyAxMi44MyAyLjUzIDMuODUgNi45IDYuMTggMTEuMzEgNi4yMyA1LjIuMDYgMTAuMDMtMy4xIDExLjkzLTguMDkgMS4zOC0zLjY2Ljc3LTcuNjQtMS4zMi0xMC44Ni0yLjA3LTMuMi01LjQ1LTUuMTMtOS4wNi01LjQyLTMuODEtLjMxLTcuNDkgMS4zMy05LjU3IDQuMzh6Ii8+CiAgICA8L2c+Cjwvc3ZnPg==" 
-      alt="ScorpionGYM AI Logo" 
+      src="/logo.png"
+      alt="Scorpion AI Logo" 
       className={`app-logo ${className}`} 
     />
 );
@@ -118,18 +117,18 @@ const RoleSelectionView = ({ onSelectRole }: { onSelectRole: (role: 'admin' | 'c
         <div className="login-container">
             <header>
                  <Logo />
-                 <h1>ScorpionGYM AI</h1>
-                 <p>Tu asistente de entrenamiento personal.</p>
+                 <h1>Scorpion AI</h1>
+                 <p>Tu plataforma de entrenamiento inteligente.</p>
             </header>
             <div className="landing-box">
-                <h2>¿Cómo quieres ingresar?</h2>
-                <p>Selecciona tu tipo de acceso para continuar.</p>
+                <h2>Bienvenido</h2>
+                <p>¿Cómo querés acceder?</p>
                 <div className="role-selection">
                     <button className="cta-button" onClick={() => onSelectRole('admin')}>
-                        Soy Administrador / Entrenador
+                        Acceso Gimnasio / Entrenador
                     </button>
                     <button className="cta-button secondary" onClick={() => onSelectRole('client')}>
-                        Soy Cliente
+                        Acceso Cliente
                     </button>
                 </div>
             </div>
@@ -156,17 +155,15 @@ const LoginView = ({ onLoginSuccess, userType, onBack }: {
 
         try {
             if (userType === 'admin') {
-                 // Super Admin check
-                if (identifier.toLowerCase() === 'superadmin' && password === SUPER_ADMIN_PASSWORD) {
-                    onLoginSuccess({ _id: 'superadmin', name: 'Super Admin', username: 'superadmin' }, 'superadmin');
-                    return;
-                }
-                // Gym/Coach login
                 const gym = await apiClient.gymLogin(identifier, password);
                 if (gym) {
-                    onLoginSuccess(gym, 'gym');
+                    if (gym.username === 'superadmin') {
+                         onLoginSuccess(gym, 'superadmin');
+                    } else {
+                        onLoginSuccess(gym, 'gym');
+                    }
                 } else {
-                    setError('Usuario o contraseña de administrador incorrectos.');
+                    setError('Usuario o contraseña incorrectos.');
                 }
             } else { // Client login
                 const clientData = await apiClient.getClientData(identifier);
@@ -191,7 +188,7 @@ const LoginView = ({ onLoginSuccess, userType, onBack }: {
         <div className="login-container">
              <header>
                 <Logo />
-                <h1>{userType === 'admin' ? 'Acceso de Administrador' : 'Acceso de Cliente'}</h1>
+                <h1>{userType === 'admin' ? 'Acceso Gimnasio / Entrenador' : 'Acceso de Cliente'}</h1>
              </header>
             <div className="login-box">
                 <form onSubmit={handleLogin}>
@@ -224,7 +221,8 @@ const LoginView = ({ onLoginSuccess, userType, onBack }: {
 
 
 // 3. Super Admin Dashboard
-const SuperAdminDashboard = ({ onLogout, onManageGym }: { 
+const SuperAdminDashboard = ({ loggedInUser, onLogout, onManageGym }: { 
+    loggedInUser: Gym;
     onLogout: () => void;
     onManageGym: (gym: Gym) => void; 
 }) => {
@@ -251,12 +249,17 @@ const SuperAdminDashboard = ({ onLogout, onManageGym }: {
         onConfirm?: () => void;
         onCancel?: () => void;
     }>({ isOpen: false });
+    
+    // Super admin password state
+    const [newSuperAdminPassword, setNewSuperAdminPassword] = useState('');
+    const [isSavingPassword, setIsSavingPassword] = useState(false);
 
 
     const fetchGyms = async () => {
         setIsLoading(true);
         const fetchedGyms = await apiClient.getGyms();
-        setGyms(fetchedGyms);
+        // Filter out the superadmin user from the list of manageable gyms
+        setGyms(fetchedGyms.filter(gym => gym.username !== 'superadmin'));
         setIsLoading(false);
     };
 
@@ -323,6 +326,20 @@ const SuperAdminDashboard = ({ onLogout, onManageGym }: {
         setShowConfirmModal({ isOpen: false });
     };
 
+    const handleUpdatePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newSuperAdminPassword) return;
+        setIsSavingPassword(true);
+        const success = await apiClient.updateGym(loggedInUser._id, { password: newSuperAdminPassword });
+        if (success) {
+            alert('Contraseña de Super Administrador actualizada con éxito.');
+            setNewSuperAdminPassword('');
+        } else {
+            alert('Error al actualizar la contraseña.');
+        }
+        setIsSavingPassword(false);
+    };
+
 
     return (
         <div className="admin-dashboard">
@@ -332,9 +349,32 @@ const SuperAdminDashboard = ({ onLogout, onManageGym }: {
                 </div>
                 <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
             </header>
+            
+            <div className="password-management">
+                <h2>Gestionar Contraseña de Administrador</h2>
+                 <form onSubmit={handleUpdatePassword}>
+                    <div className="form-group">
+                        <label htmlFor="super-admin-pass">Nueva Contraseña</label>
+                        <input
+                            id="super-admin-pass"
+                            type="password"
+                            value={newSuperAdminPassword}
+                            onChange={(e) => setNewSuperAdminPassword(e.target.value)}
+                            placeholder="Introduce la nueva contraseña"
+                            required
+                        />
+                    </div>
+                    <button type="submit" className="cta-button" disabled={isSavingPassword}>
+                        {isSavingPassword ? <span className="spinner small"></span> : 'Guardar'}
+                    </button>
+                </form>
+            </div>
 
+            <hr />
+            
+            <h2 style={{ marginTop: '2rem' }}>Gestionar Gimnasios</h2>
             {!showAddForm && (
-                 <button onClick={() => setShowAddForm(true)} className="cta-button">
+                 <button onClick={() => setShowAddForm(true)} className="cta-button" style={{ marginTop: '1rem' }}>
                     + Agregar Nuevo Gimnasio
                 </button>
             )}
@@ -1158,7 +1198,7 @@ const ProfileForm = ({ profile, onProfileChange }: {
                 <div className="form-group">
                     <label>Músculo a Priorizar</label>
                     <select value={profile.muscleFocus} onChange={e => onProfileChange('muscleFocus', e.target.value)}>
-                        {muscleGroups[profile.bodyFocusArea].map(muscle => (
+                        {muscleGroups[profile.bodyFocusArea as keyof typeof muscleGroups].map(muscle => (
                             <option key={muscle} value={muscle}>{muscle}</option>
                         ))}
                     </select>
@@ -2688,7 +2728,7 @@ const App = () => {
                 if (managedGym) {
                      return <AdminDashboard loggedInGym={managedGym} onLogout={handleLogout} onBackToSuperAdmin={handleBackToSuperAdmin} />;
                 }
-                return <SuperAdminDashboard onLogout={handleLogout} onManageGym={handleManageGym}/>;
+                return <SuperAdminDashboard loggedInUser={loggedInUser as Gym} onLogout={handleLogout} onManageGym={handleManageGym}/>;
             }
              if (userType === 'gym') {
                 return <AdminDashboard loggedInGym={loggedInUser as Gym} onLogout={handleLogout} />;

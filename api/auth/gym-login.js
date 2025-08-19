@@ -16,6 +16,21 @@ export default async function handler(req, res) {
     if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required' });
     }
+    
+    // Ensure superadmin user exists for the first time
+    if (username.toLowerCase() === 'superadmin') {
+        let superAdminUser = await gymsCollection.findOne({ username: 'superadmin' });
+        if (!superAdminUser) {
+            console.log("Superadmin user not found, creating one with default password.");
+            const defaultSuperAdmin = {
+                name: 'Super Administrador',
+                username: 'superadmin',
+                password: 'admin', // Default password, can be changed from the dashboard
+                dailyQuestionLimit: 999
+            };
+            await gymsCollection.insertOne(defaultSuperAdmin);
+        }
+    }
 
     const gym = await gymsCollection.findOne({ username });
 
