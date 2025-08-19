@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -91,6 +92,33 @@ const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, 
 
     return { bmi: bmiValue, category, categoryClass };
 };
+
+const calculateTargetWeight = (profile: Profile): number | null => {
+    const weight = parseFloat(profile.weight);
+    const heightCm = parseFloat(profile.height);
+    if (isNaN(weight) || isNaN(heightCm) || heightCm <= 0) return null;
+
+    const heightM = heightCm / 100;
+    const upperNormalBmiWeight = 24.9 * (heightM * heightM);
+    const lowerNormalBmiWeight = 18.5 * (heightM * heightM);
+
+    switch (profile.goal) {
+        case 'Pérdida de grasa':
+            // Target the upper end of normal BMI, or a 10% reduction, whichever is higher (less extreme)
+            return Math.max(upperNormalBmiWeight, weight * 0.9);
+        case 'Hipertrofia':
+            // Target a 5-7% increase
+            return weight * 1.06;
+        case 'Mantenimiento':
+            return weight;
+        case 'Resistencia':
+            // Target a weight slightly below the middle of the healthy range for endurance.
+             return (lowerNormalBmiWeight + upperNormalBmiWeight) / 2;
+        default:
+            return null;
+    }
+};
+
 
 const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2027,7 +2055,8 @@ const ClientDashboard = ({ clientData, onLogout, isExpired, onProgressUpdate }: 
     isExpired: boolean;
     onProgressUpdate: (updatedLog: ProgressLog, updatedWeightLog: BodyWeightEntry[]) => void;
 }) => {
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
+    const [activeTab, setActiveTab] = useState<'training' | 'progress' | 'profile'>('training');
+    const [activeSubTab, setActiveSubTab] = useState<'routine' | 'diet'>('routine');
     const [bodyWeight, setBodyWeight] = useState('');
     const [logStatus, setLogStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -2064,26 +2093,40 @@ const ClientDashboard = ({ clientData, onLogout, isExpired, onProgressUpdate }: 
     };
     
     const renderContent = () => {
-        if (isExpired && activeTab !== 'progress') {
-            return (
-                <div className="expired-view">
-                    <h2>Tu Plan Ha Expirado</h2>
-                    <p>Tu plan de entrenamiento ha finalizado. ¡Felicitaciones por tu progreso! Por favor, contacta a tu entrenador para que te asigne una nueva rutina y plan de nutrición.</p>
-                </div>
-            );
-        }
-
         switch (activeTab) {
-            case 'routine':
-                return clientData.routine ?
-                    <ClientRoutineView clientData={clientData} onProgressUpdate={onProgressUpdate} /> :
-                    <div className="placeholder"><p>Aún no se te ha asignado un plan de entrenamiento. Contacta a tu entrenador.</p></div>;
-            case 'diet':
-                 return clientData.dietPlan ?
-                    <DietPlanView dietPlan={clientData.dietPlan} /> :
-                    <div className="placeholder"><p>Aún no se te ha asignado un plan de nutrición. Contacta a tu entrenador.</p></div>;
+            case 'training':
+                return (
+                    <div className="training-view">
+                        <nav className="sub-tabs-nav">
+                            <button className={`sub-tab-button ${activeSubTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveSubTab('routine')}>
+                                Rutina
+                            </button>
+                            <button className={`sub-tab-button ${activeSubTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveSubTab('diet')}>
+                                Nutrición
+                            </button>
+                        </nav>
+                        <div className="sub-tab-content">
+                            {isExpired ? (
+                                <div className="expired-view">
+                                    <h2>Tu Plan Ha Expirado</h2>
+                                    <p>Tu plan de entrenamiento ha finalizado. ¡Felicitaciones por tu progreso! Por favor, contacta a tu entrenador para que te asigne una nueva rutina y plan de nutrición.</p>
+                                </div>
+                            ) : activeSubTab === 'routine' ? (
+                                clientData.routine ?
+                                    <ClientRoutineView clientData={clientData} onProgressUpdate={onProgressUpdate} /> :
+                                    <div className="placeholder"><p>Aún no se te ha asignado un plan de entrenamiento. Contacta a tu entrenador.</p></div>
+                            ) : (
+                                clientData.dietPlan ?
+                                    <DietPlanView dietPlan={clientData.dietPlan} /> :
+                                    <div className="placeholder"><p>Aún no se te ha asignado un plan de nutrición. Contacta a tu entrenador.</p></div>
+                            )}
+                        </div>
+                    </div>
+                );
             case 'progress':
                 return <ProgressView clientData={clientData} />;
+            case 'profile':
+                return <ClientProfileView clientData={clientData} />;
             default:
                 return null;
         }
@@ -2127,14 +2170,14 @@ const ClientDashboard = ({ clientData, onLogout, isExpired, onProgressUpdate }: 
             
             <main className="main-content" style={{width: '100%'}}>
                  <nav className="main-tabs-nav">
-                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>
+                    <button className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`} onClick={() => setActiveTab('training')}>
                         Entrenamiento
-                    </button>
-                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>
-                        Nutrición
                     </button>
                     <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>
                         Progreso
+                    </button>
+                    <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+                        Perfil
                     </button>
                 </nav>
                 {renderContent()}
@@ -2452,8 +2495,62 @@ const ProgressView = ({ clientData }: { clientData: ClientData }) => {
     );
 };
 
+// 12. Vista de Perfil del Cliente
+const ClientProfileView = ({ clientData }: { clientData: ClientData }) => {
+    const { profile } = clientData;
+    const heightCm = parseFloat(profile.height);
+    const heightM = !isNaN(heightCm) ? heightCm / 100 : 0;
 
-// 12. Vista de Acuerdo/Términos
+    const healthyWeightMin = heightM > 0 ? (18.5 * (heightM * heightM)).toFixed(1) : 'N/A';
+    const healthyWeightMax = heightM > 0 ? (24.9 * (heightM * heightM)).toFixed(1) : 'N/A';
+
+    const targetWeight = calculateTargetWeight(profile);
+
+    return (
+        <div className="client-profile-view animated-fade-in">
+            <h2>Perfil y Objetivos</h2>
+            <div className="profile-info-grid">
+                <div className="info-card">
+                    <h3>Información Personal</h3>
+                    <ul>
+                        <li><strong>Nombre:</strong> {profile.name}</li>
+                        <li><strong>Edad:</strong> {profile.age} años</li>
+                        <li><strong>Peso Actual:</strong> {profile.weight} kg</li>
+                        <li><strong>Altura:</strong> {profile.height} cm</li>
+                        <li><strong>Género:</strong> {profile.gender}</li>
+                    </ul>
+                </div>
+                <div className="info-card">
+                    <h3>Objetivos del Plan</h3>
+                    <ul>
+                        <li><strong>Objetivo Principal:</strong> {profile.goal}</li>
+                        <li><strong>Nivel:</strong> {profile.level}</li>
+                        <li><strong>Días/Semana:</strong> {profile.trainingDays}</li>
+                        <li><strong>Intensidad:</strong> {profile.trainingIntensity}</li>
+                    </ul>
+                </div>
+                 <div className="info-card full-width">
+                    <h3>Métricas de Salud</h3>
+                     <div className="health-metrics">
+                        <div className="metric-item">
+                            <span className="metric-label">Rango de Peso Saludable</span>
+                            <span className="metric-value">{healthyWeightMin} - {healthyWeightMax} kg</span>
+                        </div>
+                        {targetWeight && (
+                             <div className="metric-item">
+                                <span className="metric-label">Peso Objetivo Sugerido</span>
+                                <span className="metric-value">{targetWeight.toFixed(1)} kg</span>
+                             </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// 13. Vista de Acuerdo/Términos
 const AgreementView = ({ onAccept, onLogout }: { onAccept: () => void; onLogout: () => void; }) => {
     const [isChecked, setIsChecked] = useState(false);
     
@@ -2504,7 +2601,7 @@ Presiona "Aceptar y Continuar" para confirmar que has leído y entendido estos t
 };
 
 
-// 13. Asistente de Chat del Cliente
+// 14. Asistente de Chat del Cliente
 const ChatAssistant = ({ isOpen, onClose, clientData }: {
     isOpen: boolean;
     onClose: () => void;
