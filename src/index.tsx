@@ -103,11 +103,7 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
 
 // 0. Logo
 const Logo = ({ className = '' }: { className?: string }) => (
-    <img 
-      src="/logo.png"
-      alt="Scorpion AI Logo" 
-      className={`app-logo ${className}`} 
-    />
+    <img src="/logo.svg" alt="Scorpion AI Logo" className={`app-logo ${className}`} />
 );
 
 
