@@ -502,13 +502,18 @@ const AdminDashboard = ({ loggedInGym, onLogout, onBackToSuperAdmin }: {
             message: `¿Estás seguro de que quieres archivar ${selectedClients.size} cliente(s)?`,
             onConfirm: async () => {
                 await apiClient.updateClientStatus(selectedClients, 'archived');
-                // Refresh client list
-                const updatedClients = await apiClient.getClients(loggedInGym!._id);
-                setClients(updatedClients);
+                // Optimistically update the local state instead of refetching
+                setClients(prevClients =>
+                    prevClients.map(client =>
+                        selectedClients.has(client.dni)
+                            ? { ...client, status: 'archived' }
+                            : client
+                    )
+                );
                 setSelectedClients(new Set());
                 setSelectionMode(false);
                 setShowConfirmModal({ isOpen: false });
-                setViewMode('archived'); // Switch view to show the result
+                setViewMode('archived'); // Switch view to see the result
             },
             onCancel: () => setShowConfirmModal({ isOpen: false }),
         });
@@ -520,13 +525,18 @@ const AdminDashboard = ({ loggedInGym, onLogout, onBackToSuperAdmin }: {
             message: `¿Estás seguro de que quieres restaurar ${selectedClients.size} cliente(s)?`,
             onConfirm: async () => {
                 await apiClient.updateClientStatus(selectedClients, 'active');
-                // Refresh client list
-                const updatedClients = await apiClient.getClients(loggedInGym!._id);
-                setClients(updatedClients);
+                // Optimistically update the local state
+                setClients(prevClients =>
+                    prevClients.map(client =>
+                        selectedClients.has(client.dni)
+                            ? { ...client, status: 'active' }
+                            : client
+                    )
+                );
                 setSelectedClients(new Set());
                 setSelectionMode(false);
                 setShowConfirmModal({ isOpen: false });
-                setViewMode('active'); // Switch view to show the result
+                setViewMode('active'); // Switch view to see the result
             },
             onCancel: () => setShowConfirmModal({ isOpen: false }),
         });
