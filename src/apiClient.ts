@@ -22,6 +22,7 @@ export interface Exercise {
     repeticiones: string;
     descanso: string;
     tecnicaAvanzada?: string;
+    youtubeLink?: string;
 }
 
 export interface DayPlan {
