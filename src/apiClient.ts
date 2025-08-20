@@ -13,6 +13,7 @@ export interface Profile {
     bodyFocusArea: 'Cuerpo completo' | 'Tren Superior' | 'Tren Inferior';
     muscleFocus: string; // e.g., 'General', 'Cuádriceps', 'Pecho'
     includeAdaptationPhase: 'Sí' | 'No';
+    includeDeloadPhase: 'Sí' | 'No';
     trainingIntensity: 'Baja' | 'Moderada' | 'Alta' | 'Extrema';
 }
 

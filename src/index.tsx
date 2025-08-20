@@ -946,6 +946,20 @@ const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: Cl
                         <option value="Sí">Sí</option>
                     </select>
                 </div>
+                 <div className="form-group">
+                    <label>Incluir Fase de Adaptación</label>
+                    <select value={profile.includeAdaptationPhase} onChange={e => handleChange('includeAdaptationPhase', e.target.value)}>
+                        <option value="Sí">Sí</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Incluir Fase de Descarga</label>
+                    <select value={profile.includeDeloadPhase} onChange={e => handleChange('includeDeloadPhase', e.target.value)}>
+                        <option value="No">No</option>
+                        <option value="Sí">Sí</option>
+                    </select>
+                </div>
                 {isModified && (
                      <button type="button" onClick={handleSave} disabled={isSaving} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
                          {isSaving ? <><span className="spinner small"></span> Guardando...</> : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
@@ -1038,8 +1052,9 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 5.  La suma de 'durationWeeks' de todas las fases debe ser igual a 'totalDurationWeeks'.
                 6.  Aplica 'tecnicaAvanzada' solo si el perfil del cliente lo permite ('useAdvancedTechniques: "Sí"'). Las opciones válidas son: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, el valor debe ser un string vacío "".
                 7.  Si el perfil incluye 'includeAdaptationPhase: "Sí"', la primera fase debe ser de adaptación.
-                8.  Ajusta la intensidad, volumen y selección de ejercicios según el 'level', 'goal' e 'trainingIntensity' del cliente.
-                9.  Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
+                8.  Si el perfil incluye 'includeDeloadPhase: "Sí"', una de las fases (preferiblemente intermedia o la última) debe ser una "Fase de Descarga" con una notable reducción de volumen e intensidad (ej. reducir series, usar pesos más ligeros) para facilitar la recuperación.
+                9.  Ajusta la intensidad, volumen y selección de ejercicios según el 'level', 'goal' e 'trainingIntensity' del cliente.
+                10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
             `;
             
             const response: GenerateContentResponse = await ai.models.generateContent({
@@ -1487,9 +1502,10 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"
 
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
-                1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
-                2.  Calcula las calorías y macronutrientes basándote en el perfil del cliente (peso, altura, edad, género, nivel de actividad, objetivo). Sé preciso.
-                3.  El JSON debe seguir esta estructura exacta:
+                1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
+                2.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+                3.  Calcula las calorías y macronutrientes basándote en el perfil del cliente (peso, altura, edad, género, nivel de actividad, objetivo). Sé preciso.
+                4.  El JSON debe seguir esta estructura exacta:
                     {
                         "planTitle": "Título del Plan (ej: Dieta para Hipertrofia)",
                         "summary": {
@@ -1514,10 +1530,10 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                             "Evitar bebidas azucaradas."
                         ]
                     }
-                4.  Distribuye las calorías y macros en 4-6 comidas a lo largo del día (Desayuno, Media Mañana, Almuerzo, Merienda, Cena, Pre-entreno si es relevante).
-                5.  Utiliza alimentos comunes y saludables.
-                6.  Las cantidades deben estar en gramos o unidades claras.
-                7.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
+                5.  Distribuye las calorías y macros en 4-6 comidas a lo largo del día (Desayuno, Media Mañana, Almuerzo, Merienda, Cena, Pre-entreno si es relevante).
+                6.  Utiliza alimentos comunes y saludables, considerando la disponibilidad en Argentina.
+                7.  Las cantidades deben estar en gramos o unidades claras.
+                8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
             
             const response: GenerateContentResponse = await ai.models.generateContent({
@@ -1575,9 +1591,6 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
         <div className="diet-plan-container">
             <div className="actions-bar">
                  <h2>Plan de Nutrición</h2>
-                 <button className="cta-button regenerate" onClick={handleGenerate} disabled={isGenerating}>
-                    Regenerar Plan
-                </button>
             </div>
 
             <h3>{currentPlan.planTitle}</h3>
@@ -1622,6 +1635,22 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                         <li key={i}>{rec}</li>
                     ))}
                 </ul>
+            </div>
+
+            <div className="regeneration-container">
+                <div className="admin-instructions-box">
+                    <label htmlFor="admin-instructions-diet-regen">Instrucciones Adicionales (Opcional)</label>
+                    <textarea
+                        id="admin-instructions-diet-regen"
+                        rows={3}
+                        value={adminInstructions}
+                        onChange={(e) => setAdminInstructions(e.target.value)}
+                        placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                    ></textarea>
+                </div>
+                <button className="cta-button regenerate" onClick={handleGenerate} disabled={isGenerating}>
+                    Regenerar Plan
+                </button>
             </div>
         </div>
     );
