@@ -133,6 +133,7 @@ const App: React.FC = () => {
     const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard'>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
     const [currentGym, setCurrentGym] = useState<Gym | null>(null);
+    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
     const [loginError, setLoginError] = useState<string>('');
 
     useEffect(() => {
@@ -188,6 +189,7 @@ const App: React.FC = () => {
         sessionStorage.clear();
         setCurrentClientDni(null);
         setCurrentGym(null);
+        setImpersonatedGym(null);
         setView('landing');
     };
     
@@ -201,6 +203,16 @@ const App: React.FC = () => {
         setView('adminDashboard');
     };
     
+    const handleSelectGym = (gymToManage: Gym) => {
+        setImpersonatedGym(gymToManage);
+        setView('adminDashboard');
+    };
+
+    const handleBackToSuperAdmin = () => {
+        setImpersonatedGym(null);
+        setView('superAdminDashboard');
+    };
+
     const renderView = () => {
         switch (view) {
             case 'landing':
@@ -208,13 +220,19 @@ const App: React.FC = () => {
             case 'login':
                 return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
             case 'adminDashboard':
-                return <AdminDashboard onSelectClient={handleSelectClient} onLogout={handleLogout} gym={currentGym!} />;
+                return <AdminDashboard 
+                            onSelectClient={handleSelectClient} 
+                            onLogout={handleLogout} 
+                            gym={impersonatedGym || currentGym!} 
+                            loggedInGym={currentGym!}
+                            onBackToSuperAdmin={handleBackToSuperAdmin}
+                        />;
             case 'clientDashboard':
-                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={currentGym!} />;
+                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
             case 'clientView':
                 return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
             case 'superAdminDashboard':
-                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} />;
+                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
             default:
                 return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
         }
@@ -356,7 +374,7 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
     );
 };
 
-const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void }> = ({ gym, onLogout }) => {
+const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGym: (gym: Gym) => void; }> = ({ gym, onLogout, onSelectGym }) => {
     const [gyms, setGyms] = useState<Gym[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingGym, setEditingGym] = useState<Gym | null>(null);
@@ -429,7 +447,7 @@ const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void }> = ({ gym
             ) : (
                 <div className="gym-list">
                     {gyms.filter(g => g.username !== 'superadmin').map(gym => (
-                        <div key={gym._id} className="gym-card" onClick={() => setEditingGym(gym)}>
+                        <div key={gym._id} className="gym-card" onClick={() => onSelectGym(gym)}>
                            <div className="gym-card-header">
                                 {gym.logoSvg && (
                                     <div className="gym-card-logo">
@@ -626,7 +644,13 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
 
 // --- Admin/Coach Views ---
 
-const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout: () => void; gym: Gym; }> = ({ onSelectClient, onLogout, gym }) => {
+const AdminDashboard: React.FC<{ 
+    onSelectClient: (dni: string) => void; 
+    onLogout: () => void; 
+    gym: Gym; 
+    loggedInGym: Gym;
+    onBackToSuperAdmin: () => void;
+}> = ({ onSelectClient, onLogout, gym, loggedInGym, onBackToSuperAdmin }) => {
     const [clients, setClients] = useState<ClientListItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
@@ -700,6 +724,8 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
         return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
     }
 
+    const isImpersonating = loggedInGym.username === 'superadmin' && gym.username !== 'superadmin';
+
     return (
         <div className="admin-dashboard">
             <div className="main-header">
@@ -707,12 +733,16 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
                     {gym.logoSvg && <div className="app-logo" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />}
                     <div>
                         <h1>{gym.name}</h1>
-                        <p>Panel de Entrenador</p>
+                        <p>{isImpersonating ? `Gestionando como Superadmin` : 'Panel de Entrenador'}</p>
                     </div>
                 </div>
                 <div className="admin-header-nav">
                     <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca de Ejercicios</button>
-                    <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                    {isImpersonating ? (
+                        <button onClick={onBackToSuperAdmin} className="back-button">Volver a Super Admin</button>
+                    ) : (
+                        <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                    )}
                 </div>
             </div>
 
