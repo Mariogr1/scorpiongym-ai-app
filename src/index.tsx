@@ -1,7 +1,4 @@
 
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -572,6 +569,7 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [adminView, setAdminView] = useState<'clients' | 'library'>('clients');
 
     const fetchClients = async () => {
         setIsLoading(true);
@@ -581,8 +579,10 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
     };
 
     useEffect(() => {
-        fetchClients();
-    }, [gym._id]);
+        if (adminView === 'clients') {
+            fetchClients();
+        }
+    }, [gym._id, adminView]);
     
     const handleClientCreated = () => {
         fetchClients();
@@ -631,6 +631,10 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
         fetchClients();
     };
 
+    if (adminView === 'library') {
+        return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
+    }
+
     return (
         <div className="admin-dashboard">
             <div className="main-header">
@@ -642,7 +646,7 @@ const AdminDashboard: React.FC<{ onSelectClient: (dni: string) => void; onLogout
                     </div>
                 </div>
                 <div className="admin-header-nav">
-                    <ExerciseLibraryManager gymId={gym._id} />
+                    <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca de Ejercicios</button>
                     <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
                 </div>
             </div>
@@ -2474,23 +2478,17 @@ const ChatAssistant: React.FC<{
 
 
 // --- Exercise Library ---
-const ExerciseLibraryManager: React.FC<{ gymId: string }> = ({ gymId }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    
-    if (!isOpen) {
-        return <button className="header-nav-button" onClick={() => setIsOpen(true)}>Biblioteca de Ejercicios</button>;
-    }
-    
+const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
     return (
-        <div className="modal-overlay">
-            <div className="modal-content" style={{maxWidth: '900px', height: '90vh', display: 'flex', flexDirection: 'column', textAlign: 'left', padding: '1.5rem'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
-                    <h2 style={{fontSize: '1.8rem'}}>Biblioteca de Ejercicios</h2>
-                     <button onClick={() => setIsOpen(false)} className="close-button" style={{fontSize: '2rem', color: '#fff'}}>&times;</button>
+        <div className="admin-dashboard animated-fade-in">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                    <h1>Biblioteca de Ejercicios</h1>
                 </div>
-                 <div className="library-container" style={{flexGrow: 1, overflowY: 'auto', padding: '0.5rem'}}>
-                    <LibraryContent gymId={gymId} />
-                </div>
+                <button onClick={onBack} className="back-button">Volver al Panel</button>
+            </div>
+            <div className="library-container">
+                <LibraryContent gymId={gymId} />
             </div>
         </div>
     );
