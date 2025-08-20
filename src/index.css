@@ -1117,11 +1117,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    flex: 0 1 100px;
+    flex: 0 0 90px; /* No crecer, no encogerse, base de 90px. */
 }
 .form-group-inline.full-width {
     flex-basis: 100%;
-    max-width: none;
 }
 .form-group-inline label {
     font-size: 0.8rem;
