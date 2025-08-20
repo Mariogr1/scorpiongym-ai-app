@@ -1117,7 +1117,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    flex: 0 1 80px; /* No crecer, encogerse si es necesario, base de 80px. */
+    flex: 0 1 70px; /* No crecer, encogerse, base de 70px. */
+    min-width: 0;  /* ¡LA CLAVE! Permite que el elemento se encoja por debajo del tamaño de su contenido. */
 }
 .form-group-inline.full-width {
     flex-basis: 100%;
