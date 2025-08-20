@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1720,7 +1721,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
             case 'progress':
                 return <ProgressView clientData={clientData} />;
             case 'profile':
-                 return <ClientProfileView profile={clientData.profile} />;
+                 return <ClientProfileView clientData={clientData} />;
             default: return null;
         }
     }
@@ -1766,9 +1767,36 @@ const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
     </div>
 );
 
-const ClientProfileView: React.FC<{ profile: Profile }> = ({ profile }) => {
+const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+    const { profile, routine } = clientData;
     const bmi = useMemo(() => calculateBMI(parseFloat(profile.weight), parseFloat(profile.height)), [profile.weight, profile.height]);
     const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(profile.height)), [profile.height]);
+
+    const estimatedFinalWeight = useMemo(() => {
+        if (!routine?.totalDurationWeeks || !profile.weight || !profile.goal) {
+            return null;
+        }
+
+        const currentWeight = parseFloat(profile.weight);
+        const durationWeeks = routine.totalDurationWeeks;
+        let weightChangePerWeek = 0;
+
+        switch (profile.goal) {
+            case 'Pérdida de grasa':
+                weightChangePerWeek = -0.5; // kg/week
+                break;
+            case 'Hipertrofia':
+                weightChangePerWeek = 0.25; // kg/week
+                break;
+            default:
+                return null;
+        }
+
+        const finalWeight = currentWeight + (weightChangePerWeek * durationWeeks);
+        return finalWeight.toFixed(1);
+
+    }, [profile.weight, profile.goal, routine?.totalDurationWeeks]);
+
 
     return (
         <div className="client-profile-view animated-fade-in">
@@ -1817,6 +1845,11 @@ const ClientProfileView: React.FC<{ profile: Profile }> = ({ profile }) => {
                     </ul>
                 </div>
             </div>
+             {estimatedFinalWeight && (
+                <div className="target-weight-info" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                    Peso estimado al finalizar el plan: <strong>{estimatedFinalWeight} kg</strong>
+                </div>
+            )}
         </div>
     );
 };
@@ -1877,9 +1910,18 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
 // --- Client Portal: Routine Tracker ---
 
 const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void }> = ({ clientData, onProgressLogged }) => {
-    const { routine } = clientData;
+    const { routine, routineGeneratedDate } = clientData;
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const [activeSubTab, setActiveSubTab] = useState<'routine' | 'bodyWeight'>('routine');
+
+    const expirationDateString = useMemo(() => {
+        if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
+        const generated = new Date(routineGeneratedDate);
+        const expiration = new Date(generated);
+        expiration.setDate(expiration.getDate() + routine.totalDurationWeeks * 7);
+        return expiration.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    }, [routineGeneratedDate, routine?.totalDurationWeeks]);
+
 
     if (!routine) return null;
 
@@ -1888,6 +1930,7 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
              <div className="plan-header">
                 <h2>Mi Rutina: {routine.planName}</h2>
                 <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+                {expirationDateString && <p className="expiration-date">Tu plan finaliza el: <strong>{expirationDateString}</strong></p>}
             </div>
             
             <div className="sub-tabs-nav">
