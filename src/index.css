@@ -196,6 +196,11 @@ body {
     margin: -0.5rem 0 0.5rem 0;
 }
 
+.success-text {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
 .role-selection {
     display: flex;
     flex-direction: column;
@@ -367,6 +372,13 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.gym-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    border-color: var(--primary-color);
 }
 .gym-card-header {
     display: flex;
@@ -2344,6 +2356,11 @@ input:checked + .slider:before {
         position: static;
     }
     
+    .password-management form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
     .add-gym-form {
         grid-template-columns: 1fr;
     }

@@ -214,7 +214,7 @@ const App: React.FC = () => {
             case 'clientView':
                 return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
             case 'superAdminDashboard':
-                return <SuperAdminDashboard onLogout={handleLogout} />;
+                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} />;
             default:
                 return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
         }
@@ -290,7 +290,73 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
 
 // --- Super Admin View ---
 
-const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) => {
+const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccessMessage('');
+
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+        if (password.length < 4) {
+            setError('La contraseña debe tener al menos 4 caracteres.');
+            return;
+        }
+
+        setIsSaving(true);
+        const success = await apiClient.updateGym(gymId, { password });
+        if (success) {
+            setSuccessMessage('¡Contraseña actualizada con éxito!');
+            setPassword('');
+            setConfirmPassword('');
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } else {
+            setError('No se pudo actualizar la contraseña.');
+        }
+        setIsSaving(false);
+    };
+
+    return (
+        <div className="password-management">
+            <h2>Gestionar Contraseña de Superadmin</h2>
+            <form onSubmit={handleSave}>
+                <div className="form-group">
+                    <label>Nueva Contraseña</label>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        required
+                    />
+                </div>
+                <div className="form-group">
+                    <label>Confirmar Nueva Contraseña</label>
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        required
+                    />
+                </div>
+                <button type="submit" className="cta-button" disabled={isSaving}>
+                    {isSaving ? 'Guardando...' : 'Guardar Contraseña'}
+                </button>
+            </form>
+            {error && <p className="error-text" style={{ marginTop: '1rem' }}>{error}</p>}
+            {successMessage && <p className="success-text" style={{ marginTop: '1rem' }}>{successMessage}</p>}
+        </div>
+    );
+};
+
+const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void }> = ({ gym, onLogout }) => {
     const [gyms, setGyms] = useState<Gym[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingGym, setEditingGym] = useState<Gym | null>(null);
@@ -336,6 +402,8 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
                 <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
             </div>
             
+            <PasswordManagement gymId={gym._id} />
+
             <AddGymForm onGymCreated={handleGymCreated} />
 
             {editingGym && (
@@ -361,7 +429,7 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
             ) : (
                 <div className="gym-list">
                     {gyms.filter(g => g.username !== 'superadmin').map(gym => (
-                        <div key={gym._id} className="gym-card">
+                        <div key={gym._id} className="gym-card" onClick={() => setEditingGym(gym)}>
                            <div className="gym-card-header">
                                 {gym.logoSvg && (
                                     <div className="gym-card-logo">
@@ -374,8 +442,8 @@ const SuperAdminDashboard: React.FC<{ onLogout: () => void }> = ({ onLogout }) =
                                 </div>
                             </div>
                             <div className="gym-card-actions">
-                                <button className="action-btn edit" onClick={() => setEditingGym(gym)}>Editar</button>
-                                <button className="action-btn delete" onClick={() => setShowDeleteConfirm(gym)}>Eliminar</button>
+                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingGym(gym); }}>Editar</button>
+                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(gym); }}>Eliminar</button>
                             </div>
                         </div>
                     ))}
