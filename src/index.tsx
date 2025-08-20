@@ -203,7 +203,7 @@ const App: React.FC = () => {
     const renderView = () => {
         switch (view) {
             case 'landing':
-                return <LandingPage onSelectRole={(role) => setView('login')} />;
+                return <LandingPage onIngresar={() => setView('login')} />;
             case 'login':
                 return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
             case 'adminDashboard':
@@ -224,20 +224,16 @@ const App: React.FC = () => {
 
 // --- Landing & Login Views ---
 
-const LandingPage: React.FC<{ onSelectRole: (role: 'client' | 'gym') => void }> = ({ onSelectRole }) => {
+const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
     return (
-        <div className="login-container">
+        <div className="login-container landing-view">
             <header>
-                <img src="https://i.ibb.co/L6v2M12/logo-sg-copia.png" alt="ScorpionGYM Logo" className="app-logo" width="80" height="80"/>
-                <h1>Bienvenido a ScorpionGYM AI</h1>
-                <p>Tu asistente de entrenamiento personal.</p>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" />
+                <h1>Scorpion AI</h1>
+                <p className="landing-subtitle">bienvenido a tu plataforma inteligente</p>
             </header>
-            <div className="landing-box">
-                <h2>¿Cómo quieres ingresar?</h2>
-                <div className="role-selection">
-                    <button className="cta-button" onClick={() => onSelectRole('client')}>Soy Cliente</button>
-                    <button className="cta-button secondary" onClick={() => onSelectRole('gym')}>Soy Entrenador</button>
-                </div>
+            <div className="landing-actions">
+                <button className="cta-button" onClick={onIngresar}>Ingresar</button>
             </div>
         </div>
     );
@@ -256,7 +252,7 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
     return (
         <div className="login-container">
              <header>
-                <img src="https://i.ibb.co/L6v2M12/logo-sg-copia.png" alt="ScorpionGYM Logo" className="app-logo" width="80" height="80"/>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
             </header>
             <div className="login-box">
                 <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
@@ -1851,7 +1847,7 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
     return (
         <div className="agreement-container">
             <header>
-                 <img src="https://i.ibb.co/L6v2M12/logo-sg-copia.png" alt="ScorpionGYM Logo" className="app-logo" width="80" height="80"/>
+                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
                  <h1>Términos y Condiciones</h1>
             </header>
             <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>

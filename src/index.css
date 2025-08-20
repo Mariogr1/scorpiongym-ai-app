@@ -202,6 +202,40 @@ body {
     gap: 1rem;
 }
 
+/* --- Estilos para la nueva Landing View --- */
+.landing-view {
+    justify-content: center; /* Centra verticalmente */
+}
+
+.landing-view header {
+    margin-bottom: 3rem;
+}
+
+.landing-view header .app-logo {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 1.5rem;
+}
+
+.landing-view header h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.landing-subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 0;
+}
+
+.landing-actions {
+    width: 100%;
+    max-width: 400px;
+}
+
+
 /* --- Panel de Administrador General --- */
 .password-management {
     background-color: var(--surface-color);
