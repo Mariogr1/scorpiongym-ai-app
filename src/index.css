@@ -1096,7 +1096,7 @@ body {
 }
 .exercise-item {
     background-color: var(--background-color);
-    padding: 1.25rem;
+    padding: 1.25rem 0.75rem;
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
 }
@@ -1359,7 +1359,7 @@ body {
 
 .exercise-tracking {
     display: flex;
-    gap: 1rem;
+    gap: 0.5rem;
     margin-top: 1rem;
     align-items: flex-end;
 }
@@ -1377,6 +1377,17 @@ body {
     width: 100%;
     padding: 0.6rem;
     font-size: 1rem;
+}
+.exercise-tracking .cta-button.secondary {
+    flex-shrink: 0;
+    width: 44px;
+    height: 40px;
+    padding: 0;
+    font-size: 1.5rem;
+    line-height: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 .save-progress-button {
     margin-top: 1.5rem;
@@ -2380,13 +2391,13 @@ input:checked + .slider:before {
     }
 
     .exercise-item {
-        padding: 1rem;
+        padding: 1rem 0.5rem;
     }
 
     .exercise-tracking {
         flex-direction: row;
         align-items: flex-end;
-        gap: 1rem;
+        gap: 0.5rem;
     }
     
     .save-progress-button {
