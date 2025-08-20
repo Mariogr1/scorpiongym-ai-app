@@ -1096,6 +1096,7 @@ body {
     border-radius: 6px;
     font-size: 1rem;
     font-weight: 600;
+    min-width: 0; /* Evita que el contenido largo (nombres de ejercicios) expanda el contenedor flex */
 }
 .delete-exercise-btn {
     background-color: var(--error-color);

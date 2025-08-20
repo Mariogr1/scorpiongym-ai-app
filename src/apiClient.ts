@@ -128,12 +128,12 @@ export interface Gym {
 
 // --- Constants ---
 
-export const advancedTechniqueOptions = [
-      { value: '', label: 'Ninguna' },
-      { value: 'Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.', label: 'Drop Set (2 descensos)' },
-      { value: 'Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.', label: 'Rest-Pause (3 pausas)' },
-      { value: 'Myo-reps (3 pasadas) - Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.', label: 'Myo-reps (3 pasadas)' },
-      { value: 'Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.', label: 'Excéntricas (Negativas)' }
+export const advancedTechniqueOptions: { value: string; label: string; description: string; }[] = [
+      { value: '', label: 'Ninguna', description: 'Sin técnica avanzada.' },
+      { value: 'Drop Set', label: 'Drop Set (2 descensos)', description: 'Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.' },
+      { value: 'Rest-Pause', label: 'Rest-Pause (3 pausas)', description: 'Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.' },
+      { value: 'Myo-reps', label: 'Myo-reps (3 pasadas)', description: 'Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.' },
+      { value: 'Excéntricas', label: 'Excéntricas (Negativas)', description: 'Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.' }
 ];
 
 export const apiClient = {
