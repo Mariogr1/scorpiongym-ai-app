@@ -1,5 +1,4 @@
 
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -107,7 +106,7 @@ const calculateBMI = (weight: number, height: number): { value: number; category
     if (roundedBmi < 18.5) categoryClass = 'underweight';
     else if (roundedBmi >= 25 && roundedBmi < 30) categoryClass = 'overweight';
     else if (roundedBmi >= 30) categoryClass = 'obesity';
-    return { value: roundedBmi, categoryClass };
+    return { value: roundedBmi, categoryClass: categoryClass };
 };
 
 /**
@@ -949,9 +948,26 @@ const ProfileEditor: React.FC<{
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
+    const muscleGroups = {
+        superior: ['General', 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'],
+        inferior: ['General', 'Cuádriceps', 'Femorales e Isquiotibiales', 'Glúteos', 'Aductores y Abductores', 'Gemelos y Sóleos']
+    };
+
     useEffect(() => {
         setProfile(clientData.profile);
     }, [clientData.profile]);
+
+    // Reset muscle focus when body focus changes
+    useEffect(() => {
+        if (profile.bodyFocusArea === 'Cuerpo completo') {
+             if (profile.muscleFocus !== 'General') {
+                handleChange('muscleFocus', 'General');
+             }
+        } else if (profile.muscleFocus && !getMuscleFocusOptions().includes(profile.muscleFocus)) {
+            handleChange('muscleFocus', 'General');
+        }
+    }, [profile.bodyFocusArea]);
+
 
     const handleChange = (field: keyof Profile, value: string) => {
         setProfile(prev => ({ ...prev, [field]: value }));
@@ -992,6 +1008,12 @@ const ProfileEditor: React.FC<{
     const bmi = useMemo(() => {
         return calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
     }, [profile.weight, profile.height]);
+    
+    const getMuscleFocusOptions = () => {
+        if (profile.bodyFocusArea === 'Tren Superior') return muscleGroups.superior;
+        if (profile.bodyFocusArea === 'Tren Inferior') return muscleGroups.inferior;
+        return [];
+    };
 
     return (
         <div>
@@ -1049,6 +1071,24 @@ const ProfileEditor: React.FC<{
                     <input type="number" min="1" max="7" value={profile.trainingDays} onChange={e => handleChange('trainingDays', e.target.value)} />
                 </div>
                  <div className="form-group">
+                    <label>Índice de Actividad (fuera del gym)</label>
+                     <select value={profile.activityFactor} onChange={e => handleChange('activityFactor', e.target.value)}>
+                        <option value="Sedentario">Sedentario (poco o nada de ejercicio)</option>
+                        <option value="Ligero">Ligero (ejercicio/deporte 1-3 días/sem)</option>
+                        <option value="Activo">Activo (ejercicio/deporte 3-5 días/sem)</option>
+                        <option value="Muy Activo">Muy Activo (ejercicio/deporte 6-7 días/sem)</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Intensidad del Entrenamiento</label>
+                     <select value={profile.trainingIntensity} onChange={e => handleChange('trainingIntensity', e.target.value)}>
+                        <option value="Baja">Baja</option>
+                        <option value="Moderada">Moderada</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Extrema">Extrema</option>
+                    </select>
+                </div>
+                 <div className="form-group">
                     <label>Enfoque Corporal</label>
                      <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
                         <option value="Cuerpo completo">Cuerpo completo</option>
@@ -1057,9 +1097,13 @@ const ProfileEditor: React.FC<{
                     </select>
                 </div>
                 {['Tren Superior', 'Tren Inferior'].includes(profile.bodyFocusArea) && (
-                    <div className="form-group">
-                        <label>Músculo a Enfocar (Opcional)</label>
-                        <input type="text" value={profile.muscleFocus} onChange={e => handleChange('muscleFocus', e.target.value)} placeholder="Ej: Pecho, Glúteos..." />
+                    <div className="form-group animated-fade-in">
+                        <label>Músculo a Enfocar</label>
+                        <select value={profile.muscleFocus} onChange={e => handleChange('muscleFocus', e.target.value)}>
+                            {getMuscleFocusOptions().map(group => (
+                                <option key={group} value={group}>{group}</option>
+                            ))}
+                        </select>
                     </div>
                 )}
                  <div className="form-group">
@@ -1183,7 +1227,7 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 6.  Aplica 'tecnicaAvanzada' solo si el perfil del cliente lo permite ('useAdvancedTechniques: "Sí"'). Las opciones válidas son: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, el valor debe ser un string vacío "".
                 7.  Si el perfil incluye 'includeAdaptationPhase: "Sí"', la primera fase debe ser de adaptación.
                 8.  Si el perfil incluye 'includeDeloadPhase: "Sí"', una de las fases (preferiblemente intermedia o la última) debe ser una "Fase de Descarga" con una notable reducción de volumen e intensidad (ej. reducir series, usar pesos más ligeros) para facilitar la recuperación.
-                9.  Ajusta la intensidad, volumen y selección de ejercicios según el 'level', 'goal' e 'trainingIntensity' del cliente.
+                9.  Ajusta el número de ejercicios por día según la 'trainingIntensity' del perfil: 'Baja' (5-6 ejercicios), 'Moderada' (6-7), 'Alta' (8-10), y 'Extrema' (11-13, mezclando fuerza, hipertrofia y resistencia).
                 10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
             `;
             
@@ -1650,7 +1694,7 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
                 1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
                 2.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
-                3.  Calcula las calorías y macronutrientes basándote en el perfil del cliente (peso, altura, edad, género, nivel de actividad, objetivo). Sé preciso.
+                3.  Calcula las calorías y macronutrientes basándote en el perfil completo del cliente (peso, altura, edad, género, nivel de experiencia, objetivo y MUY IMPORTANTE, su 'activityFactor'). Sé preciso.
                 4.  El JSON debe seguir esta estructura exacta:
                     {
                         "planTitle": "Título del Plan (ej: Dieta para Hipertrofia)",
