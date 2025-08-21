@@ -892,9 +892,6 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
 
     return (
         <div className="client-management-view">
-             {gym.logoSvg && (
-                <div className="background-logo-container" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />
-            )}
              <div className="main-header">
                 <div className="header-title-wrapper">
                     {gym.logoSvg && <div className="app-logo" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />}
