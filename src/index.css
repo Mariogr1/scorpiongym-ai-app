@@ -99,6 +99,12 @@ body {
     margin-bottom: 1.5rem;
 }
 
+.success-message p {
+    color: var(--success-color);
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
 
 .modal-content p {
   font-size: 1.2rem;
@@ -432,6 +438,7 @@ body {
 
 .admin-header-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     align-items: center;
 }
@@ -445,9 +452,27 @@ body {
     cursor: pointer;
     transition: background-color 0.2s;
     font-weight: 500;
+    position: relative;
 }
 .header-nav-button:hover {
     background-color: var(--secondary-button-hover);
+}
+
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 2px solid var(--surface-color);
 }
 
 
@@ -465,7 +490,7 @@ body {
     flex-wrap: wrap;
     gap: 1.5rem;
     max-width: 100%;
-    margin-bottom: 1.5rem;
+    margin: 2rem 0;
 }
 
 .add-client-form, .search-client-form {
@@ -1411,6 +1436,11 @@ body {
     margin-right: 0.5rem;
 }
 
+.request-change-button {
+    width: 100%;
+    margin: 1.5rem 0;
+}
+
 .exercise-tracking {
     display: flex;
     gap: 0.5rem;
@@ -1452,7 +1482,7 @@ body {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
 }
 .save-progress-button.saved {
     background-color: var(--success-color);
@@ -1828,7 +1858,7 @@ body {
     border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
     flex-shrink: 0;
 }
 
@@ -2319,6 +2349,60 @@ input:checked + .slider:before {
   fill: var(--text-color);
   transform: translateX(1px);
 }
+
+/* --- Trainer Request/Ticket System --- */
+.requests-view-container {
+    padding-top: 2rem;
+}
+.request-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.request-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+.request-card.status-new { border-left-color: var(--primary-color); }
+.request-card.status-read { border-left-color: var(--text-secondary-color); }
+.request-card.status-resolved { border-left-color: var(--success-color); opacity: 0.8; }
+
+.request-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.request-card-info h4 { font-size: 1.2rem; margin-bottom: 0.25rem; }
+.request-card-info span { font-size: 0.9rem; color: var(--text-secondary-color); }
+.request-status-badge {
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    text-transform: uppercase;
+}
+.request-status-badge.status-new { background-color: var(--primary-color); color: var(--text-color); }
+.request-status-badge.status-read { background-color: var(--secondary-button-color); color: var(--text-color); }
+.request-status-badge.status-resolved { background-color: var(--success-color); color: var(--text-color); }
+
+.request-card-body strong { display: block; margin-bottom: 0.5rem; color: var(--text-color); }
+.request-card-body p { color: var(--text-secondary-color); white-space: pre-wrap; }
+
+.request-card-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
 
 /* --- Responsive Design --- */
 

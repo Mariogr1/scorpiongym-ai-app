@@ -129,6 +129,17 @@ export interface Gym {
     logoSvg?: string;
 }
 
+export interface Request {
+    _id: string;
+    clientId: string;
+    clientName: string;
+    gymId: string;
+    subject: string;
+    message: string;
+    status: 'new' | 'read' | 'resolved';
+    createdAt: string;
+}
+
 
 // --- Constants ---
 
@@ -349,6 +360,56 @@ export const apiClient = {
     } catch (error) {
         console.error(`Failed to save exercise library:`, error);
         return false;
+    }
+  },
+
+  // --- Trainer Request System ---
+  async getRequests(gymId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?gymId=${gymId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch requests:", error);
+      return [];
+    }
+  },
+
+  async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
+    try {
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to create request:", error);
+      return false;
+    }
+  },
+
+  async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to update request ${requestId}:`, error);
+      return false;
+    }
+  },
+
+  async deleteRequest(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to delete request ${requestId}:`, error);
+      return false;
     }
   },
 };

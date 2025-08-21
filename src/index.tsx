@@ -24,7 +24,8 @@ import {
     ExerciseDefinition,
     Gym,
     Phase,
-    DayPlan
+    DayPlan,
+    Request as TrainerRequest // Renamed to avoid conflict
 } from './apiClient';
 
 
@@ -662,30 +663,42 @@ const AdminDashboard: React.FC<{
     onBackToSuperAdmin: () => void;
 }> = ({ onSelectClient, onLogout, gym, loggedInGym, onBackToSuperAdmin }) => {
     const [clients, setClients] = useState<ClientListItem[]>([]);
+    const [requests, setRequests] = useState<TrainerRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [adminView, setAdminView] = useState<'clients' | 'library'>('clients');
+    const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests'>('clients');
 
-    const fetchClients = async () => {
+    const fetchAllData = async () => {
         setIsLoading(true);
-        const fetchedClients = await apiClient.getClients(gym._id);
+        const [fetchedClients, fetchedRequests] = await Promise.all([
+            apiClient.getClients(gym._id),
+            apiClient.getRequests(gym._id)
+        ]);
         setClients(fetchedClients);
+        setRequests(fetchedRequests);
         setIsLoading(false);
+    };
+    
+    const fetchRequests = async () => {
+        const fetchedRequests = await apiClient.getRequests(gym._id);
+        setRequests(fetchedRequests);
     };
 
     useEffect(() => {
-        if (adminView === 'clients') {
-            fetchClients();
-        }
-    }, [gym._id, adminView]);
+        fetchAllData();
+    }, [gym._id]);
     
     const handleClientCreated = () => {
-        fetchClients();
+        fetchAllData();
     };
+
+    const newRequestCount = useMemo(() => {
+        return requests.filter(r => r.status === 'new').length;
+    }, [requests]);
 
     const filteredClients = useMemo(() => {
         return clients
@@ -719,7 +732,7 @@ const AdminDashboard: React.FC<{
         await apiClient.updateClientStatus(selectedClients, newStatus);
         setSelectedClients(new Set());
         setSelectionMode(false);
-        fetchClients();
+        fetchAllData();
     };
     
     const handleDeleteSelected = async () => {
@@ -727,11 +740,82 @@ const AdminDashboard: React.FC<{
         setShowDeleteConfirm(false);
         setSelectedClients(new Set());
         setSelectionMode(false);
-        fetchClients();
+        fetchAllData();
     };
 
-    if (adminView === 'library') {
-        return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
+    const renderCurrentView = () => {
+        switch(adminView) {
+            case 'library':
+                return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
+            case 'requests':
+                return <RequestsView requests={requests} onUpdateRequest={fetchRequests} />;
+            case 'clients':
+            default:
+                return (
+                    <>
+                        <div className="client-management-bar">
+                             <AddClientForm onClientCreated={handleClientCreated} gymId={gym._id} />
+                             <div className="search-client-form">
+                                 <input
+                                    type="text"
+                                    placeholder="Buscar por nombre o DNI..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                             </div>
+                        </div>
+                        <div className="view-controls">
+                            <div className="view-toggle">
+                                <button onClick={() => setViewMode('active')} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
+                                <button onClick={() => setViewMode('archived')} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
+                            </div>
+                            <div className="selection-controls">
+                                 <button onClick={toggleSelectionMode} className="selection-toggle-button">
+                                    {selectionMode ? 'Cancelar Selección' : 'Seleccionar Varios'}
+                                </button>
+                                {selectionMode && (
+                                    <>
+                                       {viewMode === 'active' ? (
+                                           <button onClick={() => handleUpdateStatus('archived')} className="archive-selected-button" disabled={selectedClients.size === 0}>Archivar</button>
+                                       ) : (
+                                           <button onClick={() => handleUpdateStatus('active')} className="restore-selected-button" disabled={selectedClients.size === 0}>Restaurar</button>
+                                       )}
+                                       <button onClick={() => setShowDeleteConfirm(true)} className="delete-selected-button" disabled={selectedClients.size === 0}>Eliminar</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        {isLoading ? (
+                             <div className="loading-container"><div className="spinner"></div>Cargando clientes...</div>
+                        ) : (
+                            <div className="client-list">
+                                {filteredClients.map(client => (
+                                    <div 
+                                       key={client.dni} 
+                                       className={`client-card ${selectionMode ? 'selection-mode' : ''} ${selectedClients.has(client.dni) ? 'selected' : ''}`}
+                                       onClick={() => handleCardClick(client)}
+                                    >
+                                        {selectionMode && (
+                                           <input 
+                                              type="checkbox" 
+                                              className="client-selection-checkbox"
+                                              checked={selectedClients.has(client.dni)}
+                                              readOnly
+                                           />
+                                        )}
+                                        <div className="client-card-header">
+                                            <h3>{client.profile?.name || 'Nuevo Cliente'}</h3>
+                                            {client.planStatus === 'pending' && <span className="client-status-badge pending">Pendiente</span>}
+                                        </div>
+                                        <p>DNI: {client.dni}</p>
+                                        <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                );
+        }
     }
 
     const isImpersonating = loggedInGym.username === 'superadmin' && gym.username !== 'superadmin';
@@ -747,77 +831,21 @@ const AdminDashboard: React.FC<{
                     </div>
                 </div>
                 <div className="admin-header-nav">
-                    <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca de Ejercicios</button>
+                     <button className="header-nav-button" onClick={() => setAdminView('clients')}>Clientes</button>
+                     <button className="header-nav-button" onClick={() => setAdminView('requests')}>
+                        Bandeja de Entrada
+                        {newRequestCount > 0 && <span className="notification-badge">{newRequestCount}</span>}
+                    </button>
+                    <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca</button>
                     {isImpersonating ? (
-                        <button onClick={onBackToSuperAdmin} className="back-button">Volver a Super Admin</button>
+                        <button onClick={onBackToSuperAdmin} className="back-button">Volver</button>
                     ) : (
                         <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
                     )}
                 </div>
             </div>
 
-            <div className="client-management-bar">
-                 <AddClientForm onClientCreated={handleClientCreated} gymId={gym._id} />
-                 <div className="search-client-form">
-                     <input
-                        type="text"
-                        placeholder="Buscar por nombre o DNI..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                 </div>
-            </div>
-
-            <div className="view-controls">
-                <div className="view-toggle">
-                    <button onClick={() => setViewMode('active')} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
-                    <button onClick={() => setViewMode('archived')} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
-                </div>
-                <div className="selection-controls">
-                     <button onClick={toggleSelectionMode} className="selection-toggle-button">
-                        {selectionMode ? 'Cancelar Selección' : 'Seleccionar Varios'}
-                    </button>
-                    {selectionMode && (
-                        <>
-                           {viewMode === 'active' ? (
-                               <button onClick={() => handleUpdateStatus('archived')} className="archive-selected-button" disabled={selectedClients.size === 0}>Archivar</button>
-                           ) : (
-                               <button onClick={() => handleUpdateStatus('active')} className="restore-selected-button" disabled={selectedClients.size === 0}>Restaurar</button>
-                           )}
-                           <button onClick={() => setShowDeleteConfirm(true)} className="delete-selected-button" disabled={selectedClients.size === 0}>Eliminar</button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {isLoading ? (
-                <div className="loading-container"><div className="spinner"></div>Cargando clientes...</div>
-            ) : (
-                <div className="client-list">
-                    {filteredClients.map(client => (
-                        <div 
-                           key={client.dni} 
-                           className={`client-card ${selectionMode ? 'selection-mode' : ''} ${selectedClients.has(client.dni) ? 'selected' : ''}`}
-                           onClick={() => handleCardClick(client)}
-                        >
-                            {selectionMode && (
-                               <input 
-                                  type="checkbox" 
-                                  className="client-selection-checkbox"
-                                  checked={selectedClients.has(client.dni)}
-                                  readOnly
-                               />
-                            )}
-                            <div className="client-card-header">
-                                <h3>{client.profile?.name || 'Nuevo Cliente'}</h3>
-                                {client.planStatus === 'pending' && <span className="client-status-badge pending">Pendiente</span>}
-                            </div>
-                            <p>DNI: {client.dni}</p>
-                            <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {renderCurrentView()}
             
             {showDeleteConfirm && (
                 <ConfirmationModal
@@ -1973,11 +2001,14 @@ const ClientOnboardingView: React.FC<{
 
 const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>('routine');
+    const [showRequestModal, setShowRequestModal] = useState(false);
 
     const renderContent = () => {
         switch(activeTab) {
             case 'routine':
-                return clientData.routine ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} /> : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
+                return clientData.routine 
+                    ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} /> 
+                    : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
             case 'diet':
                 return clientData.dietPlan ? <ClientDietView dietPlan={clientData.dietPlan} /> : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
             case 'progress':
@@ -1999,6 +2030,12 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
             <div className="animated-fade-in">
                 {renderContent()}
             </div>
+             {showRequestModal && (
+                <RequestModal 
+                    client={clientData} 
+                    onClose={() => setShowRequestModal(false)}
+                />
+            )}
         </div>
     );
 }
@@ -2171,7 +2208,7 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
 
 // --- Client Portal: Routine Tracker ---
 
-const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void }> = ({ clientData, onProgressLogged }) => {
+const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void }> = ({ clientData, onProgressLogged, onRequestChange }) => {
     const { routine, routineGeneratedDate } = clientData;
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const [activeSubTab, setActiveSubTab] = useState<'routine' | 'bodyWeight'>('routine');
@@ -2194,6 +2231,10 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
                 <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
                 {expirationDateString && <p className="expiration-date">Tu plan finaliza el: <strong>{expirationDateString}</strong></p>}
             </div>
+
+            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
+                Solicitar Cambio al Entrenador
+            </button>
             
             <div className="sub-tabs-nav">
                 <button 
@@ -3023,6 +3064,153 @@ const ConfirmationModal: React.FC<{
                         {confirmText}
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Trainer Request/Ticket System ---
+
+const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('Cambiar un ejercicio');
+    const [message, setMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!message.trim()) {
+            alert("Por favor, escribe un mensaje.");
+            return;
+        }
+        setIsSubmitting(true);
+        setStatus('idle');
+        
+        const success = await apiClient.createRequest({
+            clientId: client.dni,
+            clientName: client.profile.name,
+            gymId: client.gymId,
+            subject,
+            message
+        });
+
+        if (success) {
+            setStatus('success');
+            setMessage('');
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } else {
+            setStatus('error');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal">
+                <h3>Contactar a tu Entrenador</h3>
+                {status === 'success' ? (
+                    <div className="success-message">
+                        <p>¡Mensaje enviado! Tu entrenador lo revisará pronto.</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label htmlFor="request-subject">Asunto</label>
+                            <select id="request-subject" value={subject} onChange={e => setSubject(e.target.value)}>
+                                <option>Cambiar un ejercicio</option>
+                                <option>Ajustar dificultad (muy fácil/difícil)</option>
+                                <option>Dudas sobre la rutina</option>
+                                <option>Otro</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="request-message">Mensaje</label>
+                            <textarea
+                                id="request-message"
+                                rows={5}
+                                value={message}
+                                onChange={e => setMessage(e.target.value)}
+                                placeholder="Escribe aquí tu consulta o el cambio que te gustaría solicitar..."
+                                required
+                            ></textarea>
+                        </div>
+                        {status === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
+                        <div className="modal-actions" style={{ marginTop: '2rem' }}>
+                            <button type="button" className="cta-button secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</button>
+                            <button type="submit" className="cta-button" disabled={isSubmitting}>
+                                {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
+    const [filter, setFilter] = useState<'new' | 'read' | 'resolved' | 'all'>('all');
+    
+    const filteredRequests = useMemo(() => {
+        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (filter === 'all') return sorted;
+        return sorted.filter(r => r.status === filter);
+    }, [requests, filter]);
+
+    if (requests.length === 0) {
+        return <div className="placeholder">No hay solicitudes de clientes.</div>;
+    }
+
+    return (
+        <div className="requests-view-container">
+            <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
+                <button className={`view-toggle-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
+                <button className={`view-toggle-button ${filter === 'new' ? 'active' : ''}`} onClick={() => setFilter('new')}>Nuevos</button>
+                <button className={`view-toggle-button ${filter === 'read' ? 'active' : ''}`} onClick={() => setFilter('read')}>Leídos</button>
+                <button className={`view-toggle-button ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>Resueltos</button>
+            </div>
+            <div className="request-list">
+                {filteredRequests.map(req => (
+                    <RequestCard key={req._id} request={req} onUpdate={onUpdateRequest} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const RequestCard: React.FC<{ request: TrainerRequest, onUpdate: () => void }> = ({ request, onUpdate }) => {
+
+    const handleUpdateStatus = async (newStatus: 'read' | 'resolved') => {
+        const success = await apiClient.updateRequestStatus(request._id, newStatus);
+        if (success) onUpdate();
+    };
+
+    const handleDelete = async () => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
+            const success = await apiClient.deleteRequest(request._id);
+            if (success) onUpdate();
+        }
+    };
+    
+    return (
+        <div className={`request-card status-${request.status}`}>
+            <div className="request-card-header">
+                <div className="request-card-info">
+                    <h4>{request.clientName}</h4>
+                    <span>{new Date(request.createdAt).toLocaleString('es-ES')}</span>
+                </div>
+                <span className={`request-status-badge status-${request.status}`}>{request.status.toUpperCase()}</span>
+            </div>
+            <div className="request-card-body">
+                <strong>{request.subject}</strong>
+                <p>{request.message}</p>
+            </div>
+            <div className="request-card-actions">
+                {request.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus('read')}>Marcar como Leído</button>}
+                {request.status === 'read' && <button className="action-btn save" onClick={() => handleUpdateStatus('resolved')}>Marcar como Resuelto</button>}
+                <button className="action-btn delete" onClick={handleDelete}>Borrar</button>
             </div>
         </div>
     );
