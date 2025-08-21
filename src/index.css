@@ -60,13 +60,6 @@ body {
     border: 1px solid var(--border-color);
 }
 
-/* Fix para la visibilidad del logo SVG */
-.main-header .app-logo svg,
-.svg-logo-wrapper svg {
-    width: 100%;
-    height: 100%;
-}
-
 
 /* --- Modal de Confirmación y Edición --- */
 .modal-overlay {
@@ -357,19 +350,7 @@ body {
   font-weight: 600;
   font-size: 0.8rem;
   overflow: hidden;
-}
-.file-input-preview .svg-logo-wrapper {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 5px;
-}
-.file-input-preview .svg-logo-wrapper svg {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+  padding: 5px; /* Add padding for the inner image */
 }
 
 .gym-list {
@@ -413,16 +394,6 @@ body {
     padding: 5px;
     border: 1px solid var(--border-color);
 }
-.gym-card-logo .svg-logo-wrapper {
-    width: 100%;
-    height: 100%;
-}
-.gym-card-logo .svg-logo-wrapper svg {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
 
 .gym-card-info {
     flex-grow: 1;

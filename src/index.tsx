@@ -126,6 +126,16 @@ const calculateTargetWeight = (height: number): string => {
 
 // --- React Components ---
 
+const SvgImage: React.FC<{ svgString: string | null | undefined, altText: string }> = ({ svgString, altText }) => {
+    if (!svgString) {
+        return null;
+    }
+    // Handles potential UTF-8 characters in SVG string for btoa
+    const toB64 = (str: string) => btoa(unescape(encodeURIComponent(str)));
+    const dataUri = `data:image/svg+xml;base64,${toB64(svgString)}`;
+    return <img src={dataUri} alt={altText} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />;
+};
+
 /**
  * Main application component that handles routing and state.
  */
@@ -451,7 +461,7 @@ const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGy
                            <div className="gym-card-header">
                                 {gym.logoSvg && (
                                     <div className="gym-card-logo">
-                                        <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />
+                                        <SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} />
                                     </div>
                                 )}
                                 <div className="gym-card-info">
@@ -539,7 +549,7 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
                         <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
                         <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
                         <div className="file-input-preview">
-                            {logoSvg ? <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: logoSvg }} /> : 'SVG'}
+                            {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
                         </div>
                     </div>
                 </div>
@@ -624,7 +634,7 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
                              <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
                              {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
                              <div className="file-input-preview">
-                                {logoSvg ? <div className="svg-logo-wrapper" dangerouslySetInnerHTML={{ __html: logoSvg }} /> : 'SVG'}
+                                {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
                             </div>
                         </div>
                     </div>
@@ -730,7 +740,7 @@ const AdminDashboard: React.FC<{
         <div className="admin-dashboard">
             <div className="main-header">
                 <div className="header-title-wrapper">
-                    {gym.logoSvg && <div className="app-logo" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />}
+                    {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
                     <div>
                         <h1>{gym.name}</h1>
                         <p>{isImpersonating ? `Gestionando como Superadmin` : 'Panel de Entrenador'}</p>
@@ -894,7 +904,7 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
         <div className="client-management-view">
              <div className="main-header">
                 <div className="header-title-wrapper">
-                    {gym.logoSvg && <div className="app-logo" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />}
+                    {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
                      <div>
                         <h1>{clientData.profile.name || `Cliente ${clientData.dni}`}</h1>
                         <p>DNI: {clientData.dni}</p>
