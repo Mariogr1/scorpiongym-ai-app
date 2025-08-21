@@ -59,9 +59,17 @@ body {
     padding: 5px;
     border: 1px solid var(--border-color);
 }
-.gym-card .app-logo {
+
+/* Fix para la visibilidad del logo SVG */
+.main-header .app-logo svg,
+.svg-logo-wrapper svg {
     width: 100%;
     height: 100%;
+}
+/* Forzar el color del SVG a blanco para que sea visible en fondos oscuros */
+.main-header .app-logo svg *,
+.svg-logo-wrapper svg * {
+    fill: var(--text-color);
 }
 
 
