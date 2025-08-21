@@ -107,6 +107,7 @@ export interface ClientData {
     termsAccepted?: boolean;
     accessCode: string;
     status?: 'active' | 'archived';
+    planStatus: 'pending' | 'active' | 'expired';
     dailyQuestionLimit?: number; // Added from Gym
     aiUsage?: { date: string; count: number }; // Added to track usage
 }
@@ -116,6 +117,8 @@ export interface ClientListItem {
     profile: Partial<Profile>;
     planName: string;
     status: 'active' | 'archived';
+    accessCode: string;
+    planStatus: 'pending' | 'active' | 'expired';
 }
 
 export interface Gym {
@@ -300,6 +303,20 @@ export const apiClient = {
         const data: ClientData = await response.json();
         return data.accessCode === accessCode && (data.status === 'active' || data.status === undefined);
     } catch (error) {
+        return false;
+    }
+  },
+
+  async enablePlanGeneration(dni: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reset_plan' }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to enable plan generation for client ${dni}:`, error);
         return false;
     }
   },

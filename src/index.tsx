@@ -798,9 +798,12 @@ const AdminDashboard: React.FC<{
                                   readOnly
                                />
                             )}
-                            <h3>{client.profile?.name || 'Nuevo Cliente'}</h3>
+                            <div className="client-card-header">
+                                <h3>{client.profile?.name || 'Nuevo Cliente'}</h3>
+                                {client.planStatus === 'pending' && <span className="client-status-badge pending">Pendiente</span>}
+                            </div>
                             <p>DNI: {client.dni}</p>
-                            <p>Plan: {client.planName}</p>
+                            <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
                         </div>
                     ))}
                 </div>
@@ -868,13 +871,14 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
 
+     const fetchClientData = async () => {
+        setIsLoading(true);
+        const data = await apiClient.getClientData(dni);
+        setClientData(data);
+        setIsLoading(false);
+    };
+
     useEffect(() => {
-        const fetchClientData = async () => {
-            setIsLoading(true);
-            const data = await apiClient.getClientData(dni);
-            setClientData(data);
-            setIsLoading(false);
-        };
         fetchClientData();
     }, [dni]);
     
@@ -903,7 +907,7 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
             </div>
             <div className="dashboard-grid">
                 <aside className="profile-section">
-                    <ProfileEditor clientData={clientData} setClientData={setClientData} />
+                    <ProfileEditor clientData={clientData} setClientData={setClientData} onDataUpdate={fetchClientData}/>
                 </aside>
                 <main className="main-content">
                     <nav className="main-tabs-nav">
@@ -934,20 +938,28 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
     );
 };
 
-const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; }> = ({ clientData, setClientData }) => {
+const ProfileEditor: React.FC<{ 
+    clientData: ClientData; 
+    setClientData: (data: ClientData) => void; 
+    onDataUpdate?: () => void; // Optional callback for parent
+    isClientOnboarding?: boolean;
+}> = ({ clientData, setClientData, onDataUpdate, isClientOnboarding = false }) => {
     const [profile, setProfile] = useState<Profile>(clientData.profile);
-    const [isModified, setIsModified] = useState(false);
+    const [isModified, setIsModified] = useState(isClientOnboarding);
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
     useEffect(() => {
-        setProfile(clientData.profile); // Sync with parent if clientData changes
+        setProfile(clientData.profile);
     }, [clientData.profile]);
 
     const handleChange = (field: keyof Profile, value: string) => {
         setProfile(prev => ({ ...prev, [field]: value }));
-        setIsModified(true);
-        setSaveStatus('idle');
+        setClientData({ ...clientData, profile: { ...profile, [field]: value } }); // Update parent immediately for generators
+        if (!isClientOnboarding) {
+            setIsModified(true);
+            setSaveStatus('idle');
+        }
     };
 
     const handleSave = async () => {
@@ -957,11 +969,24 @@ const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: Cl
             setClientData({ ...clientData, profile });
             setSaveStatus('saved');
             setIsModified(false);
+            if(onDataUpdate) onDataUpdate();
             setTimeout(() => setSaveStatus('idle'), 2000);
         } else {
             setSaveStatus('error');
         }
         setIsSaving(false);
+    };
+
+    const handleEnableGeneration = async () => {
+        if (window.confirm("¿Estás seguro de que quieres habilitar la generación de un nuevo plan para este cliente? Su plan actual será borrado.")) {
+            const success = await apiClient.enablePlanGeneration(clientData.dni);
+            if (success) {
+                alert("¡Listo! El cliente ahora puede generar un nuevo plan.");
+                if(onDataUpdate) onDataUpdate();
+            } else {
+                alert("Error al habilitar la generación del plan.");
+            }
+        }
     };
 
     const bmi = useMemo(() => {
@@ -970,9 +995,9 @@ const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: Cl
 
     return (
         <div>
-            <h2>Perfil del Cliente</h2>
+            <h2>{isClientOnboarding ? "Completa tu Perfil" : "Perfil del Cliente"}</h2>
             <form className="profile-form">
-                <div className="form-group">
+                 <div className="form-group">
                     <label>Nombre</label>
                     <input type="text" value={profile.name} onChange={e => handleChange('name', e.target.value)} />
                 </div>
@@ -1058,16 +1083,23 @@ const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: Cl
                         <option value="Sí">Sí</option>
                     </select>
                 </div>
-                {isModified && (
+                {!isClientOnboarding && isModified && (
                      <button type="button" onClick={handleSave} disabled={isSaving} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
                          {isSaving ? <><span className="spinner small"></span> Guardando...</> : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
                     </button>
                 )}
             </form>
-            <div className="access-code-display">
-                <span>Código de Acceso del Cliente</span>
-                <strong>{clientData.accessCode}</strong>
-            </div>
+             {!isClientOnboarding && (
+                 <>
+                    <div className="access-code-display">
+                        <span>Código de Acceso del Cliente</span>
+                        <strong>{clientData.accessCode}</strong>
+                    </div>
+                     <button onClick={handleEnableGeneration} className="cta-button secondary enable-generation-button">
+                        Habilitar Nueva Generación
+                    </button>
+                 </>
+            )}
         </div>
     );
 };
@@ -1075,7 +1107,7 @@ const ProfileEditor: React.FC<{ clientData: ClientData; setClientData: (data: Cl
 
 // --- Plan Generators ---
 
-const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; }> = ({ clientData, setClientData, gymId }) => {
+const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; isClientOnboarding?: boolean }> = ({ clientData, setClientData, gymId, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
     const [currentRoutine, setCurrentRoutine] = useState<Routine | null>(clientData.routine);
@@ -1112,7 +1144,7 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 - Perfil: ${JSON.stringify(clientData.profile)}
                 - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
                 
-                Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"
+                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
 
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
                 1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
@@ -1202,20 +1234,36 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     if (!currentRoutine) {
         return (
             <div className="placeholder-action generation-container">
-                <div className="admin-instructions-box">
-                    <label htmlFor="admin-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
-                    <textarea
-                        id="admin-instructions-gen"
-                        rows={3}
-                        value={adminInstructions}
-                        onChange={(e) => setAdminInstructions(e.target.value)}
-                        placeholder="Ej: Evitar sentadillas por lesión de rodilla. Enfocar en espalda alta."
-                    ></textarea>
-                </div>
+                {!isClientOnboarding && (
+                    <div className="admin-instructions-box">
+                        <label htmlFor="admin-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
+                        <textarea
+                            id="admin-instructions-gen"
+                            rows={3}
+                            value={adminInstructions}
+                            onChange={(e) => setAdminInstructions(e.target.value)}
+                            placeholder="Ej: Evitar sentadillas por lesión de rodilla. Enfocar en espalda alta."
+                        ></textarea>
+                    </div>
+                )}
                 <button className="cta-button" onClick={() => handleGenerate(false)}>
                     Generar Rutina con IA
                 </button>
-                <p className="text-secondary">Se creará una rutina de entrenamiento basada en el perfil del cliente.</p>
+                <p className="text-secondary">Se creará una rutina de entrenamiento basada en el perfil.</p>
+            </div>
+        );
+    }
+    
+    // Don't show editing UI for client onboarding
+     if (isClientOnboarding) {
+        return (
+             <div className="plan-container">
+                <RoutinePlan 
+                    routine={currentRoutine} 
+                    isEditing={false}
+                    onRoutineChange={setCurrentRoutine}
+                    exerciseLibrary={exerciseLibrary}
+                />
             </div>
         );
     }
@@ -1581,7 +1629,7 @@ const ExerciseView: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
 };
 
 
-const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; }> = ({ clientData, setClientData }) => {
+const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
     const [currentPlan, setCurrentPlan] = useState<DietPlan | null>(clientData.dietPlan);
@@ -1597,7 +1645,7 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
                 - Perfil: ${JSON.stringify(clientData.profile)}
                 
-                Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"
+                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
 
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
                 1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
@@ -1648,7 +1696,9 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
 
             setCurrentPlan(generatedPlan);
             setClientData({ ...clientData, dietPlan: generatedPlan });
-            await apiClient.saveClientData(clientData.dni, { dietPlan: generatedPlan });
+            if (!isClientOnboarding) {
+                 await apiClient.saveClientData(clientData.dni, { dietPlan: generatedPlan });
+            }
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : "Ocurrió un error al generar el plan de nutrición.");
@@ -1667,16 +1717,18 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
     if (!currentPlan) {
         return (
              <div className="placeholder-action generation-container">
-                <div className="admin-instructions-box">
-                    <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
-                    <textarea
-                        id="admin-instructions-diet"
-                        rows={3}
-                        value={adminInstructions}
-                        onChange={(e) => setAdminInstructions(e.target.value)}
-                        placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                    ></textarea>
-                </div>
+                {!isClientOnboarding && (
+                    <div className="admin-instructions-box">
+                        <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
+                        <textarea
+                            id="admin-instructions-diet"
+                            rows={3}
+                            value={adminInstructions}
+                            onChange={(e) => setAdminInstructions(e.target.value)}
+                            placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                        ></textarea>
+                    </div>
+                )}
                 <button className="cta-button" onClick={handleGenerate}>
                     Generar Plan de Nutrición con IA
                 </button>
@@ -1685,55 +1737,18 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
         );
     }
     
+    // Don't show regeneration UI for client onboarding
+    if (isClientOnboarding) {
+        return <ClientDietView dietPlan={currentPlan} />;
+    }
+    
     return (
         <div className="diet-plan-container">
             <div className="actions-bar">
                  <h2>Plan de Nutrición</h2>
             </div>
 
-            <h3>{currentPlan.planTitle}</h3>
-            <div className="diet-summary">
-                <div>
-                    <strong>Calorías</strong>
-                    <span>{currentPlan.summary.totalCalories} kcal</span>
-                </div>
-                 <div>
-                    <strong>Proteínas</strong>
-                    <span>{currentPlan.summary.macronutrients.proteinGrams} g</span>
-                </div>
-                 <div>
-                    <strong>Carbohidratos</strong>
-                    <span>{currentPlan.summary.macronutrients.carbsGrams} g</span>
-                </div>
-                 <div>
-                    <strong>Grasas</strong>
-                    <span>{currentPlan.summary.macronutrients.fatGrams} g</span>
-                </div>
-            </div>
-            
-            <div className="meals-grid">
-                {currentPlan.meals.map(meal => (
-                    <div key={meal.mealName} className="meal-card">
-                        <h4>{meal.mealName}</h4>
-                        <ul>
-                            {meal.foodItems.map(item => (
-                                <li key={item.food}>
-                                    {item.food} <span>{item.amount}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-            </div>
-            
-            <div className="recommendations-section">
-                <h4>Recomendaciones</h4>
-                 <ul>
-                    {currentPlan.recommendations.map((rec, i) => (
-                        <li key={i}>{rec}</li>
-                    ))}
-                </ul>
-            </div>
+            <ClientDietView dietPlan={currentPlan} />
 
             <div className="regeneration-container">
                 <div className="admin-instructions-box">
@@ -1759,35 +1774,19 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
 const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [showTerms, setShowTerms] = useState(false);
     const [showChat, setShowChat] = useState(false);
 
-    const fetchClientData = async () => {
-        setIsLoading(true);
+    const fetchClientData = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         const data = await apiClient.getClientData(dni);
         setClientData(data);
-        if (data && !data.termsAccepted) {
-            setShowTerms(true);
-        }
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
     };
 
     useEffect(() => {
         fetchClientData();
     }, [dni]);
 
-    const handleAcceptTerms = async () => {
-        if (!clientData) return;
-        const updatedData = { ...clientData, termsAccepted: true };
-        const success = await apiClient.saveClientData(dni, { termsAccepted: true });
-        if (success) {
-            setClientData(updatedData);
-            setShowTerms(false);
-        } else {
-            alert("No se pudieron guardar los términos. Por favor, intente de nuevo.");
-        }
-    };
-    
     const isPlanExpired = () => {
         if (!clientData?.routineGeneratedDate || !clientData?.routine?.totalDurationWeeks) {
             return false; // No hay plan o fecha, no se puede determinar la expiración
@@ -1803,8 +1802,10 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
     if (!clientData) {
         return <div className="error-container">No se encontraron datos para este cliente.</div>;
     }
-    if (showTerms) {
-        return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
+
+    // --- View Routing based on client status ---
+    if (clientData.planStatus === 'pending') {
+        return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
     }
 
     return (
@@ -1820,7 +1821,7 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                      <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
                 </div>
             ) : (
-                <ClientPortalTabs clientData={clientData} onDataUpdate={fetchClientData} />
+                <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
             )}
             
             <ChatAssistant clientData={clientData} setClientData={setClientData} isVisible={showChat} onClose={() => setShowChat(false)} />
@@ -1830,7 +1831,86 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.4,2.97C13.1,2.91 12,3.46 12,4.82V11.5C12,12.33 12.67,13 13.5,13H15V15.5C15,18 12.94,20 10.5,20C8,20 6,18 6,15.5V13H7.5C8.33,13 9,12.33 9,11.5V4.82C9,3.46 7.9,2.91 6.6,2.97C5.3,3.03 4.2,3.54 4.2,4.82V12.18C4.2,13.46 5.3,14.04 6.6,14.09C7.9,14.15 9,13.58 9,12.22V10H6V12.22C6,14.67 4.26,16.5 2,16.92V18.5H9.5C9.5,19.34 10.16,20 11,20H12.5C13.88,20 15,18.88 15,17.5V16H18V17.5C18,18.88 19.12,20 20.5,20H22V18.2C19.78,17.8 18,15.91 18,13.5V4.82C18,3.54 16.7,3.03 15.4,2.97L14.4,2.97M20.5,5.5V8.5H18V5.5H20.5Z" /></svg>
                 </button>
             )}
+        </div>
+    );
+};
 
+const ClientOnboardingView: React.FC<{
+    initialClientData: ClientData;
+    onOnboardingComplete: () => void;
+    onLogout: () => void;
+}> = ({ initialClientData, onOnboardingComplete, onLogout }) => {
+    const [step, setStep] = useState(initialClientData.termsAccepted ? 'profile' : 'terms');
+    const [clientData, setClientData] = useState<ClientData>(initialClientData);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const handleAcceptTerms = async () => {
+        const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
+        if (success) {
+            setClientData({ ...clientData, termsAccepted: true });
+            setStep('profile');
+        } else {
+            alert("No se pudieron guardar los términos. Por favor, intente de nuevo.");
+        }
+    };
+    
+    const handleSaveAndStart = async () => {
+        if (!clientData.routine || !clientData.dietPlan) {
+            alert("Por favor, genera tu rutina y plan de nutrición antes de comenzar.");
+            return;
+        }
+        setIsSaving(true);
+        const finalData: Partial<ClientData> = {
+            profile: clientData.profile,
+            routine: clientData.routine,
+            dietPlan: clientData.dietPlan,
+            routineGeneratedDate: new Date().toISOString(),
+            planStatus: 'active',
+        };
+
+        const success = await apiClient.saveClientData(clientData.dni, finalData);
+        if (success) {
+            onOnboardingComplete();
+        } else {
+            alert("Ocurrió un error al guardar tu plan. Por favor, intenta de nuevo.");
+        }
+        setIsSaving(false);
+    };
+
+    if (step === 'terms') {
+        return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
+    }
+
+    return (
+        <div className="onboarding-container">
+            <header className="onboarding-header">
+                <h1>¡Bienvenido a ScorpionGYM AI!</h1>
+                <p>Vamos a configurar tu primer plan.</p>
+            </header>
+            
+            <div className="onboarding-section">
+                <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
+            </div>
+            
+            <div className="onboarding-section">
+                 <h2>Paso 2: Genera tu Rutina</h2>
+                 <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={clientData.gymId} isClientOnboarding />
+            </div>
+
+            <div className="onboarding-section">
+                 <h2>Paso 3: Genera tu Plan de Nutrición</h2>
+                 <DietPlanGenerator clientData={clientData} setClientData={setClientData} isClientOnboarding />
+            </div>
+            
+             <div className="onboarding-actions">
+                <button 
+                    className="cta-button" 
+                    onClick={handleSaveAndStart} 
+                    disabled={isSaving || !clientData.routine || !clientData.dietPlan}
+                >
+                    {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
+                </button>
+            </div>
         </div>
     );
 };

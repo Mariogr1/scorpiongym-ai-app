@@ -39,6 +39,20 @@ export default async function handler(req, res) {
     case 'PUT':
       try {
         const dataToUpdate = req.body;
+
+        // Special action to reset plan generation for a client
+        if (dataToUpdate.action === 'reset_plan') {
+            const result = await collection.updateOne(
+              { dni: dni },
+              { $set: { planStatus: 'pending', routine: null, dietPlan: null, routineGeneratedDate: null } }
+            );
+            if (result.matchedCount === 0) {
+              return res.status(404).json({ message: 'Client not found' });
+            }
+            return res.status(200).json({ success: true, message: 'Client plan reset successfully.' });
+        }
+
+
         delete dataToUpdate._id;
         // Prevent client-side from overwriting the limit
         delete dataToUpdate.dailyQuestionLimit;
