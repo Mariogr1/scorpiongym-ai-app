@@ -66,9 +66,9 @@ body {
     width: 100%;
     height: 100%;
 }
-/* Forzar el color del SVG a blanco para que sea visible en fondos oscuros */
-.main-header .app-logo svg *,
-.svg-logo-wrapper svg * {
+/* Forzar el color de los logos SVG a blanco, apuntando solo a los elementos 'path' para evitar rellenar fondos. */
+.main-header .app-logo svg path,
+.svg-logo-wrapper svg path {
     fill: var(--text-color);
 }
 
