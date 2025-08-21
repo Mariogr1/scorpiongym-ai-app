@@ -54,7 +54,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: var(--secondary-button-color);
+    background-color: #cccccc; /* Light gray for contrast */
     border-radius: 6px;
     padding: 5px;
     border: 1px solid var(--border-color);
@@ -347,13 +347,14 @@ body {
 .file-input-preview {
   width: 50px;
   height: 50px;
-  background-color: var(--secondary-button-color);
+  background-color: #cccccc; /* Light gray for contrast */
   border: 1px dashed var(--border-color);
   border-radius: 6px;
   display: flex;
   justify-content: center;
   align-items: center;
-  color: var(--text-secondary-color);
+  color: #111; /* Dark text for light background */
+  font-weight: 600;
   font-size: 0.8rem;
   overflow: hidden;
 }
@@ -404,7 +405,7 @@ body {
     height: 50px;
     flex-shrink: 0;
     border-radius: 8px;
-    background-color: var(--secondary-button-color);
+    background-color: #cccccc; /* Light gray for contrast */
     display: flex;
     justify-content: center;
     align-items: center;
