@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -890,7 +891,10 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
     }
 
     return (
-        <div>
+        <div className="client-management-view">
+             {gym.logoSvg && (
+                <div className="background-logo-container" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />
+            )}
              <div className="main-header">
                 <div className="header-title-wrapper">
                     {gym.logoSvg && <div className="app-logo" dangerouslySetInnerHTML={{ __html: gym.logoSvg }} />}
@@ -2847,87 +2851,95 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
     };
 
     const handleDeleteExercise = (group: string, index: number) => {
-        const newLibrary = { ...library };
-        newLibrary[group].splice(index, 1);
-        handleSaveChanges(newLibrary);
+         if (window.confirm(`¿Estás seguro de que quieres eliminar el ejercicio "${library[group][index].name}"?`)) {
+            const newLibrary = { ...library };
+            newLibrary[group].splice(index, 1);
+            handleSaveChanges(newLibrary);
+        }
     };
-    
-    if (isLoading) return <div className="loading-container"><div className="spinner"></div></div>;
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
+    }
 
     return (
         <div>
             <div className="library-instructions">
-                <p>Aquí puedes gestionar los ejercicios disponibles para la IA. Desactiva los que no estén disponibles en tu gimnasio. Puedes añadir nuevos ejercicios o editar los existentes.</p>
+                <p>Gestiona los ejercicios disponibles para la IA. Desactiva los que no quieras que se usen en las rutinas o añade nuevos ejercicios a cada grupo muscular.</p>
             </div>
-            <AddExerciseToLibraryForm library={library} onAddExercise={handleAddExercise} />
+            
+             <AddExerciseToLibraryForm library={library} onAddExercise={handleAddExercise} />
 
             <div className="library-accordion">
-                {Object.entries(library).map(([group, exercises]) => (
-                    <div key={group} className="library-accordion-item">
-                        <button
+                {Object.keys(library).sort().map(group => (
+                    <div className="library-accordion-item" key={group}>
+                        <button 
                             className={`library-accordion-header ${activeAccordion === group ? 'active' : ''}`}
                             onClick={() => setActiveAccordion(activeAccordion === group ? null : group)}
                         >
                             {group}
-                            <span className="icon">+</span>
+                             <span className="icon">+</span>
                         </button>
-                         <div className={`library-accordion-content ${activeAccordion === group ? 'open' : ''}`}>
-                             <div className="exercise-entry-list">
+                        <div className={`library-accordion-content ${activeAccordion === group ? 'open' : ''}`}>
+                            <div className="exercise-entry-list">
                                 <div className="exercise-entry-header">
-                                    <span>Habilitado</span>
-                                    <span>Nombre</span>
-                                    <span>Link YouTube</span>
+                                    <span>Activo</span>
+                                    <span>Nombre del Ejercicio</span>
+                                    <span>Link de YouTube (Opcional)</span>
                                     <span>Acciones</span>
                                 </div>
-                                {exercises.map((ex, index) => {
-                                     const isEditingThis = editingExercise?.group === group && editingExercise?.index === index;
-                                     return (
-                                        <div key={ex.name} className="exercise-entry-row">
+                                {library[group].map((exercise, index) => {
+                                    const isEditingThis = editingExercise?.group === group && editingExercise?.index === index;
+                                    return (
+                                        <div className="exercise-entry-row" key={index}>
                                              <label className="switch">
-                                                <input type="checkbox" checked={ex.isEnabled} onChange={() => handleToggleEnable(group, index)} />
+                                                <input type="checkbox" checked={exercise.isEnabled} onChange={() => handleToggleEnable(group, index)} />
                                                 <span className="slider round"></span>
                                             </label>
-                                             {isEditingThis ? (
-                                                <input
-                                                    type="text"
-                                                    value={editingExercise.name}
-                                                    onChange={e => setEditingExercise({...editingExercise, name: e.target.value})}
-                                                    className="editing-input"
-                                                />
-                                            ) : (
-                                                <span className="exercise-name-lib">{ex.name}</span>
-                                            )}
-                                             {isEditingThis ? (
-                                                 <input
-                                                    type="text"
-                                                    value={editingExercise.link}
-                                                    onChange={e => setEditingExercise({...editingExercise, link: e.target.value})}
-                                                    className="editing-input"
-                                                    placeholder="URL Completa"
-                                                />
-                                             ) : (
-                                                 <a href={ex.youtubeLink} target="_blank" rel="noopener noreferrer" className="video-link">
-                                                    {ex.youtubeLink ? 'Ver Video' : 'Sin link'}
-                                                </a>
-                                             )}
-
-                                            <div className="exercise-row-actions">
+                                             <div>
+                                                {isEditingThis ? (
+                                                     <input 
+                                                        type="text" 
+                                                        className="editing-input"
+                                                        value={editingExercise.name} 
+                                                        onChange={(e) => setEditingExercise({...editingExercise, name: e.target.value})} 
+                                                    />
+                                                ) : (
+                                                    <span className="exercise-name-lib">{exercise.name}</span>
+                                                )}
+                                             </div>
+                                             <div>
                                                  {isEditingThis ? (
+                                                    <input 
+                                                        type="text" 
+                                                        className="editing-input"
+                                                        value={editingExercise.link} 
+                                                        onChange={(e) => setEditingExercise({...editingExercise, link: e.target.value})}
+                                                        placeholder="https://youtu.be/..."
+                                                    />
+                                                ) : (
+                                                    <a href={exercise.youtubeLink || '#'} target="_blank" rel="noopener noreferrer" className={`video-link-lib ${!exercise.youtubeLink ? 'disabled' : ''}`}>
+                                                        {exercise.youtubeLink ? 'Ver Video' : 'Sin video'}
+                                                    </a>
+                                                )}
+                                             </div>
+                                            <div className="exercise-row-actions">
+                                                {isEditingThis ? (
                                                     <>
                                                         <button className="action-btn save" onClick={handleUpdateExercise}>Guardar</button>
                                                         <button className="action-btn cancel" onClick={() => setEditingExercise(null)}>Cancelar</button>
                                                     </>
                                                 ) : (
-                                                    <>
-                                                         <button className="action-btn edit" onClick={() => setEditingExercise({ group, index, name: ex.name, link: ex.youtubeLink })}>Editar</button>
+                                                     <>
+                                                        <button className="action-btn edit" onClick={() => setEditingExercise({ group, index, name: exercise.name, link: exercise.youtubeLink })}>Editar</button>
                                                         <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)}>Borrar</button>
-                                                    </>
+                                                     </>
                                                 )}
                                             </div>
                                         </div>
-                                     );
+                                    );
                                 })}
-                             </div>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -2936,36 +2948,43 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
     );
 };
 
-const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExercise: (group: string, name: string) => void }> = ({ library, onAddExercise }) => {
-    const [name, setName] = useState('');
-    const [group, setGroup] = useState(Object.keys(library)[0] || '');
-    const [newGroup, setNewGroup] = useState('');
 
+const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExercise: (group: string, name: string) => void }> = ({ library, onAddExercise }) => {
+    const [newExerciseName, setNewExerciseName] = useState('');
+    const [selectedGroup, setSelectedGroup] = useState(Object.keys(library)[0] || '');
+    
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const targetGroup = group === '__new__' ? newGroup.trim() : group;
-        if (!name.trim() || !targetGroup) {
-            alert("Por favor, completa el nombre y el grupo del ejercicio.");
+        if (!newExerciseName.trim() || !selectedGroup) {
+            alert("Por favor, completa el nombre y selecciona un grupo.");
             return;
         }
-        onAddExercise(targetGroup, name.trim());
-        setName('');
-        setNewGroup('');
+        onAddExercise(selectedGroup, newExerciseName.trim());
+        setNewExerciseName('');
     };
-
+    
     return (
         <div className="add-exercise-container">
             <div className="add-exercise-form-wrapper">
                 <h3>Añadir Nuevo Ejercicio</h3>
                 <form onSubmit={handleSubmit} className="add-exercise-form">
-                     <select value={group} onChange={e => setGroup(e.target.value)} required>
-                        {Object.keys(library).map(g => <option key={g} value={g}>{g}</option>)}
-                        <option value="__new__">-- Crear Nuevo Grupo --</option>
+                     <input
+                        type="text"
+                        placeholder="Nombre del Ejercicio"
+                        value={newExerciseName}
+                        onChange={(e) => setNewExerciseName(e.target.value)}
+                        required
+                    />
+                    <select
+                        value={selectedGroup}
+                        onChange={(e) => setSelectedGroup(e.target.value)}
+                        required
+                    >
+                        <option value="" disabled>-- Selecciona un Grupo --</option>
+                        {Object.keys(library).sort().map(group => (
+                            <option key={group} value={group}>{group}</option>
+                        ))}
                     </select>
-                    {group === '__new__' && (
-                        <input type="text" placeholder="Nombre del nuevo grupo" value={newGroup} onChange={e => setNewGroup(e.target.value)} required />
-                    )}
-                    <input type="text" placeholder="Nombre del ejercicio" value={name} onChange={e => setName(e.target.value)} required />
                     <button type="submit">Añadir</button>
                 </form>
             </div>
@@ -2973,30 +2992,27 @@ const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExerci
     );
 };
 
-// --- Helper & Wrapper Components ---
+
+// --- Generic Components ---
+
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
     onCancel: () => void;
     confirmText?: string;
     cancelText?: string;
-    confirmClass?: 'delete' | 'archive' | 'restore';
-}> = ({ message, onConfirm, onCancel, confirmText = "Confirmar", cancelText = "Cancelar", confirmClass }) => {
-    const getConfirmButtonClass = () => {
-        let className = 'cta-button';
-        if (confirmClass === 'delete') className += ' delete-selected-button';
-        else if (confirmClass === 'archive') className += ' archive-selected-button';
-        else if (confirmClass === 'restore') className += ' restore-selected-button';
-        return className;
-    };
-
+    confirmClass?: 'delete' | 'archive';
+}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
     return (
-        <div className="modal-overlay" onClick={onCancel}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+            <div className="modal-content">
                 <p>{message}</p>
                 <div className="modal-actions">
-                    <button className="cta-button secondary" onClick={onCancel}>{cancelText}</button>
-                    <button className={getConfirmButtonClass()} onClick={onConfirm}>
+                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
+                    <button 
+                        onClick={onConfirm} 
+                        className={`cta-button ${confirmClass === 'delete' ? 'delete-selected-button' : (confirmClass === 'archive' ? 'archive-selected-button' : '')}`}
+                    >
                         {confirmText}
                     </button>
                 </div>
@@ -3006,5 +3022,10 @@ const ConfirmationModal: React.FC<{
 };
 
 
+// --- App Initialization ---
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);
