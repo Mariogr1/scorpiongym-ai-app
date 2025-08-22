@@ -2538,7 +2538,9 @@ input:checked + .slider:before {
     }
     .main-tabs-nav {
         border-bottom: 1px solid var(--border-color);
-        overflow-x: hidden; /* Prevent scrolling now that tabs fit */
+    }
+    .main-tab-button {
+        flex-grow: 0; /* Allow tabs to have their natural width */
     }
     
     .add-exercise-form {
