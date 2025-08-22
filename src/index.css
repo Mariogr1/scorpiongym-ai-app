@@ -2172,7 +2172,7 @@ input:checked + .slider:before {
 .chat-message {
   display: flex;
   gap: 1rem;
-  max-width: 85%;
+  max-width: 90%;
 }
 .chat-message.user {
   align-self: flex-end;
@@ -2249,7 +2249,7 @@ input:checked + .slider:before {
 }
 
 .chat-input-area {
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   border-top: 1px solid var(--border-color);
   background-color: var(--surface-color);
 }
@@ -2538,6 +2538,8 @@ input:checked + .slider:before {
     }
     .main-tabs-nav {
         border-bottom: 1px solid var(--border-color);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
     .main-tab-button {
         flex-grow: 0; /* Allow tabs to have their natural width */
