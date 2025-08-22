@@ -1499,7 +1499,7 @@ body {
     gap: 0.5rem;
     margin-bottom: 2rem;
     background-color: var(--surface-color);
-    padding: 1.5rem;
+    padding: 1.5rem 0.75rem;
     border-radius: 12px;
     max-width: 400px;
     width: 100%;
@@ -2205,6 +2205,7 @@ input:checked + .slider:before {
   padding: 0.75rem 1.25rem;
   border-radius: 18px;
   line-height: 1.5;
+  max-width: calc(100% - 50px);
 }
 .message-content p {
   margin: 0;
@@ -2249,7 +2250,7 @@ input:checked + .slider:before {
 }
 
 .chat-input-area {
-  padding: 0.75rem;
+  padding: 0.5rem;
   border-top: 1px solid var(--border-color);
   background-color: var(--surface-color);
 }
