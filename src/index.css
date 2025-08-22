@@ -335,7 +335,7 @@ body {
   border-radius: 8px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color: 0.2s ease;
 }
 .file-input-label:hover {
   background-color: var(--secondary-button-hover);
@@ -450,7 +450,7 @@ body {
     padding: 0.6rem 1rem;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
     font-weight: 500;
     position: relative;
 }
@@ -658,7 +658,7 @@ body {
     border-radius: 8px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color: 0.2s ease;
 }
 .selection-toggle-button:hover {
     background-color: var(--secondary-button-hover);
@@ -731,7 +731,7 @@ body {
     cursor: pointer;
     padding: 0.6rem 1rem;
     border-radius: 8px;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
     flex-shrink: 0;
     white-space: nowrap;
 }
@@ -875,7 +875,7 @@ body {
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color: 0.2s ease;
   width: 100%;
 }
 .cta-button:hover:not(:disabled) {
@@ -1088,7 +1088,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.2s;
+  transition: background-color: 0.2s;
 }
 
 .accordion-item:hover .accordion-header {
@@ -1222,7 +1222,7 @@ body {
     line-height: 1;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
 }
 .delete-exercise-btn:hover {
     background-color: var(--primary-color-hover);
@@ -1482,7 +1482,7 @@ body {
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
 }
 .save-progress-button.saved {
     background-color: var(--success-color);
@@ -1858,7 +1858,7 @@ body {
     border-radius: 6px;
     cursor: pointer;
     font-weight: 600;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
     flex-shrink: 0;
 }
 
@@ -2172,7 +2172,7 @@ input:checked + .slider:before {
 .chat-message {
   display: flex;
   gap: 1rem;
-  max-width: 90%;
+  max-width: 95%;
 }
 .chat-message.user {
   align-self: flex-end;
@@ -2249,7 +2249,7 @@ input:checked + .slider:before {
 }
 
 .chat-input-area {
-  padding: 1rem;
+  padding: 0.75rem;
   border-top: 1px solid var(--border-color);
   background-color: var(--surface-color);
 }
