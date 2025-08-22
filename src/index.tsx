@@ -2362,6 +2362,14 @@ const ProgressTracker: React.FC<{
     const [isSaving, setIsSaving] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
 
+    const lastLog = useMemo(() => {
+        const logs = clientData.progressLog?.[exerciseName];
+        if (logs && logs.length > 0) {
+            return logs[logs.length - 1];
+        }
+        return null;
+    }, [clientData.progressLog, exerciseName]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!weight || !repetitions) return;
@@ -2403,7 +2411,7 @@ const ProgressTracker: React.FC<{
                     id={`weight-${exerciseName}`}
                     type="number"
                     step="0.5"
-                    placeholder="e.g., 20.5"
+                    placeholder={lastLog ? `Últ: ${lastLog.weight}` : "e.g., 20.5"}
                     value={weight}
                     onChange={e => setWeight(e.target.value)}
                     className="form-group input"
@@ -2414,7 +2422,7 @@ const ProgressTracker: React.FC<{
                 <input
                     id={`reps-${exerciseName}`}
                     type="number"
-                    placeholder="e.g., 10"
+                    placeholder={lastLog ? `Últ: ${lastLog.repetitions}` : "e.g., 10"}
                     value={repetitions}
                     onChange={e => setRepetitions(e.target.value)}
                     className="form-group input"
