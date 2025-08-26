@@ -155,7 +155,7 @@ export const apiClient = {
   // --- Super Admin ---
   async getGyms(): Promise<Gym[]> {
     try {
-        const response = await fetch('/api/gyms', { cache: 'no-store' });
+        const response = await fetch('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
         return await response.json();
     } catch (error) {
@@ -221,7 +221,7 @@ export const apiClient = {
   // --- Client Management (Scoped by Gym) ---
   async getClients(gymId: string): Promise<ClientListItem[]> {
     try {
-        const response = await fetch(`/api/clients?gymId=${gymId}`, { cache: 'no-store' });
+        const response = await fetch(`/api/clients?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const clients: ClientListItem[] = await response.json();
         return clients.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
@@ -233,7 +233,7 @@ export const apiClient = {
 
   async getClientData(dni: string): Promise<ClientData | null> {
     try {
-        const response = await fetch(`/api/clients/${dni}`, { cache: 'no-store' });
+        const response = await fetch(`/api/clients/${dni}`);
         if (!response.ok) {
             if (response.status === 404) return null;
             throw new Error('Network response was not ok');
@@ -335,7 +335,7 @@ export const apiClient = {
   // Exercise Library Management (Scoped by Gym)
   async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {
     try {
-        const response = await fetch(`/api/library?gymId=${gymId}`, { cache: 'no-store' });
+        const response = await fetch(`/api/library?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const library: ExerciseLibrary = await response.json();
         return library;
@@ -366,7 +366,7 @@ export const apiClient = {
   // --- Trainer Request System ---
   async getRequests(gymId: string): Promise<Request[]> {
     try {
-      const response = await fetch(`/api/requests?gymId=${gymId}`, { cache: 'no-store' });
+      const response = await fetch(`/api/requests?gymId=${gymId}`);
       if (!response.ok) throw new Error('Network response was not ok');
       return await response.json();
     } catch (error) {
