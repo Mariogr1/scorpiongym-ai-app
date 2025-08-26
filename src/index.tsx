@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1933,6 +1934,60 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
     );
 };
 
+// --- AI Generation Logic (for Onboarding) ---
+const generateRoutineForClient = async (clientData: ClientData, gymId: string): Promise<Routine> => {
+    const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
+        const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+        if (enabled.length > 0) acc[group] = enabled;
+        return acc;
+    }, {} as Record<string, string[]>);
+
+    const prompt = `
+        Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
+        REGLAS ESTRICTAS PARA TU RESPUESTA:
+        1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+        2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
+        3. Selecciona ejercicios EXCLUSIVAMENTE de la lista de ejercicios disponibles.
+        4. Asigna los días de entrenamiento según 'trainingDays'.
+        5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
+        6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
+        7. Incluye fases de adaptación y descarga si el perfil lo indica.
+        8. Ajusta el número de ejercicios según la 'trainingIntensity'.
+        9. Prioriza 'bodyFocusArea' y 'muscleFocus'.
+    `;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
+    return JSON.parse(jsonString);
+};
+
+const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `
+        Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        REGLAS ESTRICTAS PARA TU RESPUESTA:
+        1. **Idioma:** Tu respuesta DEBE estar en español de Argentina.
+        2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin texto adicional, markdown o explicaciones.
+        3. Calcula calorías y macros basándote en el perfil completo del cliente.
+        4. El JSON debe seguir esta estructura exacta: {"planTitle": "Título", "summary": {"totalCalories": 2500, "macronutrients": {"proteinGrams": 180, "carbsGrams": 300, "fatGrams": 60}}, "meals": [{"mealName": "Desayuno", "foodItems": [{"food": "Avena", "amount": "80g"}]}], "recommendations": ["Beber 2-3 litros de agua."]}
+        5. Distribuye las calorías en 4-6 comidas.
+        6. Usa alimentos comunes en Argentina.
+    `;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
+    return JSON.parse(jsonString);
+};
+
+
+// FIX: Moved GenerationStatus type to a shared scope to be accessible by both ClientOnboardingView and GenerationProgressIndicator components.
+type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
+
 const ClientOnboardingView: React.FC<{
     initialClientData: ClientData;
     onOnboardingComplete: () => void;
@@ -1941,6 +1996,14 @@ const ClientOnboardingView: React.FC<{
     const [step, setStep] = useState(initialClientData.termsAccepted ? 'profile' : 'terms');
     const [clientData, setClientData] = useState<ClientData>(initialClientData);
     const [isSaving, setIsSaving] = useState(false);
+    
+    const [generationState, setGenerationState] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+    const [generationProgress, setGenerationProgress] = useState({
+        routine: 'pending' as GenerationStatus,
+        diet1: 'pending' as GenerationStatus,
+        diet2: 'pending' as GenerationStatus,
+    });
+    const [generationError, setGenerationError] = useState('');
 
     const handleAcceptTerms = async () => {
         const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
@@ -1952,9 +2015,46 @@ const ClientOnboardingView: React.FC<{
         }
     };
     
+    const handleGenerateFullPlan = async () => {
+        setGenerationState('generating');
+        setGenerationError('');
+        setGenerationProgress({ routine: 'loading', diet1: 'pending', diet2: 'pending' });
+
+        try {
+            // 1. Generate Routine
+            const routine = await generateRoutineForClient(clientData, clientData.gymId);
+            setClientData(prev => ({ ...prev, routine }));
+            setGenerationProgress(prev => ({ ...prev, routine: 'done', diet1: 'loading' }));
+
+            // 2. Generate Diet Plan 1
+            const diet1 = await generateDietForClient(clientData);
+            setClientData(prev => ({ ...prev, dietPlans: [diet1, prev.dietPlans[1]] }));
+            setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'loading' }));
+            
+            // 3. Generate Diet Plan 2
+            const diet2 = await generateDietForClient(clientData);
+            setClientData(prev => ({ ...prev, dietPlans: [prev.dietPlans[0], diet2] }));
+            setGenerationProgress(prev => ({ ...prev, diet2: 'done' }));
+
+            setGenerationState('success');
+
+        } catch (error) {
+            console.error("Plan generation failed:", error);
+            setGenerationError(error instanceof Error ? error.message : "Ocurrió un error desconocido.");
+            setGenerationState('error');
+            setGenerationProgress(prev => {
+                const newProgress = {...prev};
+                if (newProgress.routine === 'loading') newProgress.routine = 'error';
+                if (newProgress.diet1 === 'loading') newProgress.diet1 = 'error';
+                if (newProgress.diet2 === 'loading') newProgress.diet2 = 'error';
+                return newProgress;
+            });
+        }
+    };
+
     const handleSaveAndStart = async () => {
-        if (!clientData.routine || !clientData.dietPlans[0]) {
-            alert("Por favor, genera tu rutina y plan de nutrición antes de comenzar.");
+        if (generationState !== 'success') {
+            alert("Por favor, genera tu plan completo antes de comenzar.");
             return;
         }
         setIsSaving(true);
@@ -1987,28 +2087,80 @@ const ClientOnboardingView: React.FC<{
             </header>
             
             <div className="onboarding-section">
+                <h2>Paso 1: Completa tu Perfil</h2>
                 <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
             </div>
             
             <div className="onboarding-section">
-                 <h2>Paso 2: Genera tu Rutina</h2>
-                 <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={clientData.gymId} isClientOnboarding />
-            </div>
-
-            <div className="onboarding-section">
-                 <h2>Paso 3: Genera tu Plan de Nutrición</h2>
-                 <DietPlanGenerator clientData={clientData} setClientData={setClientData} isClientOnboarding />
+                <h2>Paso 2: Crea tu Plan Integral</h2>
+                 {generationState === 'idle' && (
+                     <div className="placeholder-action">
+                        <p>Cuando tu perfil esté listo, haz clic abajo para que la IA cree tu rutina y planes de nutrición personalizados.</p>
+                        <button className="cta-button" onClick={handleGenerateFullPlan}>
+                            Generar Mi Plan Completo
+                        </button>
+                    </div>
+                )}
+                
+                {(generationState === 'generating' || generationState === 'error' || generationState === 'success') && (
+                     <GenerationProgressIndicator 
+                        progress={generationProgress} 
+                        error={generationError}
+                        onRetry={handleGenerateFullPlan}
+                    />
+                )}
             </div>
             
              <div className="onboarding-actions">
                 <button 
                     className="cta-button" 
                     onClick={handleSaveAndStart} 
-                    disabled={isSaving || !clientData.routine || !clientData.dietPlans[0]}
+                    disabled={isSaving || generationState !== 'success'}
                 >
                     {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
                 </button>
             </div>
+        </div>
+    );
+};
+
+const GenerationProgressIndicator: React.FC<{
+    progress: { routine: GenerationStatus; diet1: GenerationStatus; diet2: GenerationStatus; };
+    error: string;
+    onRetry: () => void;
+}> = ({ progress, error, onRetry }) => {
+    
+    const renderStatusIcon = (status: GenerationStatus) => {
+        switch (status) {
+            case 'loading': return <div className="spinner small"></div>;
+            case 'done': return <span className="status-icon success">✓</span>;
+            case 'error': return <span className="status-icon error">✗</span>;
+            case 'pending': return <span className="status-icon pending">●</span>;
+        }
+    };
+
+    return (
+        <div className="generation-progress-container">
+            <ul className="generation-progress-list">
+                <li className={`progress-item ${progress.routine}`}>
+                    {renderStatusIcon(progress.routine)}
+                    <span>Plan de Entrenamiento</span>
+                </li>
+                <li className={`progress-item ${progress.diet1}`}>
+                    {renderStatusIcon(progress.diet1)}
+                    <span>Plan de Nutrición 1</span>
+                </li>
+                 <li className={`progress-item ${progress.diet2}`}>
+                    {renderStatusIcon(progress.diet2)}
+                    <span>Plan de Nutrición 2</span>
+                </li>
+            </ul>
+            {error && (
+                <div className="error-container" style={{padding: '1rem', marginTop: '1.5rem', minHeight: 'auto'}}>
+                    <p style={{margin: '0 0 1rem 0'}}>{error}</p>
+                    <button className="cta-button secondary" onClick={onRetry}>Intentar de Nuevo</button>
+                </div>
+            )}
         </div>
     );
 };

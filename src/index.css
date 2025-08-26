@@ -1620,6 +1620,51 @@ body {
     padding: 0 2rem;
 }
 
+/* --- Onboarding Generation Progress --- */
+.generation-progress-container {
+    padding: 1rem 0;
+}
+.generation-progress-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 400px;
+    margin: 0 auto;
+}
+.progress-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+.progress-item.pending {
+    color: var(--text-secondary-color);
+}
+.progress-item.loading {
+    color: var(--text-color);
+    font-weight: 600;
+}
+.progress-item.done {
+    color: var(--success-color);
+    font-weight: 600;
+}
+.progress-item.error {
+    color: var(--error-color);
+    font-weight: 600;
+}
+
+.status-icon {
+    font-size: 1.5rem;
+    width: 25px;
+    text-align: center;
+}
+.status-icon.success { color: var(--success-color); }
+.status-icon.error { color: var(--error-color); }
+.status-icon.pending { color: var(--text-secondary-color); font-size: 1rem; }
+
+
 /* --- Progress View --- */
 .progress-view-container {
     padding: 1rem;
