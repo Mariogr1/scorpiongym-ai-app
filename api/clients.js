@@ -52,7 +52,7 @@ export default async function handler(req, res) {
             planStatus: 'pending',
             profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", muscleFocus: "General", includeAdaptationPhase: "Sí", includeDeloadPhase: "No", trainingIntensity: "Moderada" },
             routine: null,
-            dietPlan: null,
+            dietPlans: [null, null],
             progressLog: {},
             bodyWeightLog: [],
             termsAccepted: false,

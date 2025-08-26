@@ -15,6 +15,16 @@ export default async function handler(req, res) {
           return res.status(404).json({ message: 'Client not found' });
         }
 
+        // --- Backward compatibility for diet plans ---
+        if (clientData && clientData.dietPlan && !clientData.dietPlans) {
+            clientData.dietPlans = [clientData.dietPlan, null];
+            delete clientData.dietPlan; // Clean up old field
+        } else if (clientData && !clientData.dietPlans) {
+            // Ensure new clients or clients without any plan have the correct structure
+            clientData.dietPlans = [null, null];
+        }
+
+
         // Fetch gym's dailyQuestionLimit and attach it to the client data
         if (clientData.gymId) {
             try {
@@ -44,7 +54,7 @@ export default async function handler(req, res) {
         if (dataToUpdate.action === 'reset_plan') {
             const result = await collection.updateOne(
               { dni: dni },
-              { $set: { planStatus: 'pending', routine: null, dietPlan: null, routineGeneratedDate: null } }
+              { $set: { planStatus: 'pending', routine: null, dietPlans: [null, null], routineGeneratedDate: null } }
             );
             if (result.matchedCount === 0) {
               return res.status(404).json({ message: 'Client not found' });

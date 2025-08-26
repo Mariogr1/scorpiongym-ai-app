@@ -101,7 +101,7 @@ export interface ClientData {
     profile: Profile;
     routine: Routine | null;
     routineGeneratedDate?: string;
-    dietPlan: DietPlan | null;
+    dietPlans: (DietPlan | null)[];
     progressLog: ProgressLog;
     bodyWeightLog?: BodyWeightEntry[];
     termsAccepted?: boolean;

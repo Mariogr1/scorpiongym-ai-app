@@ -1715,11 +1715,12 @@ const ExerciseView: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
 const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
-    const [currentPlan, setCurrentPlan] = useState<DietPlan | null>(clientData.dietPlan);
-    const [isEditing, setIsEditing] = useState(false);
     const [adminInstructions, setAdminInstructions] = useState('');
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
     
-    const handleGenerate = async () => {
+    const currentPlan = clientData.dietPlans ? clientData.dietPlans[activePlanIndex] : null;
+
+    const handleGenerate = async (planIndex: number) => {
         setIsGenerating(true);
         setError('');
         try {
@@ -1777,10 +1778,14 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
             }
             const generatedPlan: DietPlan = JSON.parse(jsonString);
 
-            setCurrentPlan(generatedPlan);
-            setClientData({ ...clientData, dietPlan: generatedPlan });
+            const newDietPlans = [...(clientData.dietPlans || [null, null])];
+            newDietPlans[planIndex] = generatedPlan;
+            
+            const dataToUpdate = { ...clientData, dietPlans: newDietPlans };
+            setClientData(dataToUpdate);
+
             if (!isClientOnboarding) {
-                 await apiClient.saveClientData(clientData.dni, { dietPlan: generatedPlan });
+                 await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
             }
         } catch (err) {
             console.error(err);
@@ -1794,63 +1799,73 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
         return <div className="loading-container"><div className="spinner"></div><p>Generando plan de nutrición...</p></div>;
     }
      if (error) {
-        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={handleGenerate}>Intentar de Nuevo</button></div>;
+        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>Intentar de Nuevo</button></div>;
     }
+    
+    const renderPlanContent = (plan: DietPlan | null) => {
+        if (!plan) {
+            return (
+                 <div className="placeholder-action generation-container">
+                    {!isClientOnboarding && (
+                        <div className="admin-instructions-box">
+                            <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
+                            <textarea
+                                id="admin-instructions-diet"
+                                rows={3}
+                                value={adminInstructions}
+                                onChange={(e) => setAdminInstructions(e.target.value)}
+                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                            ></textarea>
+                        </div>
+                    )}
+                    <button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>
+                        Generar Plan de Nutrición con IA
+                    </button>
+                    <p className="text-secondary">Se creará un plan de nutrición basado en el perfil y objetivo del cliente.</p>
+                </div>
+            );
+        }
 
-    if (!currentPlan) {
         return (
-             <div className="placeholder-action generation-container">
+             <div className="diet-plan-container">
+                <ClientDietView dietPlan={plan} />
+
                 {!isClientOnboarding && (
-                    <div className="admin-instructions-box">
-                        <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
-                        <textarea
-                            id="admin-instructions-diet"
-                            rows={3}
-                            value={adminInstructions}
-                            onChange={(e) => setAdminInstructions(e.target.value)}
-                            placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                        ></textarea>
+                    <div className="regeneration-container">
+                        <div className="admin-instructions-box">
+                            <label htmlFor="admin-instructions-diet-regen">Instrucciones Adicionales (Opcional)</label>
+                            <textarea
+                                id="admin-instructions-diet-regen"
+                                rows={3}
+                                value={adminInstructions}
+                                onChange={(e) => setAdminInstructions(e.target.value)}
+                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                            ></textarea>
+                        </div>
+                        <button className="cta-button regenerate" onClick={() => handleGenerate(activePlanIndex)} disabled={isGenerating}>
+                            Regenerar Plan
+                        </button>
                     </div>
                 )}
-                <button className="cta-button" onClick={handleGenerate}>
-                    Generar Plan de Nutrición con IA
-                </button>
-                <p className="text-secondary">Se creará un plan de nutrición basado en el perfil y objetivo del cliente.</p>
             </div>
         );
-    }
-    
-    // Don't show regeneration UI for client onboarding
-    if (isClientOnboarding) {
-        return <ClientDietView dietPlan={currentPlan} />;
-    }
-    
+    };
+
     return (
-        <div className="diet-plan-container">
-            <div className="actions-bar">
-                 <h2>Plan de Nutrición</h2>
-            </div>
-
-            <ClientDietView dietPlan={currentPlan} />
-
-            <div className="regeneration-container">
-                <div className="admin-instructions-box">
-                    <label htmlFor="admin-instructions-diet-regen">Instrucciones Adicionales (Opcional)</label>
-                    <textarea
-                        id="admin-instructions-diet-regen"
-                        rows={3}
-                        value={adminInstructions}
-                        onChange={(e) => setAdminInstructions(e.target.value)}
-                        placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                    ></textarea>
+        <div className="multi-plan-container">
+             {!isClientOnboarding && (
+                <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                    <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                    <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
                 </div>
-                <button className="cta-button regenerate" onClick={handleGenerate} disabled={isGenerating}>
-                    Regenerar Plan
-                </button>
+            )}
+            <div className="animated-fade-in">
+                 {renderPlanContent(currentPlan)}
             </div>
         </div>
     );
 };
+
 
 // --- Client View ---
 
@@ -1938,7 +1953,7 @@ const ClientOnboardingView: React.FC<{
     };
     
     const handleSaveAndStart = async () => {
-        if (!clientData.routine || !clientData.dietPlan) {
+        if (!clientData.routine || !clientData.dietPlans[0]) {
             alert("Por favor, genera tu rutina y plan de nutrición antes de comenzar.");
             return;
         }
@@ -1946,7 +1961,7 @@ const ClientOnboardingView: React.FC<{
         const finalData: Partial<ClientData> = {
             profile: clientData.profile,
             routine: clientData.routine,
-            dietPlan: clientData.dietPlan,
+            dietPlans: clientData.dietPlans,
             routineGeneratedDate: new Date().toISOString(),
             planStatus: 'active',
         };
@@ -1989,7 +2004,7 @@ const ClientOnboardingView: React.FC<{
                 <button 
                     className="cta-button" 
                     onClick={handleSaveAndStart} 
-                    disabled={isSaving || !clientData.routine || !clientData.dietPlan}
+                    disabled={isSaving || !clientData.routine || !clientData.dietPlans[0]}
                 >
                     {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
                 </button>
@@ -2010,7 +2025,9 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                     ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} /> 
                     : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
             case 'diet':
-                return clientData.dietPlan ? <ClientDietView dietPlan={clientData.dietPlan} /> : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
+                return clientData.dietPlans && (clientData.dietPlans[0] || clientData.dietPlans[1])
+                    ? <ClientDietTabsView dietPlans={clientData.dietPlans} /> 
+                    : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
             case 'progress':
                 return <ProgressView clientData={clientData} />;
             case 'profile':
@@ -2039,6 +2056,28 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
         </div>
     );
 }
+
+const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+    const activePlan = dietPlans[activePlanIndex];
+
+    return (
+        <div>
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+            </div>
+            {activePlan ? (
+                <ClientDietView dietPlan={activePlan} />
+            ) : (
+                <div className="placeholder" style={{ marginTop: '2rem' }}>
+                    <p>Este plan de nutrición aún no ha sido generado por tu entrenador.</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
      <div className="diet-plan-container animated-fade-in">
@@ -2655,7 +2694,7 @@ const ChatAssistant: React.FC<{
                         Eres un asistente de fitness experto para la aplicación ScorpionGYM AI. Tu nombre es "Scorpion AI".
                         El perfil completo del cliente con el que estás chateando es: ${JSON.stringify(clientData.profile)}.
                         La rutina actual del cliente es: ${JSON.stringify(clientData.routine)}.
-                        El plan de nutrición actual del cliente es: ${JSON.stringify(clientData.dietPlan)}.
+                        El plan de nutrición actual del cliente es: ${JSON.stringify(clientData.dietPlans)}.
 
                         Tus responsabilidades y reglas son:
                         1.  **Personalización Extrema:** TODAS tus respuestas deben estar personalizadas según el perfil, rutina y dieta del cliente. Usa su información para dar consejos relevantes. No des respuestas genéricas.
