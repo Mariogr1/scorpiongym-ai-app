@@ -1853,12 +1853,10 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
 
     return (
         <div className="multi-plan-container">
-             {!isClientOnboarding && (
-                <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
-                    <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
-                    <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
-                </div>
-            )}
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+            </div>
             <div className="animated-fade-in">
                  {renderPlanContent(currentPlan)}
             </div>
