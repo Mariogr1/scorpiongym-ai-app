@@ -1951,8 +1951,8 @@ const ClientOnboardingView: React.FC<{
     };
     
     const handleSaveAndStart = async () => {
-        if (!clientData.routine || !clientData.dietPlans[0]) {
-            alert("Por favor, genera tu rutina y plan de nutrición antes de comenzar.");
+        if (!clientData.routine || clientData.dietPlans.every(p => p === null)) {
+            alert("Por favor, genera tu rutina y al menos un plan de nutrición antes de comenzar.");
             return;
         }
         setIsSaving(true);
@@ -2002,7 +2002,7 @@ const ClientOnboardingView: React.FC<{
                 <button 
                     className="cta-button" 
                     onClick={handleSaveAndStart} 
-                    disabled={isSaving || !clientData.routine || !clientData.dietPlans[0]}
+                    disabled={isSaving || !clientData.routine || clientData.dietPlans.every(p => p === null)}
                 >
                     {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
                 </button>
