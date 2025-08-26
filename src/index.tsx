@@ -979,7 +979,7 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
 const ProfileEditor: React.FC<{ 
     clientData: ClientData; 
     setClientData: (data: ClientData) => void; 
-    onDataUpdate?: () => void; // Optional callback for parent
+    onDataUpdate?: () => void;
     isClientOnboarding?: boolean;
 }> = ({ clientData, setClientData, onDataUpdate, isClientOnboarding = false }) => {
     const [profile, setProfile] = useState<Profile>(clientData.profile);
@@ -1036,8 +1036,8 @@ const ProfileEditor: React.FC<{
         if (window.confirm("¿Estás seguro de que quieres habilitar la generación de un nuevo plan para este cliente? Su plan actual será borrado.")) {
             const success = await apiClient.enablePlanGeneration(clientData.dni);
             if (success) {
+                if(onDataUpdate) await onDataUpdate(); // Await the data refetch to prevent race conditions
                 alert("¡Listo! El cliente ahora puede generar un nuevo plan.");
-                if(onDataUpdate) onDataUpdate();
             } else {
                 alert("Error al habilitar la generación del plan.");
             }
@@ -1771,12 +1771,26 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 const newDietPlans: [DietPlan, DietPlan] = [plan1, plan2];
                 setClientData({ ...clientData, dietPlans: newDietPlans });
             } else {
-                // Generate a single plan for the trainer at the active index
-                const generatedPlan = await generateSinglePlan(createPrompt(false));
-                const newDietPlans = [...(clientData.dietPlans || [null, null])];
-                newDietPlans[activePlanIndex] = generatedPlan;
-                setClientData({ ...clientData, dietPlans: newDietPlans });
-                await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
+                // Trainer's view
+                const isFirstTimeGeneration = !clientData.dietPlans || (!clientData.dietPlans[0] && !clientData.dietPlans[1]);
+
+                if (isFirstTimeGeneration) {
+                    // If no plans exist, generate both
+                    const [plan1, plan2] = await Promise.all([
+                        generateSinglePlan(createPrompt(false)),
+                        generateSinglePlan(createPrompt(true))
+                    ]);
+                    const newDietPlans: [DietPlan, DietPlan] = [plan1, plan2];
+                    setClientData({ ...clientData, dietPlans: newDietPlans });
+                    await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
+                } else {
+                    // If at least one plan exists, regenerate only the active one
+                    const generatedPlan = await generateSinglePlan(createPrompt(false));
+                    const newDietPlans = [...(clientData.dietPlans || [null, null])] as [DietPlan | null, DietPlan | null];
+                    newDietPlans[activePlanIndex] = generatedPlan;
+                    setClientData({ ...clientData, dietPlans: newDietPlans });
+                    await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
+                }
             }
         } catch (err) {
             console.error(err);
@@ -1909,7 +1923,12 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                 <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
             )}
             
-            <ChatAssistant clientData={clientData} setClientData={setClientData} isVisible={showChat} onClose={() => setShowChat(false)} />
+            <ChatAssistant 
+                clientData={clientData} 
+                setClientData={setClientData} 
+                isVisible={showChat} 
+                onClose={() => setShowChat(false)} 
+            />
             
             {!showChat && (
                  <button className="chat-fab" onClick={() => setShowChat(true)} aria-label="Abrir asistente IA">
@@ -2614,12 +2633,12 @@ const LiftProgress: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
                 value={selectedExercise}
                 onChange={e => setSelectedExercise(e.target.value)}
             >
-                {exerciseOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                {exerciseOptions.map(ex => <option key={ex} value={ex}>{ex}</option>)}
             </select>
-            
+
             <div className="progress-list-container">
-                 <h3>Historial de {selectedExercise}</h3>
-                 <div className="progress-list">
+                <h3>Historial de {selectedExercise}</h3>
+                <div className="progress-list">
                      <div className="progress-list-header">
                         <span>Fecha</span>
                         <span>Peso (kg)</span>
@@ -2632,220 +2651,6 @@ const LiftProgress: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
                             <span>{entry.repetitions}</span>
                         </div>
                     ))}
-                 </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Chat Assistant ---
-const ChatAssistant: React.FC<{
-    clientData: ClientData,
-    setClientData: (data: ClientData) => void,
-    isVisible: boolean,
-    onClose: () => void,
-}> = ({ clientData, setClientData, isVisible, onClose }) => {
-    type Message = {
-        role: 'user' | 'model';
-        parts: { text: string; image?: { data: string; mimeType: string } }[];
-    };
-    
-    const [chat, setChat] = useState<Chat | null>(null);
-    const [history, setHistory] = useState<Message[]>([]);
-    const [input, setInput] = useState('');
-    const [isThinking, setIsThinking] = useState(false);
-    const [error, setError] = useState('');
-    const [image, setImage] = useState<{ data: string; mimeType: string } | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    
-    const aiUsage = clientData.aiUsage;
-    const dailyLimit = clientData.dailyQuestionLimit ?? 10;
-    const questionsAskedToday = useMemo(() => {
-        if (!aiUsage) return 0;
-        const today = new Date().toISOString().split('T')[0];
-        if (aiUsage.date === today) {
-            return aiUsage.count;
-        }
-        return 0;
-    }, [aiUsage]);
-    const canAskQuestion = questionsAskedToday < dailyLimit;
-
-    useEffect(() => {
-        if (isVisible) {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const chatInstance = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: {
-                     systemInstruction: `
-                        Eres un asistente de fitness experto para la aplicación ScorpionGYM AI. Tu nombre es "Scorpion AI".
-                        El perfil completo del cliente con el que estás chateando es: ${JSON.stringify(clientData.profile)}.
-                        La rutina actual del cliente es: ${JSON.stringify(clientData.routine)}.
-                        El plan de nutrición actual del cliente es: ${JSON.stringify(clientData.dietPlans)}.
-
-                        Tus responsabilidades y reglas son:
-                        1.  **Personalización Extrema:** TODAS tus respuestas deben estar personalizadas según el perfil, rutina y dieta del cliente. Usa su información para dar consejos relevantes. No des respuestas genéricas.
-                        2.  **Rol:** Actúa como un entrenador personal motivador, amigable y experto. Usa un tono de apoyo.
-                        3.  **Límites:** NO puedes modificar la rutina o el plan de dieta del cliente. Si te piden cambios, debes decirles que contacten a su entrenador humano para cualquier modificación. Tu rol es dar soporte, no alterar el plan.
-                        4.  **Temas:** Responde únicamente a preguntas sobre fitness, nutrición, ejecución de ejercicios, motivación y temas relacionados con el entrenamiento. Si te preguntan sobre otros temas (historia, política, etc.), responde amablemente que tu especialidad es el fitness y no puedes contestar a eso.
-                        5.  **Seguridad Primero:** Siempre prioriza la seguridad. Si preguntan sobre un ejercicio y sienten dolor, aconséjales parar inmediatamente y consultar a su entrenador o a un profesional de la salud.
-                        6.  **Claridad:** Sé claro y conciso en tus respuestas.
-                        7.  **Análisis de Imágenes:** Si el usuario sube una imagen, analízala en el contexto de su pregunta. Por ejemplo, si es una foto de comida, puedes estimar calorías o dar una opinión nutricional. Si es una foto de su postura en un ejercicio, puedes ofrecer consejos de técnica (siempre con la advertencia de que no reemplaza a un entrenador).
-                    `,
-                },
-            });
-            setChat(chatInstance);
-            if (history.length === 0) {
-                 setHistory([{ role: 'model', parts: [{ text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI, tu asistente. ¿En qué puedo ayudarte hoy con tu entrenamiento o nutrición?` }] }]);
-            }
-        }
-    }, [isVisible, clientData]);
-    
-     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [history, isThinking]);
-
-
-    const sendMessage = async () => {
-        if (isThinking || (!input.trim() && !image)) return;
-        
-        if (!canAskQuestion) {
-            setError(`Has alcanzado tu límite de ${dailyLimit} preguntas por hoy.`);
-            return;
-        }
-
-        setIsThinking(true);
-        setError('');
-
-        const userMessageParts = [];
-        if (input.trim()) {
-            userMessageParts.push({ text: input.trim() });
-        }
-        if (image) {
-            userMessageParts.push({ text: "Analiza esta imagen en el contexto de mi pregunta.", image });
-        }
-        
-        const newUserMessage: Message = { role: 'user', parts: userMessageParts };
-        setHistory(prev => [...prev, newUserMessage]);
-        
-        try {
-            if (!chat) throw new Error("Chat not initialized.");
-            
-            const messagePartsForApi: (string | { inlineData: { data: string, mimeType: string } })[] = [];
-            if (input.trim()) {
-                messagePartsForApi.push(input.trim());
-            }
-            if (image) {
-                messagePartsForApi.push({ inlineData: image });
-            }
-
-            const stream = await chat.sendMessageStream({ message: messagePartsForApi });
-            
-            let responseText = '';
-            setHistory(prev => [...prev, { role: 'model', parts: [{ text: responseText }] }]);
-
-            for await (const chunk of stream) {
-                responseText += chunk.text;
-                 setHistory(prev => {
-                    const newHistory = [...prev];
-                    newHistory[newHistory.length - 1] = { role: 'model', parts: [{ text: responseText }] };
-                    return newHistory;
-                });
-            }
-
-            // Update usage count
-            const today = new Date().toISOString().split('T')[0];
-            const newCount = (aiUsage?.date === today) ? (aiUsage.count + 1) : 1;
-            const newUsage = { date: today, count: newCount };
-            setClientData({...clientData, aiUsage: newUsage });
-            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
-
-        } catch (err) {
-            console.error(err);
-            setError("Lo siento, ocurrió un error al procesar tu solicitud.");
-             setHistory(prev => [...prev, { role: 'model', parts: [{ text: "Lo siento, ocurrió un error al procesar tu solicitud." }] }]);
-        } finally {
-            setIsThinking(false);
-            setInput('');
-            setImage(null);
-        }
-    };
-    
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64String = (reader.result as string).split(',')[1];
-                setImage({ data: base64String, mimeType: file.type });
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    if (!isVisible) return null;
-
-    return (
-        <div className="chat-modal-overlay" onClick={onClose}>
-            <div className="chat-modal-content" onClick={e => e.stopPropagation()}>
-                <div className="chat-modal-header">
-                    <h3>Asistente IA</h3>
-                     <p style={{ margin: 0, color: 'var(--text-secondary-color)', fontSize: '0.9rem' }}>
-                        {questionsAskedToday}/{dailyLimit}
-                    </p>
-                    <button className="close-button" onClick={onClose}>&times;</button>
-                </div>
-                <div className="chat-messages" ref={messagesEndRef}>
-                    {history.map((msg, index) => (
-                        <div key={index} className={`chat-message ${msg.role}`}>
-                            <div className="avatar">
-                                {msg.role === 'user' ? 'TÚ' : '🦂'}
-                            </div>
-                            <div className="message-content">
-                                {msg.parts.map((part, i) => (
-                                     <React.Fragment key={i}>
-                                        <p>{part.text}</p>
-                                        {part.image && <img src={`data:${part.image.mimeType};base64,${part.image.data}`} alt="Contexto de usuario"/>}
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                    {isThinking && (
-                        <div className="chat-message model">
-                             <div className="avatar">🦂</div>
-                             <div className="message-content">
-                                <div className="chat-typing-indicator">
-                                    <span></span><span></span><span></span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <div className="chat-input-area">
-                    {image && (
-                         <div className="chat-image-preview">
-                            <img src={`data:${image.mimeType};base64,${image.data}`} alt="Vista previa" />
-                            <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
-                        </div>
-                    )}
-                    {error && <p className="error-text">{error}</p>}
-                    <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
-                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
-                        <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M21.58,16.09L19.82,17.85L18.31,16.34L15.41,19.24L10,13.83L12.08,11.75L14.27,13.94L16.8,11.41L15,9.62L16.09,8.53L18.31,10.75L21.58,7.47L22.29,8.18L19.03,11.45L16.8,9.23L15.38,10.64L14.27,11.75L12.08,13.94L10,11.86L6.73,15.13L2,10.4L2.71,9.69L6,12.97L9.27,9.7L11.35,11.78L13.56,9.56L12.5,8.5L14.27,6.73L16.04,8.5L18.31,6.23L19.23,7.15L16.8,9.58L14.27,12.11L11.75,14.63L10,16.38L15.41,21.79L19.22,18L20.27,19.05L21.28,18.04L22,17.33L21.58,16.09Z" /></svg>
-                        </button>
-                        <input 
-                            type="text" 
-                            placeholder={canAskQuestion ? "Escribe tu pregunta..." : "Límite diario alcanzado."}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            disabled={isThinking || !canAskQuestion}
-                        />
-                         <button type="submit" disabled={isThinking || (!input.trim() && !image) || !canAskQuestion}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
-                        </button>
-                    </form>
                 </div>
             </div>
         </div>
@@ -2853,284 +2658,263 @@ const ChatAssistant: React.FC<{
 };
 
 
-// --- Exercise Library ---
-const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
-    return (
-        <div className="admin-dashboard animated-fade-in">
-            <div className="main-header">
-                <div className="header-title-wrapper">
-                    <h1>Biblioteca de Ejercicios</h1>
-                </div>
-                <button onClick={onBack} className="back-button">Volver al Panel</button>
-            </div>
-            <div className="library-container">
-                <LibraryContent gymId={gymId} />
-            </div>
-        </div>
-    );
-};
-
-const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
+// --- Library Manager ---
+const ExerciseLibraryManager: React.FC<{ gymId: string, onBack: () => void }> = ({ gymId, onBack }) => {
     const [library, setLibrary] = useState<ExerciseLibrary>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [editingExercise, setEditingExercise] = useState<{ group: string, index: number, name: string, link: string } | null>(null);
-    const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
 
     useEffect(() => {
+        const fetchLibrary = async () => {
+            setIsLoading(true);
+            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+            setLibrary(fetchedLibrary);
+            if (Object.keys(fetchedLibrary).length > 0) {
+                setActiveGroup(Object.keys(fetchedLibrary)[0]);
+            }
+            setIsLoading(false);
+        };
         fetchLibrary();
     }, [gymId]);
 
-    const fetchLibrary = async () => {
-        setIsLoading(true);
-        const lib = await apiClient.getExerciseLibrary(gymId);
-        setLibrary(lib);
-        setIsLoading(false);
+    const handleSaveChanges = async () => {
+        setIsSaving(true);
+        const success = await apiClient.saveExerciseLibrary(library, gymId);
+        setSaveStatus(success ? 'saved' : 'error');
+        setIsSaving(false);
+        setTimeout(() => setSaveStatus('idle'), 2000);
     };
     
-    const handleSaveChanges = async (newLibrary: ExerciseLibrary) => {
-        const success = await apiClient.saveExerciseLibrary(newLibrary, gymId);
-        if (success) {
-            setLibrary(newLibrary);
-        } else {
-            alert("Error al guardar la biblioteca.");
-        }
-    };
-    
-    const handleAddExercise = (group: string, name: string) => {
-        const newLibrary = { ...library };
-        if (!newLibrary[group]) {
-            newLibrary[group] = [];
-        }
-        // Check for duplicates
-        if (newLibrary[group].some(ex => ex.name.toLowerCase() === name.toLowerCase())) {
-            alert(`El ejercicio "${name}" ya existe en el grupo "${group}".`);
-            return;
-        }
-        newLibrary[group].push({ name, isEnabled: true, youtubeLink: '' });
-        newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
-        handleSaveChanges(newLibrary);
-    };
-    
-    const handleToggleEnable = (group: string, index: number) => {
-        const newLibrary = { ...library };
-        newLibrary[group][index].isEnabled = !newLibrary[group][index].isEnabled;
-        handleSaveChanges(newLibrary);
-    };
-    
-    const handleUpdateExercise = () => {
-        if (!editingExercise) return;
-        const { group, index, name, link } = editingExercise;
-        const newLibrary = { ...library };
-        // Check for duplicates if name changed
-        if (newLibrary[group][index].name !== name && newLibrary[group].some((ex, i) => i !== index && ex.name.toLowerCase() === name.toLowerCase())) {
-             alert(`El ejercicio "${name}" ya existe en este grupo.`);
-             return;
-        }
-        newLibrary[group][index] = { name, isEnabled: newLibrary[group][index].isEnabled, youtubeLink: link };
-        newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
-        handleSaveChanges(newLibrary);
-        setEditingExercise(null);
+    const handleExerciseToggle = (group: string, exerciseName: string) => {
+        setLibrary(prev => {
+            const newLibrary = { ...prev };
+            const exercise = newLibrary[group].find(ex => ex.name === exerciseName);
+            if (exercise) {
+                exercise.isEnabled = !exercise.isEnabled;
+            }
+            return newLibrary;
+        });
+        setSaveStatus('idle');
     };
 
-    const handleDeleteExercise = (group: string, index: number) => {
-         if (window.confirm(`¿Estás seguro de que quieres eliminar el ejercicio "${library[group][index].name}"?`)) {
-            const newLibrary = { ...library };
-            newLibrary[group].splice(index, 1);
-            handleSaveChanges(newLibrary);
-        }
+    const handleLinkChange = (group: string, exerciseName: string, link: string) => {
+        setLibrary(prev => {
+            const newLibrary = { ...prev };
+            const exercise = newLibrary[group].find(ex => ex.name === exerciseName);
+            if (exercise) {
+                exercise.youtubeLink = link;
+            }
+            return newLibrary;
+        });
+        setSaveStatus('idle');
     };
 
     if (isLoading) {
         return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
     }
-
+    
     return (
-        <div>
-            <div className="library-instructions">
-                <p>Gestiona los ejercicios disponibles para la IA. Desactiva los que no quieras que se usen en las rutinas o añade nuevos ejercicios a cada grupo muscular.</p>
+        <div className="library-manager animated-fade-in">
+            <div className="library-header">
+                <h2>Biblioteca de Ejercicios</h2>
+                <div className="library-actions">
+                    <button onClick={onBack} className="back-button">Volver</button>
+                    <button onClick={handleSaveChanges} disabled={isSaving} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
+                         {isSaving ? 'Guardando...' : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
+                    </button>
+                </div>
             </div>
-            
-             <AddExerciseToLibraryForm library={library} onAddExercise={handleAddExercise} />
-
-            <div className="library-accordion">
-                {Object.keys(library).sort().map(group => (
-                    <div className="library-accordion-item" key={group}>
+            <p className="library-description">
+                Gestiona los ejercicios disponibles para la generación de rutinas por IA. 
+                Desactiva los que no correspondan a tu equipamiento. Puedes añadir links de YouTube para referencia.
+            </p>
+            <div className="library-layout">
+                <nav className="library-nav">
+                    {Object.keys(library).map(group => (
                         <button 
-                            className={`library-accordion-header ${activeAccordion === group ? 'active' : ''}`}
-                            onClick={() => setActiveAccordion(activeAccordion === group ? null : group)}
+                            key={group} 
+                            onClick={() => setActiveGroup(group)}
+                            className={`library-nav-button ${activeGroup === group ? 'active' : ''}`}
                         >
                             {group}
-                             <span className="icon">+</span>
                         </button>
-                        <div className={`library-accordion-content ${activeAccordion === group ? 'open' : ''}`}>
-                            <div className="exercise-entry-list">
-                                <div className="exercise-entry-header">
-                                    <span>Activo</span>
-                                    <span>Nombre del Ejercicio</span>
-                                    <span>Link de YouTube (Opcional)</span>
-                                    <span>Acciones</span>
-                                </div>
-                                {library[group].map((exercise, index) => {
-                                    const isEditingThis = editingExercise?.group === group && editingExercise?.index === index;
-                                    return (
-                                        <div className="exercise-entry-row" key={index}>
-                                             <label className="switch">
-                                                <input type="checkbox" checked={exercise.isEnabled} onChange={() => handleToggleEnable(group, index)} />
-                                                <span className="slider round"></span>
-                                            </label>
-                                             <div>
-                                                {isEditingThis ? (
-                                                     <input 
-                                                        type="text" 
-                                                        className="editing-input"
-                                                        value={editingExercise.name} 
-                                                        onChange={(e) => setEditingExercise({...editingExercise, name: e.target.value})} 
-                                                    />
-                                                ) : (
-                                                    <span className="exercise-name-lib">{exercise.name}</span>
-                                                )}
-                                             </div>
-                                             <div>
-                                                 {isEditingThis ? (
-                                                    <input 
-                                                        type="text" 
-                                                        className="editing-input"
-                                                        value={editingExercise.link} 
-                                                        onChange={(e) => setEditingExercise({...editingExercise, link: e.target.value})}
-                                                        placeholder="https://youtu.be/..."
-                                                    />
-                                                ) : (
-                                                    <a href={exercise.youtubeLink || '#'} target="_blank" rel="noopener noreferrer" className={`video-link-lib ${!exercise.youtubeLink ? 'disabled' : ''}`}>
-                                                        {exercise.youtubeLink ? 'Ver Video' : 'Sin video'}
-                                                    </a>
-                                                )}
-                                             </div>
-                                            <div className="exercise-row-actions">
-                                                {isEditingThis ? (
-                                                    <>
-                                                        <button className="action-btn save" onClick={handleUpdateExercise}>Guardar</button>
-                                                        <button className="action-btn cancel" onClick={() => setEditingExercise(null)}>Cancelar</button>
-                                                    </>
-                                                ) : (
-                                                     <>
-                                                        <button className="action-btn edit" onClick={() => setEditingExercise({ group, index, name: exercise.name, link: exercise.youtubeLink })}>Editar</button>
-                                                        <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)}>Borrar</button>
-                                                     </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-
-const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExercise: (group: string, name: string) => void }> = ({ library, onAddExercise }) => {
-    const [newExerciseName, setNewExerciseName] = useState('');
-    const [selectedGroup, setSelectedGroup] = useState(Object.keys(library)[0] || '');
-    
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newExerciseName.trim() || !selectedGroup) {
-            alert("Por favor, completa el nombre y selecciona un grupo.");
-            return;
-        }
-        onAddExercise(selectedGroup, newExerciseName.trim());
-        setNewExerciseName('');
-    };
-    
-    return (
-        <div className="add-exercise-container">
-            <div className="add-exercise-form-wrapper">
-                <h3>Añadir Nuevo Ejercicio</h3>
-                <form onSubmit={handleSubmit} className="add-exercise-form">
-                     <input
-                        type="text"
-                        placeholder="Nombre del Ejercicio"
-                        value={newExerciseName}
-                        onChange={(e) => setNewExerciseName(e.target.value)}
-                        required
-                    />
-                    <select
-                        value={selectedGroup}
-                        onChange={(e) => setSelectedGroup(e.target.value)}
-                        required
-                    >
-                        <option value="" disabled>-- Selecciona un Grupo --</option>
-                        {Object.keys(library).sort().map(group => (
-                            <option key={group} value={group}>{group}</option>
-                        ))}
-                    </select>
-                    <button type="submit">Añadir</button>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-
-// --- Generic Components ---
-
-const ConfirmationModal: React.FC<{
-    message: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-    confirmText?: string;
-    cancelText?: string;
-    confirmClass?: 'delete' | 'archive';
-}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
-    return (
-        <div className="modal-overlay">
-            <div className="modal-content">
-                <p>{message}</p>
-                <div className="modal-actions">
-                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
-                    <button 
-                        onClick={onConfirm} 
-                        className={`cta-button ${confirmClass === 'delete' ? 'delete-selected-button' : (confirmClass === 'archive' ? 'archive-selected-button' : '')}`}
-                    >
-                        {confirmText}
-                    </button>
+                    ))}
+                </nav>
+                <div className="library-content">
+                    {activeGroup && library[activeGroup] ? (
+                        <ul className="library-exercise-list">
+                           {library[activeGroup].map(ex => (
+                               <li key={ex.name} className="library-exercise-item">
+                                   <div className="exercise-toggle">
+                                       <label className="switch">
+                                          <input 
+                                              type="checkbox" 
+                                              checked={ex.isEnabled} 
+                                              onChange={() => handleExerciseToggle(activeGroup, ex.name)}
+                                          />
+                                          <span className="slider round"></span>
+                                       </label>
+                                       <span>{ex.name}</span>
+                                   </div>
+                                   <div className="exercise-link-input">
+                                       <input 
+                                           type="text" 
+                                           placeholder="Link de YouTube (opcional)"
+                                           value={ex.youtubeLink}
+                                           onChange={(e) => handleLinkChange(activeGroup, ex.name, e.target.value)}
+                                       />
+                                   </div>
+                               </li>
+                           ))}
+                        </ul>
+                    ) : (
+                        <p>Selecciona un grupo muscular.</p>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
 
-// --- Trainer Request/Ticket System ---
+// --- Trainer Request/Inbox Views ---
 
-const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
-    const [subject, setSubject] = useState('Cambiar un ejercicio');
+const RequestsView: React.FC<{
+    requests: TrainerRequest[];
+    onUpdateRequest: () => void;
+}> = ({ requests, onUpdateRequest }) => {
+    const [activeRequest, setActiveRequest] = useState<TrainerRequest | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<TrainerRequest | null>(null);
+
+    const sortedRequests = useMemo(() => {
+        return [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [requests]);
+
+    const handleSelectRequest = async (req: TrainerRequest) => {
+        setActiveRequest(req);
+        if (req.status === 'new') {
+            const success = await apiClient.updateRequestStatus(req._id, 'read');
+            if (success) {
+                onUpdateRequest();
+            }
+        }
+    };
+    
+    const handleResolve = async () => {
+        if (!activeRequest) return;
+        const success = await apiClient.updateRequestStatus(activeRequest._id, 'resolved');
+        if (success) {
+            onUpdateRequest();
+            setActiveRequest(null);
+        }
+    };
+    
+    const handleDelete = async () => {
+        if (!showDeleteConfirm) return;
+        const success = await apiClient.deleteRequest(showDeleteConfirm._id);
+        if (success) {
+            onUpdateRequest();
+            if (activeRequest?._id === showDeleteConfirm._id) {
+                setActiveRequest(null);
+            }
+            setShowDeleteConfirm(null);
+        }
+    };
+
+    return (
+        <div className="requests-view animated-fade-in">
+            <div className="requests-list-panel">
+                <h3>Bandeja de Entrada</h3>
+                <div className="requests-list">
+                    {sortedRequests.length > 0 ? sortedRequests.map(req => (
+                        <div key={req._id} className={`request-item ${req.status} ${activeRequest?._id === req._id ? 'active' : ''}`} onClick={() => handleSelectRequest(req)}>
+                            <div className="request-item-header">
+                                <strong>{req.clientName}</strong>
+                                <span className="request-item-date">{new Date(req.createdAt).toLocaleDateString()}</span>
+                            </div>
+                            <p>{req.subject}</p>
+                        </div>
+                    )) : <p className="placeholder">No hay solicitudes.</p>}
+                </div>
+            </div>
+            <div className="request-detail-panel">
+                {activeRequest ? (
+                    <div className="request-detail-content">
+                        <div className="request-detail-header">
+                            <div>
+                               <h3>{activeRequest.subject}</h3>
+                               <p>De: <strong>{activeRequest.clientName}</strong> | Estado: <span className={`request-status-badge ${activeRequest.status}`}>{activeRequest.status}</span></p>
+                            </div>
+                             <div className="request-actions">
+                                {activeRequest.status !== 'resolved' && <button className="cta-button" onClick={handleResolve}>Marcar como Resuelto</button>}
+                                <button className="cta-button delete" onClick={() => setShowDeleteConfirm(activeRequest)}>Eliminar</button>
+                            </div>
+                        </div>
+                        <div className="request-message-body">
+                           <p>{activeRequest.message}</p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="placeholder-detail">Selecciona una solicitud para verla.</div>
+                )}
+            </div>
+             {showDeleteConfirm && (
+                <ConfirmationModal
+                    message={`¿Estás seguro de que quieres eliminar esta solicitud?`}
+                    onConfirm={handleDelete}
+                    onCancel={() => setShowDeleteConfirm(null)}
+                    confirmText="Eliminar"
+                    confirmClass="delete"
+                />
+            )}
+        </div>
+    );
+};
+
+
+// --- Modals ---
+const ConfirmationModal: React.FC<{
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    confirmText?: string;
+    confirmClass?: string;
+}> = ({ message, onConfirm, onCancel, confirmText = "Confirmar", confirmClass = "" }) => {
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content confirmation-modal">
+                <p>{message}</p>
+                <div className="modal-actions">
+                    <button onClick={onCancel} className="cta-button secondary">Cancelar</button>
+                    <button onClick={onConfirm} className={`cta-button ${confirmClass}`}>{confirmText}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const RequestModal: React.FC<{ client: ClientData; onClose: () => void; }> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!message.trim()) {
-            alert("Por favor, escribe un mensaje.");
-            return;
-        }
         setIsSubmitting(true);
         setStatus('idle');
-        
+
         const success = await apiClient.createRequest({
             clientId: client.dni,
             clientName: client.profile.name,
             gymId: client.gymId,
             subject,
-            message
+            message,
         });
 
         if (success) {
             setStatus('success');
-            setMessage('');
             setTimeout(() => {
                 onClose();
             }, 2000);
@@ -3142,39 +2926,29 @@ const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ c
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content edit-modal">
-                <h3>Contactar a tu Entrenador</h3>
+            <div className="modal-content request-modal">
+                <button onClick={onClose} className="close-button">&times;</button>
+                <h3>Solicitar Cambio al Entrenador</h3>
                 {status === 'success' ? (
-                    <div className="success-message">
-                        <p>¡Mensaje enviado! Tu entrenador lo revisará pronto.</p>
+                     <div className="success-message">
+                        <h4>¡Solicitud Enviada!</h4>
+                        <p>Tu entrenador revisará tu mensaje pronto.</p>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label htmlFor="request-subject">Asunto</label>
-                            <select id="request-subject" value={subject} onChange={e => setSubject(e.target.value)}>
-                                <option>Cambiar un ejercicio</option>
-                                <option>Ajustar dificultad (muy fácil/difícil)</option>
-                                <option>Dudas sobre la rutina</option>
-                                <option>Otro</option>
-                            </select>
+                            <label htmlFor="subject">Asunto</label>
+                            <input type="text" id="subject" value={subject} onChange={e => setSubject(e.target.value)} required />
                         </div>
                         <div className="form-group">
-                            <label htmlFor="request-message">Mensaje</label>
-                            <textarea
-                                id="request-message"
-                                rows={5}
-                                value={message}
-                                onChange={e => setMessage(e.target.value)}
-                                placeholder="Escribe aquí tu consulta o el cambio que te gustaría solicitar..."
-                                required
-                            ></textarea>
+                            <label htmlFor="message">Mensaje</label>
+                            <textarea id="message" rows={5} value={message} onChange={e => setMessage(e.target.value)} required placeholder="Describe qué te gustaría cambiar o qué problema tienes..."></textarea>
                         </div>
-                        {status === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
-                        <div className="modal-actions" style={{ marginTop: '2rem' }}>
+                         {status === 'error' && <p className="error-text">No se pudo enviar la solicitud. Intenta de nuevo.</p>}
+                        <div className="modal-actions">
                             <button type="button" className="cta-button secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</button>
                             <button type="submit" className="cta-button" disabled={isSubmitting}>
-                                {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
+                                {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
                             </button>
                         </div>
                     </form>
@@ -3184,77 +2958,144 @@ const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ c
     );
 };
 
-const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
-    const [filter, setFilter] = useState<'new' | 'read' | 'resolved' | 'all'>('all');
+// --- AI Chat Assistant ---
+const ChatAssistant: React.FC<{
+    clientData: ClientData;
+    setClientData: (data: ClientData) => void;
+    isVisible: boolean;
+    onClose: () => void;
+}> = ({ clientData, setClientData, isVisible, onClose }) => {
+    const [chat, setChat] = useState<Chat | null>(null);
+    const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; }[]>([]);
+    const [userInput, setUserInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const chatContentRef = useRef<HTMLDivElement>(null);
+
+    const dailyLimit = clientData.dailyQuestionLimit ?? 5;
+    const today = new Date().toISOString().split('T')[0];
+    const questionsAskedToday = clientData.aiUsage?.date === today ? clientData.aiUsage.count : 0;
+    const questionsLeft = dailyLimit - questionsAskedToday;
+
+
+    useEffect(() => {
+        if (isVisible) {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const systemInstruction = `
+                Sos Scorpion AI, un asistente virtual de fitness y nutrición. El perfil del cliente es ${JSON.stringify(clientData.profile)}. 
+                Su rutina actual es: ${JSON.stringify(clientData.routine)}.
+                Sus planes de nutrición son: ${JSON.stringify(clientData.dietPlans)}.
+                Respondé sus preguntas basándote en esta información. Sé alentador, conciso y útil. 
+                No des consejos médicos. Si te preguntan algo fuera de fitness o nutrición, negáte amablemente. 
+                Todas tus respuestas DEBEN ser en español de Argentina.
+            `;
+            const newChat = ai.chats.create({
+                model: 'gemini-2.5-flash',
+                config: { systemInstruction },
+            });
+            setChat(newChat);
+            if (messages.length === 0) {
+                 setMessages([{ role: 'model', text: `¡Hola ${clientData.profile.name}! Soy tu asistente IA. ¿En qué puedo ayudarte hoy? Tenés ${questionsLeft} preguntas restantes.` }]);
+            }
+        }
+    }, [isVisible, clientData]);
     
-    const filteredRequests = useMemo(() => {
-        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        if (filter === 'all') return sorted;
-        return sorted.filter(r => r.status === filter);
-    }, [requests, filter]);
+     useEffect(() => {
+        // Scroll to bottom when new messages appear
+        if (chatContentRef.current) {
+            chatContentRef.current.scrollTop = chatContentRef.current.scrollHeight;
+        }
+    }, [messages]);
 
-    if (requests.length === 0) {
-        return <div className="placeholder">No hay solicitudes de clientes.</div>;
-    }
+    const handleSend = async () => {
+        if (!userInput.trim() || isLoading || !chat) return;
+        
+        if (questionsLeft <= 0) {
+            setError("Has alcanzado tu límite diario de preguntas.");
+            return;
+        }
 
-    return (
-        <div className="requests-view-container">
-            <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
-                <button className={`view-toggle-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
-                <button className={`view-toggle-button ${filter === 'new' ? 'active' : ''}`} onClick={() => setFilter('new')}>Nuevos</button>
-                <button className={`view-toggle-button ${filter === 'read' ? 'active' : ''}`} onClick={() => setFilter('read')}>Leídos</button>
-                <button className={`view-toggle-button ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>Resueltos</button>
-            </div>
-            <div className="request-list">
-                {filteredRequests.map(req => (
-                    <RequestCard key={req._id} request={req} onUpdate={onUpdateRequest} />
-                ))}
-            </div>
-        </div>
-    );
-};
+        const userMessage = { role: 'user' as const, text: userInput };
+        setMessages(prev => [...prev, userMessage]);
+        setUserInput('');
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+            const stream = await chat.sendMessageStream({ message: userInput });
+            
+            // Add a placeholder for the model's response
+            setMessages(prev => [...prev, { role: 'model', text: '' }]);
 
-const RequestCard: React.FC<{ request: TrainerRequest, onUpdate: () => void }> = ({ request, onUpdate }) => {
+            for await (const chunk of stream) {
+                const chunkText = chunk.text;
+                setMessages(prev => {
+                    const lastMessage = prev[prev.length - 1];
+                    if (lastMessage.role === 'model') {
+                        lastMessage.text += chunkText;
+                        return [...prev.slice(0, -1), lastMessage];
+                    }
+                    return prev;
+                });
+            }
 
-    const handleUpdateStatus = async (newStatus: 'read' | 'resolved') => {
-        const success = await apiClient.updateRequestStatus(request._id, newStatus);
-        if (success) onUpdate();
-    };
+            // Update usage count
+            const newCount = questionsAskedToday + 1;
+            const newUsage = { date: today, count: newCount };
+            setClientData({ ...clientData, aiUsage: newUsage });
+            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
 
-    const handleDelete = async () => {
-        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
-            const success = await apiClient.deleteRequest(request._id);
-            if (success) onUpdate();
+        } catch (e) {
+            console.error(e);
+            setError("Hubo un error al contactar a la IA. Intentalo de nuevo.");
+            setMessages(prev => [...prev.slice(0,-1)]); // Remove user message on error
+        } finally {
+            setIsLoading(false);
         }
     };
-    
+
     return (
-        <div className={`request-card status-${request.status}`}>
-            <div className="request-card-header">
-                <div className="request-card-info">
-                    <h4>{request.clientName}</h4>
-                    <span>{new Date(request.createdAt).toLocaleString('es-ES')}</span>
+        <div className={`chat-assistant-container ${isVisible ? 'visible' : ''}`}>
+            <div className="chat-header">
+                <h3>Asistente IA</h3>
+                <div className="chat-header-info">
+                     <span className="questions-left">{questionsLeft}/{dailyLimit} preguntas</span>
+                    <button onClick={onClose} className="close-chat-button">&times;</button>
                 </div>
-                <span className={`request-status-badge status-${request.status}`}>{request.status.toUpperCase()}</span>
             </div>
-            <div className="request-card-body">
-                <strong>{request.subject}</strong>
-                <p>{request.message}</p>
+            <div className="chat-content" ref={chatContentRef}>
+                {messages.map((msg, index) => (
+                    <div key={index} className={`chat-message ${msg.role}`}>
+                        <div className="message-bubble">{msg.text}</div>
+                    </div>
+                ))}
+                 {isLoading && (
+                    <div className="chat-message model">
+                        <div className="message-bubble typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                )}
             </div>
-            <div className="request-card-actions">
-                {request.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus('read')}>Marcar como Leído</button>}
-                {request.status === 'read' && <button className="action-btn save" onClick={() => handleUpdateStatus('resolved')}>Marcar como Resuelto</button>}
-                <button className="action-btn delete" onClick={handleDelete}>Borrar</button>
+            <div className="chat-input-area">
+                <textarea 
+                    value={userInput} 
+                    onChange={e => setUserInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    placeholder={questionsLeft > 0 ? "Escribe tu pregunta..." : "Límite diario alcanzado."}
+                    rows={1}
+                    disabled={isLoading || questionsLeft <= 0}
+                />
+                <button onClick={handleSend} disabled={isLoading || !userInput.trim() || questionsLeft <= 0}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
+                </button>
             </div>
+            {error && <p className="error-text chat-error">{error}</p>}
         </div>
     );
 };
 
 
-// --- App Initialization ---
-const root = createRoot(document.getElementById("root")!);
-root.render(
-    <React.StrictMode>
-        <App />
-    </React.StrictMode>
-);
+const container = document.getElementById("root");
+const root = createRoot(container!);
+root.render(<App />);
