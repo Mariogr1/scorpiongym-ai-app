@@ -1717,19 +1717,22 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
     const [error, setError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
     const [activePlanIndex, setActivePlanIndex] = useState(0);
-    
-    const currentPlan = clientData.dietPlans ? clientData.dietPlans[activePlanIndex] : null;
 
-    const handleGenerate = async (planIndex: number) => {
+    const handleGenerate = async () => {
         setIsGenerating(true);
         setError('');
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const prompt = `
+
+        const createPrompt = (isAlternative: boolean) => {
+            let specialInstructions = isClientOnboarding ? '' : `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"`;
+            if (isAlternative) {
+                 specialInstructions += " Este es un plan alternativo (Plan 2). Por favor, crea una opción diferente al primer plan, utilizando distintos alimentos y preparaciones, pero manteniendo los mismos objetivos de calorías y macronutrientes. Ofrece variedad.";
+            }
+
+            return `
                 Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
                 - Perfil: ${JSON.stringify(clientData.profile)}
                 
-                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
+                ${specialInstructions}
 
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
                 1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
@@ -1738,54 +1741,42 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 4.  El JSON debe seguir esta estructura exacta:
                     {
                         "planTitle": "Título del Plan (ej: Dieta para Hipertrofia)",
-                        "summary": {
-                            "totalCalories": 2500,
-                            "macronutrients": {
-                                "proteinGrams": 180,
-                                "carbsGrams": 300,
-                                "fatGrams": 60
-                            }
-                        },
-                        "meals": [
-                            {
-                                "mealName": "Desayuno",
-                                "foodItems": [
-                                    { "food": "Avena", "amount": "80g" },
-                                    { "food": "Huevos enteros", "amount": "3 unidades" }
-                                ]
-                            }
-                        ],
-                        "recommendations": [
-                            "Beber 2-3 litros de agua al día.",
-                            "Evitar bebidas azucaradas."
-                        ]
+                        "summary": { "totalCalories": 2500, "macronutrients": { "proteinGrams": 180, "carbsGrams": 300, "fatGrams": 60 } },
+                        "meals": [ { "mealName": "Desayuno", "foodItems": [ { "food": "Avena", "amount": "80g" }, { "food": "Huevos enteros", "amount": "3 unidades" } ] } ],
+                        "recommendations": [ "Beber 2-3 litros de agua al día.", "Evitar bebidas azucaradas." ]
                     }
                 5.  Distribuye las calorías y macros en 4-6 comidas a lo largo del día (Desayuno, Media Mañana, Almuerzo, Merienda, Cena, Pre-entreno si es relevante).
                 6.  Utiliza alimentos comunes y saludables, considerando la disponibilidad en Argentina.
                 7.  Las cantidades deben estar en gramos o unidades claras.
                 8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
-            
-            const response: GenerateContentResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
+        };
+        
+        const generateSinglePlan = async (prompt: string): Promise<DietPlan> => {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
             const text = response.text;
-            
             const jsonString = extractJson(text);
-            if (!jsonString) {
-                throw new Error("La IA no devolvió un JSON válido para el plan de nutrición.");
-            }
-            const generatedPlan: DietPlan = JSON.parse(jsonString);
+            if (!jsonString) throw new Error("La IA no devolvió un JSON válido para el plan de nutrición.");
+            return JSON.parse(jsonString);
+        };
 
-            const newDietPlans = [...(clientData.dietPlans || [null, null])];
-            newDietPlans[planIndex] = generatedPlan;
-            
-            const dataToUpdate = { ...clientData, dietPlans: newDietPlans };
-            setClientData(dataToUpdate);
-
-            if (!isClientOnboarding) {
-                 await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
+        try {
+            if (isClientOnboarding) {
+                // Generate both plans in parallel for the client
+                const [plan1, plan2] = await Promise.all([
+                    generateSinglePlan(createPrompt(false)),
+                    generateSinglePlan(createPrompt(true))
+                ]);
+                const newDietPlans: [DietPlan, DietPlan] = [plan1, plan2];
+                setClientData({ ...clientData, dietPlans: newDietPlans });
+            } else {
+                // Generate a single plan for the trainer at the active index
+                const generatedPlan = await generateSinglePlan(createPrompt(false));
+                const newDietPlans = [...(clientData.dietPlans || [null, null])];
+                newDietPlans[activePlanIndex] = generatedPlan;
+                setClientData({ ...clientData, dietPlans: newDietPlans });
+                await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
             }
         } catch (err) {
             console.error(err);
@@ -1796,71 +1787,67 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
     };
     
     if (isGenerating) {
-        return <div className="loading-container"><div className="spinner"></div><p>Generando plan de nutrición...</p></div>;
+        return <div className="loading-container"><div className="spinner"></div><p>Generando plan(es) de nutrición...</p></div>;
     }
      if (error) {
-        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>Intentar de Nuevo</button></div>;
+        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={handleGenerate}>Intentar de Nuevo</button></div>;
     }
-    
-    const renderPlanContent = (plan: DietPlan | null) => {
-        if (!plan) {
+
+    // --- Onboarding View ---
+    if (isClientOnboarding) {
+        const areBothPlansGenerated = clientData.dietPlans && clientData.dietPlans[0] && clientData.dietPlans[1];
+        if (areBothPlansGenerated) {
             return (
-                 <div className="placeholder-action generation-container">
-                    {!isClientOnboarding && (
-                        <div className="admin-instructions-box">
-                            <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
-                            <textarea
-                                id="admin-instructions-diet"
-                                rows={3}
-                                value={adminInstructions}
-                                onChange={(e) => setAdminInstructions(e.target.value)}
-                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                            ></textarea>
-                        </div>
-                    )}
-                    <button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>
-                        Generar Plan de Nutrición con IA
-                    </button>
-                    <p className="text-secondary">Se creará un plan de nutrición basado en el perfil y objetivo del cliente.</p>
+                <div className="diet-plan-container">
+                    <p className="text-secondary" style={{textAlign: 'center', marginBottom: '1.5rem'}}>¡Aquí tienes tus planes! Puedes alternar entre ellos como prefieras.</p>
+                    <ClientDietTabsView dietPlans={clientData.dietPlans as [DietPlan, DietPlan]} />
                 </div>
             );
         }
-
         return (
-             <div className="diet-plan-container">
-                <ClientDietView dietPlan={plan} />
-
-                {!isClientOnboarding && (
-                    <div className="regeneration-container">
-                        <div className="admin-instructions-box">
-                            <label htmlFor="admin-instructions-diet-regen">Instrucciones Adicionales (Opcional)</label>
-                            <textarea
-                                id="admin-instructions-diet-regen"
-                                rows={3}
-                                value={adminInstructions}
-                                onChange={(e) => setAdminInstructions(e.target.value)}
-                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                            ></textarea>
-                        </div>
-                        <button className="cta-button regenerate" onClick={() => handleGenerate(activePlanIndex)} disabled={isGenerating}>
-                            Regenerar Plan
-                        </button>
-                    </div>
-                )}
+            <div className="placeholder-action generation-container">
+                <button className="cta-button" onClick={handleGenerate}>
+                    Generar Planes de Nutrición con IA
+                </button>
+                <p className="text-secondary">Se crearán dos planes alternativos para darte más opciones.</p>
             </div>
         );
-    };
+    }
+
+    // --- Trainer View ---
+    const currentPlan = clientData.dietPlans ? clientData.dietPlans[activePlanIndex] : null;
 
     return (
         <div className="multi-plan-container">
-             {!isClientOnboarding && (
-                <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
-                    <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
-                    <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
-                </div>
-            )}
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+            </div>
             <div className="animated-fade-in">
-                 {renderPlanContent(currentPlan)}
+                {!currentPlan ? (
+                    <div className="placeholder-action generation-container">
+                        <div className="admin-instructions-box">
+                            <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
+                            <textarea id="admin-instructions-diet" rows={3} value={adminInstructions} onChange={(e) => setAdminInstructions(e.target.value)} placeholder="Ej: Cliente es intolerante a la lactosa." />
+                        </div>
+                        <button className="cta-button" onClick={handleGenerate}>
+                            Generar Plan de Nutrición con IA
+                        </button>
+                    </div>
+                ) : (
+                    <div className="diet-plan-container">
+                        <ClientDietView dietPlan={currentPlan} />
+                        <div className="regeneration-container">
+                            <div className="admin-instructions-box">
+                                <label htmlFor="admin-instructions-diet-regen">Instrucciones para Regenerar (Opcional)</label>
+                                <textarea id="admin-instructions-diet-regen" rows={3} value={adminInstructions} onChange={(e) => setAdminInstructions(e.target.value)} placeholder="Ej: Hacer el plan más económico." />
+                            </div>
+                            <button className="cta-button regenerate" onClick={handleGenerate} disabled={isGenerating}>
+                                Regenerar Plan
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -1953,8 +1940,8 @@ const ClientOnboardingView: React.FC<{
     };
     
     const handleSaveAndStart = async () => {
-        if (!clientData.routine || !clientData.dietPlans[0]) {
-            alert("Por favor, genera tu rutina y plan de nutrición antes de comenzar.");
+        if (!clientData.routine || !clientData.dietPlans[0] || !clientData.dietPlans[1]) {
+            alert("Por favor, genera tu rutina y planes de nutrición antes de comenzar.");
             return;
         }
         setIsSaving(true);
@@ -2004,7 +1991,7 @@ const ClientOnboardingView: React.FC<{
                 <button 
                     className="cta-button" 
                     onClick={handleSaveAndStart} 
-                    disabled={isSaving || !clientData.routine || !clientData.dietPlans[0]}
+                    disabled={isSaving || !clientData.routine || !clientData.dietPlans[0] || !clientData.dietPlans[1]}
                 >
                     {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
                 </button>
