@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -999,7 +1000,7 @@ const ProfileEditor: React.FC<{
 
     // Reset muscle focus when body focus changes
     useEffect(() => {
-        if (profile.bodyFocusArea === 'Cuerpo completo') {
+        if (profile.bodyFocusArea === 'Full Body') {
              if (profile.muscleFocus !== 'General') {
                 handleChange('muscleFocus', 'General');
              }
@@ -1131,7 +1132,7 @@ const ProfileEditor: React.FC<{
                  <div className="form-group">
                     <label>Enfoque Corporal</label>
                      <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
-                        <option value="Cuerpo completo">Cuerpo completo</option>
+                        <option value="Full Body">Full Body</option>
                         <option value="Tren Superior">Tren Superior</option>
                         <option value="Tren Inferior">Tren Inferior</option>
                     </select>

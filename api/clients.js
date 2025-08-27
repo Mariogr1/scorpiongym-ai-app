@@ -50,7 +50,7 @@ export default async function handler(req, res) {
             accessCode: newAccessCode,
             status: 'active',
             planStatus: 'pending',
-            profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", muscleFocus: "General", includeAdaptationPhase: "Sí", includeDeloadPhase: "No", trainingIntensity: "Moderada" },
+            profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Full Body", muscleFocus: "General", includeAdaptationPhase: "Sí", includeDeloadPhase: "No", trainingIntensity: "Moderada" },
             routine: null,
             dietPlans: [null, null],
             progressLog: {},
