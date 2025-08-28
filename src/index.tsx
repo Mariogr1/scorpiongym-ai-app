@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1020,7 +1018,7 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
                     <div className="results-section">
                        {activeTab === 'routine' && <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={gym._id} />}
                        {activeTab === 'diet' && <DietPlanGenerator clientData={clientData} setClientData={setClientData} />}
-                       {activeTab === 'progress' && <ProgressView clientData={clientData} />}
+                       {activeTab === 'progress' && <ProgressView clientData={clientData} onDataUpdate={fetchClientData} />}
                     </div>
                 </main>
             </div>
@@ -1960,26 +1958,31 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
 
     return (
         <div className="client-view-container">
-             <header>
-                 <h1>Bienvenido, {clientData.profile.name}!</h1>
-                 <button onClick={onLogout} className="logout-button" style={{position: 'absolute', top: 0, right: 0}}>Salir</button>
-             </header>
-
-            {isPlanExpired() ? (
-                <div className="expired-view">
-                     <h2>Tu plan ha expirado</h2>
-                     <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
-                </div>
+            {showChat ? (
+                <ChatAssistant 
+                    clientData={clientData} 
+                    setClientData={setClientData} 
+                    onClose={() => setShowChat(false)} 
+                />
             ) : (
-                <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
-            )}
-            
-            <ChatAssistant clientData={clientData} setClientData={setClientData} isVisible={showChat} onClose={() => setShowChat(false)} />
-            
-            {!showChat && (
-                 <button className="chat-fab" onClick={() => setShowChat(true)} aria-label="Abrir asistente IA">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.4,2.97C13.1,2.91 12,3.46 12,4.82V11.5C12,12.33 12.67,13 13.5,13H15V15.5C15,18 12.94,20 10.5,20C8,20 6,18 6,15.5V13H7.5C8.33,13 9,12.33 9,11.5V4.82C9,3.46 7.9,2.91 6.6,2.97C5.3,3.03 4.2,3.54 4.2,4.82V12.18C4.2,13.46 5.3,14.04 6.6,14.09C7.9,14.15 9,13.58 9,12.22V10H6V12.22C6,14.67 4.26,16.5 2,16.92V18.5H9.5C9.5,19.34 10.16,20 11,20H12.5C13.88,20 15,18.88 15,17.5V16H18V17.5C18,18.88 19.12,20 20.5,20H22V18.2C19.78,17.8 18,15.91 18,13.5V4.82C18,3.54 16.7,3.03 15.4,2.97L14.4,2.97M20.5,5.5V8.5H18V5.5H20.5Z" /></svg>
-                </button>
+                <>
+                    <header>
+                        <h1>Bienvenido, {clientData.profile.name}!</h1>
+                        <div className="client-header-actions">
+                            <button onClick={() => setShowChat(true)} className="header-nav-button">Asistente IA</button>
+                            <button onClick={onLogout} className="logout-button">Salir</button>
+                        </div>
+                    </header>
+
+                    {isPlanExpired() ? (
+                        <div className="expired-view">
+                             <h2>Tu plan ha expirado</h2>
+                             <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
+                        </div>
+                    ) : (
+                        <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
+                    )}
+                </>
             )}
         </div>
     );
@@ -2327,7 +2330,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                     ? <ClientDietTabsView dietPlans={clientData.dietPlans} /> 
                     : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
             case 'progress':
-                return <ProgressView clientData={clientData} />;
+                return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
             case 'profile':
                  return <ClientProfileView clientData={clientData} />;
             default: return null;
@@ -2552,7 +2555,6 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
 const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void }> = ({ clientData, onProgressLogged, onRequestChange }) => {
     const { routine, routineGeneratedDate } = clientData;
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-    const [activeSubTab, setActiveSubTab] = useState<'routine' | 'bodyWeight'>('routine');
 
     const expirationDateString = useMemo(() => {
         if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
@@ -2577,35 +2579,13 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
                 Solicitar Cambio al Entrenador
             </button>
             
-            <div className="sub-tabs-nav">
-                <button 
-                    className={`sub-tab-button ${activeSubTab === 'routine' ? 'active' : ''}`}
-                    onClick={() => setActiveSubTab('routine')}
-                >
-                    Entrenamiento de Hoy
-                </button>
-                 <button 
-                    className={`sub-tab-button ${activeSubTab === 'bodyWeight' ? 'active' : ''}`}
-                    onClick={() => setActiveSubTab('bodyWeight')}
-                >
-                    Registrar Peso Corporal
-                </button>
-            </div>
-
-            <div className="sub-tab-content">
-                {activeSubTab === 'routine' && (
-                    <AccordionPhasesClient
-                        phases={routine.phases}
-                        activePhaseIndex={activePhaseIndex}
-                        setActivePhaseIndex={setActivePhaseIndex}
-                        clientData={clientData}
-                        onProgressLogged={onProgressLogged}
-                    />
-                )}
-                {activeSubTab === 'bodyWeight' && (
-                    <BodyWeightLogger clientData={clientData} onWeightLogged={onProgressLogged} />
-                )}
-            </div>
+            <AccordionPhasesClient
+                phases={routine.phases}
+                activePhaseIndex={activePhaseIndex}
+                setActivePhaseIndex={setActivePhaseIndex}
+                clientData={clientData}
+                onProgressLogged={onProgressLogged}
+            />
         </div>
     );
 };
@@ -2854,7 +2834,7 @@ const BodyWeightLogger: React.FC<{
 
 // --- Progress View ---
 
-const ProgressView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const planType = clientData.planType || 'full';
     const [activeTab, setActiveTab] = useState<'bodyWeight' | 'lifts'>(planType === 'routine' ? 'lifts' : 'bodyWeight');
 
@@ -2869,40 +2849,41 @@ const ProgressView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
                 }
             </nav>
             <div className="animated-fade-in">
-                {activeTab === 'bodyWeight' && <BodyWeightProgress clientData={clientData} />}
+                {activeTab === 'bodyWeight' && <BodyWeightProgress clientData={clientData} onDataUpdate={onDataUpdate} />}
                 {activeTab === 'lifts' && <LiftProgress clientData={clientData} />}
             </div>
         </div>
     );
 };
 
-const BodyWeightProgress: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+const BodyWeightProgress: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const log = useMemo(() => [...(clientData.bodyWeightLog || [])].reverse(), [clientData.bodyWeightLog]);
-
-    if (!log || log.length === 0) {
-        return <div className="placeholder">No hay registros de peso corporal.</div>;
-    }
 
     return (
         <div>
-            {/* Chart can be added here */}
-            <div className="progress-list-container">
-                <h3>Historial de Peso</h3>
-                <div className="progress-list">
-                     <div className="progress-list-header weight">
-                        <span>Fecha</span>
-                        <span>Peso (kg)</span>
-                        <span>IMC</span>
-                    </div>
-                    {log.map(entry => (
-                        <div key={entry.date} className="progress-list-row weight">
-                            <span>{new Date(entry.date).toLocaleDateString()}</span>
-                            <span>{entry.weight.toFixed(1)}</span>
-                             <span className={entry.imcCategoryClass}>{entry.imc?.toFixed(1) || 'N/A'}</span>
+            <BodyWeightLogger clientData={clientData} onWeightLogged={onDataUpdate} />
+            
+            {(!log || log.length === 0) ? (
+                 <div className="placeholder" style={{marginTop: '2rem'}}>No hay registros de peso corporal.</div>
+            ) : (
+                <div className="progress-list-container">
+                    <h3>Historial de Peso</h3>
+                    <div className="progress-list">
+                         <div className="progress-list-header weight">
+                            <span>Fecha</span>
+                            <span>Peso (kg)</span>
+                            <span>IMC</span>
                         </div>
-                    ))}
+                        {log.map(entry => (
+                            <div key={entry.date} className="progress-list-row weight">
+                                <span>{new Date(entry.date).toLocaleDateString()}</span>
+                                <span>{entry.weight.toFixed(1)}</span>
+                                 <span className={entry.imcCategoryClass}>{entry.imc?.toFixed(1) || 'N/A'}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
@@ -2962,9 +2943,8 @@ const LiftProgress: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
 const ChatAssistant: React.FC<{
     clientData: ClientData,
     setClientData: (data: ClientData) => void,
-    isVisible: boolean,
     onClose: () => void,
-}> = ({ clientData, setClientData, isVisible, onClose }) => {
+}> = ({ clientData, setClientData, onClose }) => {
     type Message = {
         role: 'user' | 'model';
         parts: { text: string; image?: { data: string; mimeType: string } }[];
@@ -2992,34 +2972,32 @@ const ChatAssistant: React.FC<{
     const canAskQuestion = questionsAskedToday < dailyLimit;
 
     useEffect(() => {
-        if (isVisible) {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const chatInstance = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: {
-                     systemInstruction: `
-                        Eres un asistente de fitness experto para la aplicación ScorpionGYM AI. Tu nombre es "Scorpion AI".
-                        El perfil completo del cliente con el que estás chateando es: ${JSON.stringify(clientData.profile)}.
-                        La rutina actual del cliente es: ${JSON.stringify(clientData.routine)}.
-                        El plan de nutrición actual del cliente es: ${JSON.stringify(clientData.dietPlans)}.
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const chatInstance = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: {
+                    systemInstruction: `
+                    Eres un asistente de fitness experto para la aplicación ScorpionGYM AI. Tu nombre es "Scorpion AI".
+                    El perfil completo del cliente con el que estás chateando es: ${JSON.stringify(clientData.profile)}.
+                    La rutina actual del cliente es: ${JSON.stringify(clientData.routine)}.
+                    El plan de nutrición actual del cliente es: ${JSON.stringify(clientData.dietPlans)}.
 
-                        Tus responsabilidades y reglas son:
-                        1.  **Personalización Extrema:** TODAS tus respuestas deben estar personalizadas según el perfil, rutina y dieta del cliente. Usa su información para dar consejos relevantes. No des respuestas genéricas.
-                        2.  **Rol:** Actúa como un entrenador personal motivador, amigable y experto. Usa un tono de apoyo.
-                        3.  **Límites:** NO puedes modificar la rutina o el plan de dieta del cliente. Si te piden cambios, debes decirles que contacten a su entrenador humano para cualquier modificación. Tu rol es dar soporte, no alterar el plan.
-                        4.  **Temas:** Responde únicamente a preguntas sobre fitness, nutrición, ejecución de ejercicios, motivación y temas relacionados con el entrenamiento. Si te preguntan sobre otros temas (historia, política, etc.), responde amablemente que tu especialidad es el fitness y no puedes contestar a eso.
-                        5.  **Seguridad Primero:** Siempre prioriza la seguridad. Si preguntan sobre un ejercicio y sienten dolor, aconséjales parar inmediatamente y consultar a su entrenador o a un profesional de la salud.
-                        6.  **Claridad:** Sé claro y conciso en tus respuestas.
-                        7.  **Análisis de Imágenes:** Si el usuario sube una imagen, analízala en el contexto de su pregunta. Por ejemplo, si es una foto de comida, puedes estimar calorías o dar una opinión nutricional. Si es una foto de su postura en un ejercicio, puedes ofrecer consejos de técnica (siempre con la advertencia de que no reemplaza a un entrenador).
-                    `,
-                },
-            });
-            setChat(chatInstance);
-            if (history.length === 0) {
-                 setHistory([{ role: 'model', parts: [{ text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI, tu asistente. ¿En qué puedo ayudarte hoy con tu entrenamiento o nutrición?` }] }]);
-            }
+                    Tus responsabilidades y reglas son:
+                    1.  **Personalización Extrema:** TODAS tus respuestas deben estar personalizadas según el perfil, rutina y dieta del cliente. Usa su información para dar consejos relevantes. No des respuestas genéricas.
+                    2.  **Rol:** Actúa como un entrenador personal motivador, amigable y experto. Usa un tono de apoyo.
+                    3.  **Límites:** NO puedes modificar la rutina o el plan de dieta del cliente. Si te piden cambios, debes decirles que contacten a su entrenador humano para cualquier modificación. Tu rol es dar soporte, no alterar el plan.
+                    4.  **Temas:** Responde únicamente a preguntas sobre fitness, nutrición, ejecución de ejercicios, motivación y temas relacionados con el entrenamiento. Si te preguntan sobre otros temas (historia, política, etc.), responde amablemente que tu especialidad es el fitness y no puedes contestar a eso.
+                    5.  **Seguridad Primero:** Siempre prioriza la seguridad. Si preguntan sobre un ejercicio y sienten dolor, aconséjales parar inmediatamente y consultar a su entrenador o a un profesional de la salud.
+                    6.  **Claridad:** Sé claro y conciso en tus respuestas.
+                    7.  **Análisis de Imágenes:** Si el usuario sube una imagen, analízala en el contexto de su pregunta. Por ejemplo, si es una foto de comida, puedes estimar calorías o dar una opinión nutricional. Si es una foto de su postura en un ejercicio, puedes ofrecer consejos de técnica (siempre con la advertencia de que no reemplaza a un entrenador).
+                `,
+            },
+        });
+        setChat(chatInstance);
+        if (history.length === 0) {
+                setHistory([{ role: 'model', parts: [{ text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI, tu asistente. ¿En qué puedo ayudarte hoy con tu entrenamiento o nutrición?` }] }]);
         }
-    }, [isVisible, clientData]);
+    }, [clientData]);
     
      useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -3103,70 +3081,66 @@ const ChatAssistant: React.FC<{
         }
     };
 
-    if (!isVisible) return null;
-
     return (
-        <div className="chat-modal-overlay" onClick={onClose}>
-            <div className="chat-modal-content" onClick={e => e.stopPropagation()}>
-                <div className="chat-modal-header">
-                    <h3>Asistente IA</h3>
-                     <p style={{ margin: 0, color: 'var(--text-secondary-color)', fontSize: '0.9rem' }}>
-                        {questionsAskedToday}/{dailyLimit}
-                    </p>
-                    <button className="close-button" onClick={onClose}>&times;</button>
+        <div className="chat-fullscreen-container animated-fade-in">
+            <div className="main-header" style={{ marginBottom: '1rem', padding: '1rem 1.5rem' }}>
+                <div className="header-title-wrapper">
+                    <h1>Asistente IA</h1>
+                    <p>{questionsAskedToday}/{dailyLimit} preguntas restantes</p>
                 </div>
-                <div className="chat-messages" ref={messagesEndRef}>
-                    {history.map((msg, index) => (
-                        <div key={index} className={`chat-message ${msg.role}`}>
-                            <div className="avatar">
-                                {msg.role === 'user' ? 'TÚ' : '🦂'}
-                            </div>
+                <button onClick={onClose} className="back-button">Volver</button>
+            </div>
+            <div className="chat-messages" ref={messagesEndRef}>
+                {history.map((msg, index) => (
+                    <div key={index} className={`chat-message ${msg.role}`}>
+                        <div className="avatar">
+                            {msg.role === 'user' ? 'TÚ' : '🦂'}
+                        </div>
+                        <div className="message-content">
+                            {msg.parts.map((part, i) => (
+                                    <React.Fragment key={i}>
+                                    <p>{part.text}</p>
+                                    {part.image && <img src={`data:${part.image.mimeType};base64,${part.image.data}`} alt="Contexto de usuario"/>}
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+                {isThinking && (
+                    <div className="chat-message model">
+                            <div className="avatar">🦂</div>
                             <div className="message-content">
-                                {msg.parts.map((part, i) => (
-                                     <React.Fragment key={i}>
-                                        <p>{part.text}</p>
-                                        {part.image && <img src={`data:${part.image.mimeType};base64,${part.image.data}`} alt="Contexto de usuario"/>}
-                                    </React.Fragment>
-                                ))}
+                            <div className="chat-typing-indicator">
+                                <span></span><span></span><span></span>
                             </div>
                         </div>
-                    ))}
-                    {isThinking && (
-                        <div className="chat-message model">
-                             <div className="avatar">🦂</div>
-                             <div className="message-content">
-                                <div className="chat-typing-indicator">
-                                    <span></span><span></span><span></span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <div className="chat-input-area">
-                    {image && (
-                         <div className="chat-image-preview">
-                            <img src={`data:${image.mimeType};base64,${image.data}`} alt="Vista previa" />
-                            <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
-                        </div>
-                    )}
-                    {error && <p className="error-text">{error}</p>}
-                    <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
-                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
-                        <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M21.58,16.09L19.82,17.85L18.31,16.34L15.41,19.24L10,13.83L12.08,11.75L14.27,13.94L16.8,11.41L15,9.62L16.09,8.53L18.31,10.75L21.58,7.47L22.29,8.18L19.03,11.45L16.8,9.23L15.38,10.64L14.27,11.75L12.08,13.94L10,11.86L6.73,15.13L2,10.4L2.71,9.69L6,12.97L9.27,9.7L11.35,11.78L13.56,9.56L12.5,8.5L14.27,6.73L16.04,8.5L18.31,6.23L19.23,7.15L16.8,9.58L14.27,12.11L11.75,14.63L10,16.38L15.41,21.79L19.22,18L20.27,19.05L21.28,18.04L22,17.33L21.58,16.09Z" /></svg>
-                        </button>
-                        <input 
-                            type="text" 
-                            placeholder={canAskQuestion ? "Escribe tu pregunta..." : "Límite diario alcanzado."}
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            disabled={isThinking || !canAskQuestion}
-                        />
-                         <button type="submit" disabled={isThinking || (!input.trim() && !image) || !canAskQuestion}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
-                        </button>
-                    </form>
-                </div>
+                    </div>
+                )}
+            </div>
+            <div className="chat-input-area">
+                {image && (
+                        <div className="chat-image-preview">
+                        <img src={`data:${image.mimeType};base64,${image.data}`} alt="Vista previa" />
+                        <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+                    </div>
+                )}
+                {error && <p className="error-text">{error}</p>}
+                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
+                    <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M21.58,16.09L19.82,17.85L18.31,16.34L15.41,19.24L10,13.83L12.08,11.75L14.27,13.94L16.8,11.41L15,9.62L16.09,8.53L18.31,10.75L21.58,7.47L22.29,8.18L19.03,11.45L16.8,9.23L15.38,10.64L14.27,11.75L12.08,13.94L10,11.86L6.73,15.13L2,10.4L2.71,9.69L6,12.97L9.27,9.7L11.35,11.78L13.56,9.56L12.5,8.5L14.27,6.73L16.04,8.5L18.31,6.23L19.23,7.15L16.8,9.58L14.27,12.11L11.75,14.63L10,16.38L15.41,21.79L19.22,18L20.27,19.05L21.28,18.04L22,17.33L21.58,16.09Z" /></svg>
+                    </button>
+                    <input 
+                        type="text" 
+                        placeholder={canAskQuestion ? "Escribe tu pregunta..." : "Límite diario alcanzado."}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        disabled={isThinking || !canAskQuestion}
+                    />
+                        <button type="submit" disabled={isThinking || (!input.trim() && !image) || !canAskQuestion}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
+                    </button>
+                </form>
             </div>
         </div>
     );

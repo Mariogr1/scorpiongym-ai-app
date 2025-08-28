@@ -1,3 +1,4 @@
+
 :root {
   --background-color: #000000;
   --surface-color: #141414;
@@ -168,7 +169,7 @@ body {
   padding: 1rem;
 }
 
-.login-container header, .client-view-container header, .agreement-container header {
+.login-container header, .client-view-container > header, .agreement-container header {
     margin-bottom: 2rem;
     width: 100%;
     position: relative;
@@ -176,6 +177,19 @@ body {
     flex-direction: column;
     align-items: center;
 }
+
+.client-view-container > header {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+}
+
+.client-header-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
 
 /* Titles for App Landing */
 .login-container > header h1 {
@@ -193,6 +207,12 @@ body {
     font-weight: 700;
     color: var(--text-color);
 }
+
+.client-view-container h1 {
+    font-size: 1.8rem;
+    margin: 0;
+}
+
 
 .login-box, .landing-box {
   background-color: var(--surface-color);
@@ -1546,6 +1566,8 @@ body {
     border-radius: 12px;
     max-width: 400px;
     width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }
 .body-weight-logger .input-group {
     display: flex;
@@ -1779,37 +1801,6 @@ body {
 }
 .progress-list-header.weight, .progress-list-row.weight { grid-template-columns: 2fr 1fr 1fr; }
 .progress-list-row.weight span:nth-child(2) { color: var(--archive-color); }
-
-/* --- Sub Tabs (Routine/Diet) --- */
-.sub-tabs-nav {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-.sub-tab-button {
-    background: none;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 500;
-    border-radius: 8px;
-    transition: all 0.2s;
-}
-.sub-tab-button:hover {
-    background-color: var(--secondary-button-hover);
-    color: var(--text-color);
-}
-.sub-tab-button.active {
-    background-color: var(--primary-color);
-    color: var(--text-color);
-    border-color: var(--primary-color);
-}
-.sub-tab-content {
-    margin-top: 1rem;
-}
 
 /* --- Client Profile View --- */
 .client-profile-view {
@@ -2160,81 +2151,25 @@ input:checked + .slider:before {
   border-radius: 50%;
 }
 
-/* --- Client Chat Assistant --- */
-.chat-fab {
-  position: fixed;
-  bottom: 25px;
-  right: 25px;
-  width: 60px;
-  height: 60px;
-  background-color: var(--primary-color);
-  border-radius: 50%;
-  border: none;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-  z-index: 998;
-}
-.chat-fab:hover {
-  background-color: var(--primary-color-hover);
-  transform: scale(1.05);
-}
-.chat-fab svg {
-  width: 30px;
-  height: 30px;
-  fill: var(--text-color);
+/* --- Client Chat Assistant (Fullscreen) --- */
+.chat-fullscreen-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: var(--surface-color);
+    border-radius: 12px;
+    height: calc(100vh - 4rem); /* Full viewport height minus some margin */
+    max-height: 800px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
 }
 
-.chat-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease;
+.chat-fullscreen-container .main-header {
+    flex-shrink: 0;
 }
 
-.chat-modal-content {
-  background-color: var(--background-color);
-  width: 90%;
-  max-width: 450px;
-  height: 80vh;
-  max-height: 700px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: slideUp 0.4s ease;
-}
-
-@keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-.chat-modal-header {
-  background-color: var(--surface-color);
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.chat-modal-header h3 {
-  color: var(--text-color);
-  font-size: 1.2rem;
-  margin: 0;
-}
 .close-button {
   background: none;
   border: none;
@@ -2289,7 +2224,7 @@ input:checked + .slider:before {
 }
 
 .message-content {
-  background-color: var(--surface-color);
+  background-color: var(--background-color);
   padding: 0.75rem 1.25rem;
   border-radius: 18px;
   line-height: 1.5;
@@ -2341,6 +2276,7 @@ input:checked + .slider:before {
   padding: 0.5rem;
   border-top: 1px solid var(--border-color);
   background-color: var(--surface-color);
+  flex-shrink: 0;
 }
 .chat-input-area form {
   display: flex;
