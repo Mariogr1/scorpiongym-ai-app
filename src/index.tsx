@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -25,7 +26,8 @@ import {
     Gym,
     Phase,
     DayPlan,
-    Request as TrainerRequest // Renamed to avoid conflict
+    Request as TrainerRequest, // Renamed to avoid conflict
+    PlanType
 } from './apiClient';
 
 
@@ -489,6 +491,7 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
     const [password, setPassword] = useState('');
     const [dailyQuestionLimit, setDailyQuestionLimit] = useState(10);
     const [logoSvg, setLogoSvg] = useState<string | null>(null);
+    const [planType, setPlanType] = useState<PlanType>('full');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     
@@ -510,13 +513,14 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
         e.preventDefault();
         setIsSubmitting(true);
         setError('');
-        const success = await apiClient.createGym(name, username, password, dailyQuestionLimit, logoSvg);
+        const success = await apiClient.createGym(name, username, password, dailyQuestionLimit, logoSvg, planType);
         if (success) {
             setName('');
             setUsername('');
             setPassword('');
             setDailyQuestionLimit(10);
             setLogoSvg(null);
+            setPlanType('full');
             onGymCreated();
         } else {
             setError('No se pudo crear el gimnasio. El nombre de usuario puede que ya exista.');
@@ -543,6 +547,15 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
                  <div className="form-group">
                     <label>Límite Preguntas IA / día</label>
                     <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                </div>
+                <div className="form-group">
+                    <label>Tipo de Plan</label>
+                    {/* FIX: Cast the string value from the select event to the PlanType union type to satisfy the state setter's type requirement. */}
+                    <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                        <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                        <option value="routine">Solo Plan de Rutina</option>
+                        <option value="nutrition">Solo Plan de Nutrición</option>
+                    </select>
                 </div>
                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label>Logo (SVG)</label>
@@ -571,15 +584,17 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
     const [password, setPassword] = useState('');
     const [dailyQuestionLimit, setDailyQuestionLimit] = useState(gym.dailyQuestionLimit || 10);
     const [logoSvg, setLogoSvg] = useState<string | null>(gym.logoSvg || null);
+    const [planType, setPlanType] = useState<PlanType>(gym.planType || 'full');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        const dataToUpdate: { name?: string; password?: string; dailyQuestionLimit?: number; logoSvg?: string | null } = {
+        const dataToUpdate: { name?: string; password?: string; dailyQuestionLimit?: number; logoSvg?: string | null; planType?: PlanType; } = {
             name: name,
             dailyQuestionLimit: dailyQuestionLimit,
             logoSvg: logoSvg,
+            planType: planType,
         };
         if (password) {
             dataToUpdate.password = password;
@@ -627,6 +642,14 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
                     <div className="form-group">
                         <label>Límite Preguntas IA / día</label>
                         <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                    </div>
+                    <div className="form-group">
+                        <label>Tipo de Plan</label>
+                        <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                            <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                            <option value="routine">Solo Plan de Rutina</option>
+                            <option value="nutrition">Solo Plan de Nutrición</option>
+                        </select>
                     </div>
                     <div className="form-group">
                         <label>Logo (SVG)</label>
@@ -929,7 +952,7 @@ const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = 
 const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>(gym.planType === 'nutrition' ? 'diet' : 'routine');
 
      const fetchClientData = async () => {
         setIsLoading(true);
@@ -949,6 +972,9 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
     if (!clientData) {
         return <div className="error-container">No se pudieron cargar los datos del cliente.</div>;
     }
+    
+    const planType = gym.planType || 'full';
+
 
     return (
         <div className="client-management-view">
@@ -971,16 +997,20 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
                 </aside>
                 <main className="main-content">
                     <nav className="main-tabs-nav">
-                        <button 
-                            className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} 
-                            onClick={() => setActiveTab('routine')}>
-                            Rutina
-                        </button>
-                        <button 
-                            className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} 
-                            onClick={() => setActiveTab('diet')}>
-                            Nutrición
-                        </button>
+                        {(planType === 'full' || planType === 'routine') &&
+                            <button 
+                                className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} 
+                                onClick={() => setActiveTab('routine')}>
+                                Rutina
+                            </button>
+                        }
+                        {(planType === 'full' || planType === 'nutrition') &&
+                            <button 
+                                className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} 
+                                onClick={() => setActiveTab('diet')}>
+                                Nutrición
+                            </button>
+                        }
                          <button 
                             className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} 
                             onClick={() => setActiveTab('progress')}>
@@ -2024,6 +2054,7 @@ const ClientOnboardingView: React.FC<{
         diet2: 'pending' as GenerationStatus,
     });
     const [generationError, setGenerationError] = useState('');
+    const planType = clientData.planType || 'full';
 
     const handleAcceptTerms = async () => {
         const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
@@ -2038,23 +2069,27 @@ const ClientOnboardingView: React.FC<{
     const handleGenerateFullPlan = async () => {
         setGenerationState('generating');
         setGenerationError('');
-        setGenerationProgress({ routine: 'loading', diet1: 'pending', diet2: 'pending' });
+        setGenerationProgress({ routine: 'pending', diet1: 'pending', diet2: 'pending' });
 
         try {
-            // 1. Generate Routine
-            const routine = await generateRoutineForClient(clientData, clientData.gymId);
-            setClientData(prev => ({ ...prev, routine }));
-            setGenerationProgress(prev => ({ ...prev, routine: 'done', diet1: 'loading' }));
+            if (planType === 'full' || planType === 'routine') {
+                setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
+                const routine = await generateRoutineForClient(clientData, clientData.gymId);
+                setClientData(prev => ({ ...prev, routine }));
+                setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
+            }
 
-            // 2. Generate Diet Plan 1
-            const diet1 = await generateDietForClient(clientData);
-            setClientData(prev => ({ ...prev, dietPlans: [diet1, prev.dietPlans[1]] }));
-            setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'loading' }));
-            
-            // 3. Generate Diet Plan 2
-            const diet2 = await generateDietForClient(clientData);
-            setClientData(prev => ({ ...prev, dietPlans: [prev.dietPlans[0], diet2] }));
-            setGenerationProgress(prev => ({ ...prev, diet2: 'done' }));
+            if (planType === 'full' || planType === 'nutrition') {
+                setGenerationProgress(prev => ({ ...prev, diet1: 'loading' }));
+                const diet1 = await generateDietForClient(clientData);
+                setClientData(prev => ({ ...prev, dietPlans: [diet1, prev.dietPlans?.[1] ?? null] }));
+                setGenerationProgress(prev => ({ ...prev, diet1: 'done' }));
+                
+                setGenerationProgress(prev => ({ ...prev, diet2: 'loading' }));
+                const diet2 = await generateDietForClient(clientData);
+                setClientData(prev => ({ ...prev, dietPlans: [prev.dietPlans?.[0] ?? null, diet2] }));
+                setGenerationProgress(prev => ({ ...prev, diet2: 'done' }));
+            }
 
             setGenerationState('success');
 
@@ -2127,6 +2162,7 @@ const ClientOnboardingView: React.FC<{
                         progress={generationProgress} 
                         error={generationError}
                         onRetry={handleGenerateFullPlan}
+                        planType={planType}
                     />
                 )}
             </div>
@@ -2148,7 +2184,8 @@ const GenerationProgressIndicator: React.FC<{
     progress: { routine: GenerationStatus; diet1: GenerationStatus; diet2: GenerationStatus; };
     error: string;
     onRetry: () => void;
-}> = ({ progress, error, onRetry }) => {
+    planType: PlanType;
+}> = ({ progress, error, onRetry, planType }) => {
     
     const renderStatusIcon = (status: GenerationStatus) => {
         switch (status) {
@@ -2162,18 +2199,24 @@ const GenerationProgressIndicator: React.FC<{
     return (
         <div className="generation-progress-container">
             <ul className="generation-progress-list">
-                <li className={`progress-item ${progress.routine}`}>
-                    {renderStatusIcon(progress.routine)}
-                    <span>Plan de Entrenamiento</span>
-                </li>
-                <li className={`progress-item ${progress.diet1}`}>
-                    {renderStatusIcon(progress.diet1)}
-                    <span>Plan de Nutrición 1</span>
-                </li>
-                 <li className={`progress-item ${progress.diet2}`}>
-                    {renderStatusIcon(progress.diet2)}
-                    <span>Plan de Nutrición 2</span>
-                </li>
+                {(planType === 'full' || planType === 'routine') && (
+                    <li className={`progress-item ${progress.routine}`}>
+                        {renderStatusIcon(progress.routine)}
+                        <span>Plan de Entrenamiento</span>
+                    </li>
+                )}
+                {(planType === 'full' || planType === 'nutrition') && (
+                    <>
+                        <li className={`progress-item ${progress.diet1}`}>
+                            {renderStatusIcon(progress.diet1)}
+                            <span>Plan de Nutrición 1</span>
+                        </li>
+                        <li className={`progress-item ${progress.diet2}`}>
+                            {renderStatusIcon(progress.diet2)}
+                            <span>Plan de Nutrición 2</span>
+                        </li>
+                    </>
+                )}
             </ul>
             {error && (
                 <div className="error-container" style={{padding: '1rem', marginTop: '1.5rem', minHeight: 'auto'}}>
@@ -2269,7 +2312,8 @@ const RequestModal: React.FC<{
 };
 
 const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>('routine');
+    const planType = clientData.planType || 'full';
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>(planType === 'nutrition' ? 'diet' : 'routine');
     const [showRequestModal, setShowRequestModal] = useState(false);
 
     const renderContent = () => {
@@ -2293,8 +2337,12 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
     return (
         <div className="main-content" style={{width: '100%', maxWidth: '800px'}}>
              <nav className="main-tabs-nav">
-                <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
-                <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
+                {(planType === 'full' || planType === 'routine') &&
+                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
+                }
+                {(planType === 'full' || planType === 'nutrition') &&
+                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
+                }
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
                 <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
             </nav>
@@ -2807,13 +2855,18 @@ const BodyWeightLogger: React.FC<{
 // --- Progress View ---
 
 const ProgressView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const [activeTab, setActiveTab] = useState<'bodyWeight' | 'lifts'>('bodyWeight');
+    const planType = clientData.planType || 'full';
+    const [activeTab, setActiveTab] = useState<'bodyWeight' | 'lifts'>(planType === 'routine' ? 'lifts' : 'bodyWeight');
 
     return (
         <div className="progress-view-container">
             <nav className="progress-tabs-nav">
-                <button className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} onClick={() => setActiveTab('bodyWeight')}>Peso Corporal</button>
-                <button className={`progress-tab-button ${activeTab === 'lifts' ? 'active' : ''}`} onClick={() => setActiveTab('lifts')}>Levantamientos</button>
+                {(planType === 'full' || planType === 'nutrition') &&
+                    <button className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} onClick={() => setActiveTab('bodyWeight')}>Peso Corporal</button>
+                }
+                {(planType === 'full' || planType === 'routine') &&
+                    <button className={`progress-tab-button ${activeTab === 'lifts' ? 'active' : ''}`} onClick={() => setActiveTab('lifts')}>Levantamientos</button>
+                }
             </nav>
             <div className="animated-fade-in">
                 {activeTab === 'bodyWeight' && <BodyWeightProgress clientData={clientData} />}

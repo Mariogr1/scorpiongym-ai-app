@@ -33,6 +33,7 @@ export default async function handler(req, res) {
                 const gym = await gymsCollection.findOne({ _id: gymObjectId });
                 if (gym) {
                     clientData.dailyQuestionLimit = gym.dailyQuestionLimit;
+                    clientData.planType = gym.planType;
                 }
             } catch (e) {
                  console.error(`Could not fetch gym details for client ${dni}:`, e);

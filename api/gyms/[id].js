@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'PUT':
       try {
-        const { name, password, dailyQuestionLimit, logoSvg } = req.body;
+        const { name, password, dailyQuestionLimit, logoSvg, planType } = req.body;
         const updateData = {};
         if (name) updateData.name = name;
         
@@ -35,6 +35,10 @@ export default async function handler(req, res) {
         
         if (logoSvg !== undefined) {
             updateData.logoSvg = logoSvg;
+        }
+
+        if (planType) {
+            updateData.planType = planType;
         }
 
         if (Object.keys(updateData).length === 0) {
