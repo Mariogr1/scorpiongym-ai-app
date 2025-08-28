@@ -10,7 +10,7 @@ export interface Profile {
     trainingDays: string;
     activityFactor: 'Sedentario' | 'Ligero' | 'Activo' | 'Muy Activo';
     useAdvancedTechniques: 'Sí' | 'No';
-    bodyFocusArea: 'Full Body' | 'Tren Superior' | 'Tren Inferior';
+    bodyFocusArea: 'Cuerpo completo' | 'Tren Superior' | 'Tren Inferior';
     muscleFocus: string; // e.g., 'General', 'Cuádriceps', 'Pecho'
     includeAdaptationPhase: 'Sí' | 'No';
     includeDeloadPhase: 'Sí' | 'No';

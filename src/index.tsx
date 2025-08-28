@@ -1,9 +1,4 @@
 
-
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -658,75 +653,6 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
 
 
 // --- Admin/Coach Views ---
-// FIX: Defined RequestsView component to display and manage trainer requests.
-const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
-    const [isLoading, setIsLoading] = useState(false);
-    const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
-
-    const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
-        setIsLoading(true);
-        await apiClient.updateRequestStatus(id, status);
-        onUpdateRequest();
-        setIsLoading(false);
-    };
-
-    const handleDelete = async (id: string) => {
-        if (window.confirm('¿Estás seguro de que quieres eliminar esta solicitud?')) {
-            setIsLoading(true);
-            await apiClient.deleteRequest(id);
-            onUpdateRequest();
-            setIsLoading(false);
-        }
-    };
-
-    const sortedRequests = useMemo(() => {
-        return [...requests].sort((a, b) => {
-            if (a.status === 'new' && b.status !== 'new') return -1;
-            if (a.status !== 'new' && b.status === 'new') return 1;
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
-    }, [requests]);
-
-    if (requests.length === 0) {
-        return <div className="placeholder-action"><h3>Bandeja de Entrada</h3><p>No hay solicitudes de clientes por el momento.</p></div>;
-    }
-
-    return (
-        <div className="requests-view animated-fade-in">
-            <h3>Bandeja de Entrada</h3>
-            {isLoading && <div className="loading-overlay"><div className="spinner"></div></div>}
-            <div className="requests-list">
-                {sortedRequests.map(req => (
-                    <div key={req._id} className={`request-card status-${req.status}`}>
-                        <div className="request-card-header" onClick={() => setExpandedRequestId(expandedRequestId === req._id ? null : req._id)}>
-                            <div className="request-info">
-                                <span className={`status-dot ${req.status}`}></span>
-                                <strong>{req.clientName}</strong>
-                                <span>{req.subject}</span>
-                            </div>
-                            <div className="request-meta">
-                                <span>{new Date(req.createdAt).toLocaleString('es-ES')}</span>
-                                <span className="expand-icon">{expandedRequestId === req._id ? '−' : '+'}</span>
-                            </div>
-                        </div>
-                        {expandedRequestId === req._id && (
-                            <div className="request-card-body animated-fade-in">
-                                <p>{req.message}</p>
-                                <div className="request-actions">
-                                    {req.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'read')}>Marcar como leído</button>}
-                                    {req.status !== 'resolved' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'resolved')}>Resolver</button>}
-                                    <button className="action-btn delete" onClick={() => handleDelete(req._id)}>Eliminar</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-// FIX: Defined QrCodeModal component to display a QR code for the app URL.
 const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const appUrl = window.location.origin;
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(appUrl)}`;
@@ -2079,7 +2005,6 @@ const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> 
 };
 
 
-// FIX: Moved GenerationStatus type to a shared scope to be accessible by both ClientOnboardingView and GenerationProgressIndicator components.
 type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
 
 const ClientOnboardingView: React.FC<{
@@ -2310,72 +2235,79 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
     );
 };
 
-// FIX: Defined RequestModal component for clients to send requests to their trainer.
 const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
-    const [subject, setSubject] = useState('');
+    const [subject, setSubject] = useState('Cambiar un ejercicio');
     const [message, setMessage] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
-        if (!subject.trim() || !message.trim()) {
-            setError('Por favor, completa el asunto y el mensaje.');
+        if (!message.trim()) {
+            alert("Por favor, escribe un mensaje.");
             return;
         }
-        setIsSending(true);
-        const requestData = {
+        setIsSubmitting(true);
+        setStatus('idle');
+        
+        const success = await apiClient.createRequest({
             clientId: client.dni,
             clientName: client.profile.name,
             gymId: client.gymId,
             subject,
-            message,
-        };
-        const result = await apiClient.createRequest(requestData);
-        if (result) {
-            setSuccess(true);
+            message
+        });
+
+        if (success) {
+            setStatus('success');
+            setMessage('');
             setTimeout(() => {
                 onClose();
             }, 2000);
         } else {
-            setError('No se pudo enviar tu solicitud. Inténtalo de nuevo más tarde.');
+            setStatus('error');
         }
-        setIsSending(false);
+        setIsSubmitting(false);
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content request-modal" onClick={(e) => e.stopPropagation()}>
-                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
-                {success ? (
-                    <div className="request-success animated-fade-in">
-                        <h3>¡Solicitud Enviada!</h3>
-                        <p>Tu entrenador ha recibido tu mensaje y se pondrá en contacto contigo pronto.</p>
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal">
+                <h3>Contactar a tu Entrenador</h3>
+                {status === 'success' ? (
+                    <div className="success-message">
+                        <p>¡Mensaje enviado! Tu entrenador lo revisará pronto.</p>
                     </div>
                 ) : (
-                    <>
-                        <h3>Solicitar Cambio o Hacer una Consulta</h3>
-                        <p>Envía un mensaje directo a tu entrenador.</p>
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-group">
-                                <label htmlFor="subject">Asunto</label>
-                                <input type="text" id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} required />
-                            </div>
-                            <div className="form-group">
-                                <label htmlFor="message">Mensaje</label>
-                                <textarea id="message" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} required></textarea>
-                            </div>
-                            {error && <p className="error-text">{error}</p>}
-                            <div className="modal-actions">
-                                <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
-                                <button type="submit" className="cta-button" disabled={isSending}>
-                                    {isSending ? 'Enviando...' : 'Enviar Solicitud'}
-                                </button>
-                            </div>
-                        </form>
-                    </>
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label htmlFor="request-subject">Asunto</label>
+                            <select id="request-subject" value={subject} onChange={e => setSubject(e.target.value)}>
+                                <option>Cambiar un ejercicio</option>
+                                <option>Ajustar dificultad (muy fácil/difícil)</option>
+                                <option>Dudas sobre la rutina</option>
+                                <option>Otro</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="request-message">Mensaje</label>
+                            <textarea
+                                id="request-message"
+                                rows={5}
+                                value={message}
+                                onChange={e => setMessage(e.target.value)}
+                                placeholder="Escribe aquí tu consulta o el cambio que te gustaría solicitar..."
+                                required
+                            ></textarea>
+                        </div>
+                        {status === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
+                        <div className="modal-actions" style={{ marginTop: '2rem' }}>
+                            <button type="button" className="cta-button secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</button>
+                            <button type="submit" className="cta-button" disabled={isSubmitting}>
+                                {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
+                            </button>
+                        </div>
+                    </form>
                 )}
             </div>
         </div>
@@ -3409,7 +3341,6 @@ const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExerci
 
 // --- Generic Components ---
 
-// FIX: Fixed truncated ConfirmationModal component definition.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -3420,37 +3351,95 @@ const ConfirmationModal: React.FC<{
 }> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
     return (
         <div className="modal-overlay">
-            <div className="modal-content confirmation-modal">
+            <div className="modal-content">
                 <p>{message}</p>
                 <div className="modal-actions">
                     <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
-                    <button onClick={onConfirm} className={`cta-button ${confirmClass || ''}`}>{confirmText}</button>
+                    <button 
+                        onClick={onConfirm} 
+                        className={`cta-button ${confirmClass === 'delete' ? 'delete-selected-button' : (confirmClass === 'archive' ? 'archive-selected-button' : '')}`}
+                    >
+                        {confirmText}
+                    </button>
                 </div>
             </div>
         </div>
     );
 };
-confirmText?: string;
-    cancelText?: string;
-    confirmClass?: 'delete' | 'archive';
-}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
+
+// --- Trainer Request/Ticket System ---
+
+const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
+    const [filter, setFilter] = useState<'new' | 'read' | 'resolved' | 'all'>('all');
+    
+    const filteredRequests = useMemo(() => {
+        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (filter === 'all') return sorted;
+        return sorted.filter(r => r.status === filter);
+    }, [requests, filter]);
+
+    if (requests.length === 0) {
+        return <div className="placeholder">No hay solicitudes de clientes.</div>;
+    }
+
     return (
-        <div className="modal-overlay">
-            <div className="modal-content confirmation-modal">
-                <p>{message}</p>
-                <div className="modal-actions">
-                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
-                    <button onClick={onConfirm} className={`cta-button ${confirmClass || ''}`}>{confirmText}</button>
+        <div className="requests-view-container">
+            <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
+                <button className={`view-toggle-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
+                <button className={`view-toggle-button ${filter === 'new' ? 'active' : ''}`} onClick={() => setFilter('new')}>Nuevos</button>
+                <button className={`view-toggle-button ${filter === 'read' ? 'active' : ''}`} onClick={() => setFilter('read')}>Leídos</button>
+                <button className={`view-toggle-button ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>Resueltos</button>
+            </div>
+            <div className="request-list">
+                {filteredRequests.map(req => (
+                    <RequestCard key={req._id} request={req} onUpdate={onUpdateRequest} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const RequestCard: React.FC<{ request: TrainerRequest, onUpdate: () => void }> = ({ request, onUpdate }) => {
+
+    const handleUpdateStatus = async (newStatus: 'read' | 'resolved') => {
+        const success = await apiClient.updateRequestStatus(request._id, newStatus);
+        if (success) onUpdate();
+    };
+
+    const handleDelete = async () => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
+            const success = await apiClient.deleteRequest(request._id);
+            if (success) onUpdate();
+        }
+    };
+    
+    return (
+        <div className={`request-card status-${request.status}`}>
+            <div className="request-card-header">
+                <div className="request-card-info">
+                    <h4>{request.clientName}</h4>
+                    <span>{new Date(request.createdAt).toLocaleString('es-ES')}</span>
                 </div>
+                <span className={`request-status-badge status-${request.status}`}>{request.status.toUpperCase()}</span>
+            </div>
+            <div className="request-card-body">
+                <strong>{request.subject}</strong>
+                <p>{request.message}</p>
+            </div>
+            <div className="request-card-actions">
+                {request.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus('read')}>Marcar como Leído</button>}
+                {request.status === 'read' && <button className="action-btn save" onClick={() => handleUpdateStatus('resolved')}>Marcar como Resuelto</button>}
+                <button className="action-btn delete" onClick={handleDelete}>Borrar</button>
             </div>
         </div>
     );
 };
 
 
+// --- App Initialization ---
 const root = createRoot(document.getElementById("root")!);
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
 );
