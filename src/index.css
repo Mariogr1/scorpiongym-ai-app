@@ -123,6 +123,38 @@ body {
     flex-grow: 1;
 }
 
+/* --- QR Code Modal --- */
+.qr-code-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.qr-code-container img {
+    width: 250px;
+    height: 250px;
+    border: 6px solid white;
+    border-radius: 10px;
+    background-color: white; /* Ensure QR bg is white */
+}
+.qr-code-container p {
+    font-size: 1rem;
+    color: var(--text-secondary-color);
+    margin: 0;
+    line-height: 1.4;
+}
+.qr-code-container a {
+    color: var(--archive-color);
+    text-decoration: none;
+    font-weight: 600;
+    word-break: break-all;
+}
+.qr-code-container a:hover {
+    text-decoration: underline;
+}
+
+
 /* --- Vistas de Login y Landing --- */
 .login-container, .client-view-container {
   display: flex;

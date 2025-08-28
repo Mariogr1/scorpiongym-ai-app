@@ -2,6 +2,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -673,6 +675,7 @@ const AdminDashboard: React.FC<{
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests'>('clients');
+    const [showShareModal, setShowShareModal] = useState(false);
 
     const fetchAllData = async () => {
         setIsLoading(true);
@@ -839,6 +842,7 @@ const AdminDashboard: React.FC<{
                         {newRequestCount > 0 && <span className="notification-badge">{newRequestCount}</span>}
                     </button>
                     <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca</button>
+                    <button className="header-nav-button" onClick={() => setShowShareModal(true)}>Compartir App</button>
                     {isImpersonating ? (
                         <button onClick={onBackToSuperAdmin} className="back-button">Volver</button>
                     ) : (
@@ -858,6 +862,8 @@ const AdminDashboard: React.FC<{
                     confirmClass="delete"
                 />
             )}
+
+            {showShareModal && <ShareAppModal onClose={() => setShowShareModal(false)} />}
 
         </div>
     );
@@ -3268,6 +3274,30 @@ const ConfirmationModal: React.FC<{
         </div>
     );
 };
+
+const ShareAppModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const appUrl = "https://www.scorpion-ai.app/";
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(appUrl)}`;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content" onClick={e => e.stopPropagation()}>
+                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', fontSize: '1.5rem' }}>Comparte la App con tus Clientes</h3>
+                <div className="qr-code-container">
+                    <img src={qrUrl} alt="QR Code for Scorpion AI App" />
+                    <p>
+                        O comparte este enlace: <br/>
+                        <a href={appUrl} target="_blank" rel="noopener noreferrer">{appUrl}</a>
+                    </p>
+                </div>
+                <div className="modal-actions">
+                    <button onClick={onClose} className="cta-button">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Trainer Request/Ticket System ---
 
