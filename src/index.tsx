@@ -658,6 +658,94 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
 
 
 // --- Admin/Coach Views ---
+// FIX: Defined RequestsView component to display and manage trainer requests.
+const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
+
+    const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
+        setIsLoading(true);
+        await apiClient.updateRequestStatus(id, status);
+        onUpdateRequest();
+        setIsLoading(false);
+    };
+
+    const handleDelete = async (id: string) => {
+        if (window.confirm('¿Estás seguro de que quieres eliminar esta solicitud?')) {
+            setIsLoading(true);
+            await apiClient.deleteRequest(id);
+            onUpdateRequest();
+            setIsLoading(false);
+        }
+    };
+
+    const sortedRequests = useMemo(() => {
+        return [...requests].sort((a, b) => {
+            if (a.status === 'new' && b.status !== 'new') return -1;
+            if (a.status !== 'new' && b.status === 'new') return 1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+    }, [requests]);
+
+    if (requests.length === 0) {
+        return <div className="placeholder-action"><h3>Bandeja de Entrada</h3><p>No hay solicitudes de clientes por el momento.</p></div>;
+    }
+
+    return (
+        <div className="requests-view animated-fade-in">
+            <h3>Bandeja de Entrada</h3>
+            {isLoading && <div className="loading-overlay"><div className="spinner"></div></div>}
+            <div className="requests-list">
+                {sortedRequests.map(req => (
+                    <div key={req._id} className={`request-card status-${req.status}`}>
+                        <div className="request-card-header" onClick={() => setExpandedRequestId(expandedRequestId === req._id ? null : req._id)}>
+                            <div className="request-info">
+                                <span className={`status-dot ${req.status}`}></span>
+                                <strong>{req.clientName}</strong>
+                                <span>{req.subject}</span>
+                            </div>
+                            <div className="request-meta">
+                                <span>{new Date(req.createdAt).toLocaleString('es-ES')}</span>
+                                <span className="expand-icon">{expandedRequestId === req._id ? '−' : '+'}</span>
+                            </div>
+                        </div>
+                        {expandedRequestId === req._id && (
+                            <div className="request-card-body animated-fade-in">
+                                <p>{req.message}</p>
+                                <div className="request-actions">
+                                    {req.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'read')}>Marcar como leído</button>}
+                                    {req.status !== 'resolved' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'resolved')}>Resolver</button>}
+                                    <button className="action-btn delete" onClick={() => handleDelete(req._id)}>Eliminar</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// FIX: Defined QrCodeModal component to display a QR code for the app URL.
+const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const appUrl = window.location.origin;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(appUrl)}`;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content qr-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
+                <h3>Comparte la App con tus Clientes</h3>
+                <p>Los clientes pueden escanear este código QR para acceder a la aplicación en sus teléfonos.</p>
+                <div className="qr-code-container">
+                    <img src={qrCodeUrl} alt="QR Code para la aplicación" />
+                </div>
+                <p className="app-url-display">O comparte este enlace: <a href={appUrl} target="_blank" rel="noopener noreferrer">{appUrl}</a></p>
+                <button onClick={onClose} className="cta-button secondary" style={{ marginTop: '1.5rem' }}>Cerrar</button>
+            </div>
+        </div>
+    );
+};
 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
@@ -675,7 +763,7 @@ const AdminDashboard: React.FC<{
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests'>('clients');
-    const [showShareModal, setShowShareModal] = useState(false);
+    const [showQrModal, setShowQrModal] = useState(false);
 
     const fetchAllData = async () => {
         setIsLoading(true);
@@ -842,7 +930,7 @@ const AdminDashboard: React.FC<{
                         {newRequestCount > 0 && <span className="notification-badge">{newRequestCount}</span>}
                     </button>
                     <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca</button>
-                    <button className="header-nav-button" onClick={() => setShowShareModal(true)}>Compartir App</button>
+                    <button className="header-nav-button share-app-button" onClick={() => setShowQrModal(true)}>Compartir App</button>
                     {isImpersonating ? (
                         <button onClick={onBackToSuperAdmin} className="back-button">Volver</button>
                     ) : (
@@ -863,8 +951,7 @@ const AdminDashboard: React.FC<{
                 />
             )}
 
-            {showShareModal && <ShareAppModal onClose={() => setShowShareModal(false)} />}
-
+            {showQrModal && <QrCodeModal onClose={() => setShowQrModal(false)} />}
         </div>
     );
 };
@@ -1006,7 +1093,7 @@ const ProfileEditor: React.FC<{
 
     // Reset muscle focus when body focus changes
     useEffect(() => {
-        if (profile.bodyFocusArea === 'Full Body') {
+        if (profile.bodyFocusArea === 'Cuerpo completo') {
              if (profile.muscleFocus !== 'General') {
                 handleChange('muscleFocus', 'General');
              }
@@ -1138,7 +1225,7 @@ const ProfileEditor: React.FC<{
                  <div className="form-group">
                     <label>Enfoque Corporal</label>
                      <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
-                        <option value="Full Body">Full Body</option>
+                        <option value="Cuerpo completo">Cuerpo completo</option>
                         <option value="Tren Superior">Tren Superior</option>
                         <option value="Tren Inferior">Tren Inferior</option>
                     </select>
@@ -2173,6 +2260,128 @@ const GenerationProgressIndicator: React.FC<{
 };
 
 
+const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
+    const [isChecked, setIsChecked] = useState(false);
+    
+    const termsText = `
+Bienvenido a ScorpionGYM AI.
+
+Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
+
+1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
+
+2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
+
+3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
+
+4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
+
+5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
+
+Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
+    `;
+
+    return (
+        <div className="agreement-container">
+            <header>
+                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+                 <h1>Términos y Condiciones</h1>
+            </header>
+            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
+            <div className="terms-box">
+                <p>{termsText}</p>
+            </div>
+            <div className="agreement-actions">
+                <div className="agreement-checkbox">
+                    <input 
+                        type="checkbox" 
+                        id="terms" 
+                        checked={isChecked} 
+                        onChange={() => setIsChecked(!isChecked)} 
+                    />
+                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
+                </div>
+                <div className="agreement-buttons">
+                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
+                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// FIX: Defined RequestModal component for clients to send requests to their trainer.
+const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!subject.trim() || !message.trim()) {
+            setError('Por favor, completa el asunto y el mensaje.');
+            return;
+        }
+        setIsSending(true);
+        const requestData = {
+            clientId: client.dni,
+            clientName: client.profile.name,
+            gymId: client.gymId,
+            subject,
+            message,
+        };
+        const result = await apiClient.createRequest(requestData);
+        if (result) {
+            setSuccess(true);
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } else {
+            setError('No se pudo enviar tu solicitud. Inténtalo de nuevo más tarde.');
+        }
+        setIsSending(false);
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content request-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
+                {success ? (
+                    <div className="request-success animated-fade-in">
+                        <h3>¡Solicitud Enviada!</h3>
+                        <p>Tu entrenador ha recibido tu mensaje y se pondrá en contacto contigo pronto.</p>
+                    </div>
+                ) : (
+                    <>
+                        <h3>Solicitar Cambio o Hacer una Consulta</h3>
+                        <p>Envía un mensaje directo a tu entrenador.</p>
+                        <form onSubmit={handleSubmit}>
+                            <div className="form-group">
+                                <label htmlFor="subject">Asunto</label>
+                                <input type="text" id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} required />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="message">Mensaje</label>
+                                <textarea id="message" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} required></textarea>
+                            </div>
+                            {error && <p className="error-text">{error}</p>}
+                            <div className="modal-actions">
+                                <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                                <button type="submit" className="cta-button" disabled={isSending}>
+                                    {isSending ? 'Enviando...' : 'Enviar Solicitud'}
+                                </button>
+                            </div>
+                        </form>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>('routine');
     const [showRequestModal, setShowRequestModal] = useState(false);
@@ -2353,55 +2562,6 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
 
 
 
-const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
-    const [isChecked, setIsChecked] = useState(false);
-    
-    const termsText = `
-Bienvenido a ScorpionGYM AI.
-
-Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
-
-1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
-
-2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
-
-3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
-
-4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
-
-5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
-
-Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
-    `;
-
-    return (
-        <div className="agreement-container">
-            <header>
-                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
-                 <h1>Términos y Condiciones</h1>
-            </header>
-            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
-            <div className="terms-box">
-                <p>{termsText}</p>
-            </div>
-            <div className="agreement-actions">
-                <div className="agreement-checkbox">
-                    <input 
-                        type="checkbox" 
-                        id="terms" 
-                        checked={isChecked} 
-                        onChange={() => setIsChecked(!isChecked)} 
-                    />
-                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
-                </div>
-                <div className="agreement-buttons">
-                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
-                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 
 // --- Client Portal: Routine Tracker ---
@@ -3249,6 +3409,7 @@ const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExerci
 
 // --- Generic Components ---
 
+// FIX: Fixed truncated ConfirmationModal component definition.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -3259,198 +3420,37 @@ const ConfirmationModal: React.FC<{
 }> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
     return (
         <div className="modal-overlay">
-            <div className="modal-content">
+            <div className="modal-content confirmation-modal">
                 <p>{message}</p>
                 <div className="modal-actions">
                     <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
-                    <button 
-                        onClick={onConfirm} 
-                        className={`cta-button ${confirmClass === 'delete' ? 'delete-selected-button' : (confirmClass === 'archive' ? 'archive-selected-button' : '')}`}
-                    >
-                        {confirmText}
-                    </button>
+                    <button onClick={onConfirm} className={`cta-button ${confirmClass || ''}`}>{confirmText}</button>
                 </div>
             </div>
         </div>
     );
 };
-
-const ShareAppModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const appUrl = "https://www.scorpion-ai.app/";
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(appUrl)}`;
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-                <h3 style={{ marginTop: 0, marginBottom: '1.5rem', fontSize: '1.5rem' }}>Comparte la App con tus Clientes</h3>
-                <div className="qr-code-container">
-                    <img src={qrUrl} alt="QR Code for Scorpion AI App" />
-                    <p>
-                        O comparte este enlace: <br/>
-                        <a href={appUrl} target="_blank" rel="noopener noreferrer">{appUrl}</a>
-                    </p>
-                </div>
-                <div className="modal-actions">
-                    <button onClick={onClose} className="cta-button">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-// --- Trainer Request/Ticket System ---
-
-const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
-    const [subject, setSubject] = useState('Cambiar un ejercicio');
-    const [message, setMessage] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!message.trim()) {
-            alert("Por favor, escribe un mensaje.");
-            return;
-        }
-        setIsSubmitting(true);
-        setStatus('idle');
-        
-        const success = await apiClient.createRequest({
-            clientId: client.dni,
-            clientName: client.profile.name,
-            gymId: client.gymId,
-            subject,
-            message
-        });
-
-        if (success) {
-            setStatus('success');
-            setMessage('');
-            setTimeout(() => {
-                onClose();
-            }, 2000);
-        } else {
-            setStatus('error');
-        }
-        setIsSubmitting(false);
-    };
-
+confirmText?: string;
+    cancelText?: string;
+    confirmClass?: 'delete' | 'archive';
+}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
     return (
         <div className="modal-overlay">
-            <div className="modal-content edit-modal">
-                <h3>Contactar a tu Entrenador</h3>
-                {status === 'success' ? (
-                    <div className="success-message">
-                        <p>¡Mensaje enviado! Tu entrenador lo revisará pronto.</p>
-                    </div>
-                ) : (
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label htmlFor="request-subject">Asunto</label>
-                            <select id="request-subject" value={subject} onChange={e => setSubject(e.target.value)}>
-                                <option>Cambiar un ejercicio</option>
-                                <option>Ajustar dificultad (muy fácil/difícil)</option>
-                                <option>Dudas sobre la rutina</option>
-                                <option>Otro</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="request-message">Mensaje</label>
-                            <textarea
-                                id="request-message"
-                                rows={5}
-                                value={message}
-                                onChange={e => setMessage(e.target.value)}
-                                placeholder="Escribe aquí tu consulta o el cambio que te gustaría solicitar..."
-                                required
-                            ></textarea>
-                        </div>
-                        {status === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
-                        <div className="modal-actions" style={{ marginTop: '2rem' }}>
-                            <button type="button" className="cta-button secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</button>
-                            <button type="submit" className="cta-button" disabled={isSubmitting}>
-                                {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
-    const [filter, setFilter] = useState<'new' | 'read' | 'resolved' | 'all'>('all');
-    
-    const filteredRequests = useMemo(() => {
-        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        if (filter === 'all') return sorted;
-        return sorted.filter(r => r.status === filter);
-    }, [requests, filter]);
-
-    if (requests.length === 0) {
-        return <div className="placeholder">No hay solicitudes de clientes.</div>;
-    }
-
-    return (
-        <div className="requests-view-container">
-            <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
-                <button className={`view-toggle-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
-                <button className={`view-toggle-button ${filter === 'new' ? 'active' : ''}`} onClick={() => setFilter('new')}>Nuevos</button>
-                <button className={`view-toggle-button ${filter === 'read' ? 'active' : ''}`} onClick={() => setFilter('read')}>Leídos</button>
-                <button className={`view-toggle-button ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>Resueltos</button>
-            </div>
-            <div className="request-list">
-                {filteredRequests.map(req => (
-                    <RequestCard key={req._id} request={req} onUpdate={onUpdateRequest} />
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const RequestCard: React.FC<{ request: TrainerRequest, onUpdate: () => void }> = ({ request, onUpdate }) => {
-
-    const handleUpdateStatus = async (newStatus: 'read' | 'resolved') => {
-        const success = await apiClient.updateRequestStatus(request._id, newStatus);
-        if (success) onUpdate();
-    };
-
-    const handleDelete = async () => {
-        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
-            const success = await apiClient.deleteRequest(request._id);
-            if (success) onUpdate();
-        }
-    };
-    
-    return (
-        <div className={`request-card status-${request.status}`}>
-            <div className="request-card-header">
-                <div className="request-card-info">
-                    <h4>{request.clientName}</h4>
-                    <span>{new Date(request.createdAt).toLocaleString('es-ES')}</span>
+            <div className="modal-content confirmation-modal">
+                <p>{message}</p>
+                <div className="modal-actions">
+                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
+                    <button onClick={onConfirm} className={`cta-button ${confirmClass || ''}`}>{confirmText}</button>
                 </div>
-                <span className={`request-status-badge status-${request.status}`}>{request.status.toUpperCase()}</span>
-            </div>
-            <div className="request-card-body">
-                <strong>{request.subject}</strong>
-                <p>{request.message}</p>
-            </div>
-            <div className="request-card-actions">
-                {request.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus('read')}>Marcar como Leído</button>}
-                {request.status === 'read' && <button className="action-btn save" onClick={() => handleUpdateStatus('resolved')}>Marcar como Resuelto</button>}
-                <button className="action-btn delete" onClick={handleDelete}>Borrar</button>
             </div>
         </div>
     );
 };
 
 
-// --- App Initialization ---
 const root = createRoot(document.getElementById("root")!);
 root.render(
-    <React.StrictMode>
-        <App />
-    </React.StrictMode>
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
 );
