@@ -1,5 +1,3 @@
-
-
 :root {
   --background-color: #000000;
   --surface-color: #141414;
@@ -1221,7 +1219,7 @@ body {
 
 .day-card {
     background-color: var(--surface-color);
-    padding: 1.5rem;
+    padding: 1.5rem 0.5rem;
     border-radius: 10px;
 }
 .day-card h3, .day-card h4 {
@@ -1506,26 +1504,39 @@ body {
 }
 
 .exercise-tracking {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    align-items: flex-end;
+    display: grid;
+    /* Two equal flexible columns for inputs, one auto-sized for the button */
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.75rem;
+    align-items: end; /* Aligns inputs and button along their bottom edge */
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border-color); /* Visual separator */
 }
+
 .exercise-tracking > div {
+    /* This is the wrapper for label + input */
     display: flex;
     flex-direction: column;
-    flex: 1 1 80px; /* Let them grow from a basis of 80px */
 }
+
 .exercise-tracking label {
     font-size: 0.8rem;
     color: var(--text-secondary-color);
     margin-bottom: 0.25rem;
+    white-space: nowrap; /* Prevents "Peso (kg)" from wrapping */
 }
+
 .exercise-tracking input {
     width: 100%;
     padding: 0.6rem;
     font-size: 1rem;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
 }
+
 .exercise-tracking .cta-button.secondary {
     flex-shrink: 0;
     width: 44px;
