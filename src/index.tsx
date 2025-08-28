@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1019,7 +1020,7 @@ const ProfileEditor: React.FC<{
 
     // Reset muscle focus when body focus changes
     useEffect(() => {
-        if (profile.bodyFocusArea === 'Cuerpo completo') {
+        if (profile.bodyFocusArea === 'Full Body') {
              if (profile.muscleFocus !== 'General') {
                 handleChange('muscleFocus', 'General');
              }
@@ -1151,7 +1152,7 @@ const ProfileEditor: React.FC<{
                  <div className="form-group">
                     <label>Enfoque Corporal</label>
                      <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
-                        <option value="Cuerpo completo">Cuerpo completo</option>
+                        <option value="Full Body">Full Body</option>
                         <option value="Tren Superior">Tren Superior</option>
                         <option value="Tren Inferior">Tren Inferior</option>
                     </select>
@@ -2184,83 +2185,32 @@ const GenerationProgressIndicator: React.FC<{
     );
 };
 
-
-const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
-    const [isChecked, setIsChecked] = useState(false);
-    
-    const termsText = `
-Bienvenido a ScorpionGYM AI.
-
-Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
-
-1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
-
-2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
-
-3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
-
-4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
-
-5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
-
-Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
-    `;
-
-    return (
-        <div className="agreement-container">
-            <header>
-                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
-                 <h1>Términos y Condiciones</h1>
-            </header>
-            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
-            <div className="terms-box">
-                <p>{termsText}</p>
-            </div>
-            <div className="agreement-actions">
-                <div className="agreement-checkbox">
-                    <input 
-                        type="checkbox" 
-                        id="terms" 
-                        checked={isChecked} 
-                        onChange={() => setIsChecked(!isChecked)} 
-                    />
-                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
-                </div>
-                <div className="agreement-buttons">
-                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
-                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ client, onClose }) => {
-    const [subject, setSubject] = useState('Cambiar un ejercicio');
+// Fix: Add missing RequestModal component definition.
+const RequestModal: React.FC<{
+    client: ClientData;
+    onClose: () => void;
+}> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!message.trim()) {
-            alert("Por favor, escribe un mensaje.");
-            return;
-        }
         setIsSubmitting(true);
         setStatus('idle');
         
-        const success = await apiClient.createRequest({
+        const requestData = {
             clientId: client.dni,
             clientName: client.profile.name,
             gymId: client.gymId,
             subject,
             message
-        });
+        };
 
+        const success = await apiClient.createRequest(requestData);
         if (success) {
             setStatus('success');
-            setMessage('');
             setTimeout(() => {
                 onClose();
             }, 2000);
@@ -2271,40 +2221,44 @@ const RequestModal: React.FC<{ client: ClientData, onClose: () => void }> = ({ c
     };
 
     return (
-        <div className="modal-overlay">
-            <div className="modal-content edit-modal">
-                <h3>Contactar a tu Entrenador</h3>
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
+                <h3>Contactar al Entrenador</h3>
+
                 {status === 'success' ? (
-                    <div className="success-message">
-                        <p>¡Mensaje enviado! Tu entrenador lo revisará pronto.</p>
+                    <div className="success-message" style={{textAlign: 'center', padding: '2rem'}}>
+                        <p>¡Tu solicitud ha sido enviada con éxito!</p>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label htmlFor="request-subject">Asunto</label>
-                            <select id="request-subject" value={subject} onChange={e => setSubject(e.target.value)}>
-                                <option>Cambiar un ejercicio</option>
-                                <option>Ajustar dificultad (muy fácil/difícil)</option>
-                                <option>Dudas sobre la rutina</option>
-                                <option>Otro</option>
-                            </select>
+                            <label htmlFor="subject">Asunto</label>
+                            <input
+                                type="text"
+                                id="subject"
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                placeholder="Ej: Duda sobre ejercicio, cambiar rutina..."
+                                required
+                            />
                         </div>
                         <div className="form-group">
-                            <label htmlFor="request-message">Mensaje</label>
+                            <label htmlFor="message">Mensaje</label>
                             <textarea
-                                id="request-message"
+                                id="message"
                                 rows={5}
                                 value={message}
-                                onChange={e => setMessage(e.target.value)}
-                                placeholder="Escribe aquí tu consulta o el cambio que te gustaría solicitar..."
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Describe tu solicitud o pregunta en detalle."
                                 required
                             ></textarea>
                         </div>
-                        {status === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
-                        <div className="modal-actions" style={{ marginTop: '2rem' }}>
-                            <button type="button" className="cta-button secondary" onClick={onClose} disabled={isSubmitting}>Cancelar</button>
+                        {status === 'error' && <p className="error-text">No se pudo enviar la solicitud. Inténtalo de nuevo.</p>}
+                        <div className="modal-actions" style={{marginTop: '1.5rem'}}>
+                            <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
                             <button type="submit" className="cta-button" disabled={isSubmitting}>
-                                {isSubmitting ? 'Enviando...' : 'Enviar Mensaje'}
+                                {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
                             </button>
                         </div>
                     </form>
@@ -2494,6 +2448,55 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
 
 
 
+const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
+    const [isChecked, setIsChecked] = useState(false);
+    
+    const termsText = `
+Bienvenido a ScorpionGYM AI.
+
+Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
+
+1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
+
+2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
+
+3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
+
+4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
+
+5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
+
+Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
+    `;
+
+    return (
+        <div className="agreement-container">
+            <header>
+                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+                 <h1>Términos y Condiciones</h1>
+            </header>
+            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
+            <div className="terms-box">
+                <p>{termsText}</p>
+            </div>
+            <div className="agreement-actions">
+                <div className="agreement-checkbox">
+                    <input 
+                        type="checkbox" 
+                        id="terms" 
+                        checked={isChecked} 
+                        onChange={() => setIsChecked(!isChecked)} 
+                    />
+                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
+                </div>
+                <div className="agreement-buttons">
+                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
+                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 
 // --- Client Portal: Routine Tracker ---
