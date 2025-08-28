@@ -2199,7 +2199,7 @@ input:checked + .slider:before {
 .chat-messages {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -2208,7 +2208,7 @@ input:checked + .slider:before {
 .chat-message {
   display: flex;
   gap: 1rem;
-  max-width: 85%;
+  max-width: 95%;
 }
 .chat-message.user {
   align-self: flex-end;
