@@ -1,4 +1,6 @@
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -318,6 +320,28 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
 
 
 // --- Super Admin View ---
+
+// FIX: Added missing ConfirmationModal component.
+const ConfirmationModal: React.FC<{
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    confirmClass?: string;
+}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass = '' }) => {
+    return (
+        <div className="modal-overlay" onClick={onCancel}>
+            <div className="modal-content confirmation-modal" onClick={(e) => e.stopPropagation()}>
+                <p>{message}</p>
+                <div className="modal-actions">
+                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
+                    <button onClick={onConfirm} className={`cta-button ${confirmClass}`}>{confirmText}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
     const [password, setPassword] = useState('');
@@ -691,6 +715,84 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <p className="app-url-display">O comparte este enlace: <a href={appUrl} target="_blank" rel="noopener noreferrer">{appUrl}</a></p>
                 <button onClick={onClose} className="cta-button secondary" style={{ marginTop: '1.5rem' }}>Cerrar</button>
             </div>
+        </div>
+    );
+};
+
+// FIX: Added missing RequestsView and RequestSection components.
+const RequestSection: React.FC<{
+    title: string;
+    requests: TrainerRequest[];
+    onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
+    onDelete: (id: string) => void;
+}> = ({ title, requests, onUpdateStatus, onDelete }) => {
+    if (requests.length === 0) return null;
+    
+    return (
+        <div className="request-section">
+            <h3>{title} ({requests.length})</h3>
+            <div className="request-list">
+                {requests.map(req => (
+                    <div key={req._id} className={`request-card status-${req.status}`}>
+                        <div className="request-card-header">
+                            <h4>{req.subject}</h4>
+                            <span className="request-date">{new Date(req.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="request-client"><strong>Cliente:</strong> {req.clientName} ({req.clientId})</p>
+                        <p className="request-message">{req.message}</p>
+                        <div className="request-card-actions">
+                            {req.status === 'new' && <button className="action-btn" onClick={() => onUpdateStatus(req._id, 'read')}>Marcar como Leído</button>}
+                            {req.status === 'read' && <button className="action-btn" onClick={() => onUpdateStatus(req._id, 'resolved')}>Marcar como Resuelto</button>}
+                            <button className="action-btn delete" onClick={() => onDelete(req._id)}>Eliminar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
+        setIsLoading(true);
+        await apiClient.updateRequestStatus(id, status);
+        onUpdateRequest();
+        setIsLoading(false);
+    };
+    
+    const handleDelete = async (id: string) => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
+            setIsLoading(true);
+            await apiClient.deleteRequest(id);
+            onUpdateRequest();
+            setIsLoading(false);
+        }
+    };
+    
+    // Sort requests by date, newest first
+    const sortedRequests = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const newRequests = sortedRequests.filter(r => r.status === 'new');
+    const readRequests = sortedRequests.filter(r => r.status === 'read');
+    const resolvedRequests = sortedRequests.filter(r => r.status === 'resolved');
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    }
+    
+    return (
+        <div className="requests-view animated-fade-in">
+             <h2>Bandeja de Entrada de Solicitudes</h2>
+             {requests.length === 0 ? (
+                <div className="placeholder" style={{marginTop: '2rem'}}>No hay solicitudes pendientes.</div>
+             ) : (
+                <>
+                    <RequestSection title="Nuevas Solicitudes" requests={newRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                    <RequestSection title="Solicitudes Leídas" requests={readRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                    <RequestSection title="Solicitudes Resueltas" requests={resolvedRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                </>
+             )}
         </div>
     );
 };
@@ -1969,7 +2071,7 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                     <header>
                         <h1>Bienvenido, {clientData.profile.name}!</h1>
                         <div className="client-header-actions">
-                            <button onClick={() => setShowChat(true)} className="header-nav-button">Asistente IA</button>
+                            <button onClick={() => setShowChat(true)} className="header-nav-button ai-assistant-button">Asistente IA</button>
                             <button onClick={onLogout} className="logout-button">Salir</button>
                         </div>
                     </header>
@@ -2840,6 +2942,7 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
 
     return (
         <div className="progress-view-container">
+             <BodyWeightLogger clientData={clientData} onWeightLogged={onDataUpdate} />
             <nav className="progress-tabs-nav">
                 {(planType === 'full' || planType === 'nutrition') &&
                     <button className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} onClick={() => setActiveTab('bodyWeight')}>Peso Corporal</button>
@@ -2849,20 +2952,18 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
                 }
             </nav>
             <div className="animated-fade-in">
-                {activeTab === 'bodyWeight' && <BodyWeightProgress clientData={clientData} onDataUpdate={onDataUpdate} />}
+                {activeTab === 'bodyWeight' && <BodyWeightProgress clientData={clientData} />}
                 {activeTab === 'lifts' && <LiftProgress clientData={clientData} />}
             </div>
         </div>
     );
 };
 
-const BodyWeightProgress: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
+const BodyWeightProgress: React.FC<{ clientData: ClientData; }> = ({ clientData }) => {
     const log = useMemo(() => [...(clientData.bodyWeightLog || [])].reverse(), [clientData.bodyWeightLog]);
 
     return (
         <div>
-            <BodyWeightLogger clientData={clientData} onWeightLogged={onDataUpdate} />
-            
             {(!log || log.length === 0) ? (
                  <div className="placeholder" style={{marginTop: '2rem'}}>No hay registros de peso corporal.</div>
             ) : (
@@ -3325,6 +3426,7 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
 };
 
 
+// FIX: The component was missing its return statement and JSX content.
 const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExercise: (group: string, name: string) => void }> = ({ library, onAddExercise }) => {
     const [newExerciseName, setNewExerciseName] = useState('');
     const [selectedGroup, setSelectedGroup] = useState(Object.keys(library)[0] || '');
@@ -3332,144 +3434,105 @@ const AddExerciseToLibraryForm: React.FC<{ library: ExerciseLibrary, onAddExerci
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newExerciseName.trim() || !selectedGroup) {
-            alert("Por favor, completa el nombre y selecciona un grupo.");
             return;
         }
         onAddExercise(selectedGroup, newExerciseName.trim());
         setNewExerciseName('');
     };
-    
+
     return (
-        <div className="add-exercise-container">
-            <div className="add-exercise-form-wrapper">
-                <h3>Añadir Nuevo Ejercicio</h3>
-                <form onSubmit={handleSubmit} className="add-exercise-form">
-                     <input
-                        type="text"
-                        placeholder="Nombre del Ejercicio"
-                        value={newExerciseName}
-                        onChange={(e) => setNewExerciseName(e.target.value)}
-                        required
-                    />
-                    <select
-                        value={selectedGroup}
-                        onChange={(e) => setSelectedGroup(e.target.value)}
-                        required
-                    >
-                        <option value="" disabled>-- Selecciona un Grupo --</option>
-                        {Object.keys(library).sort().map(group => (
-                            <option key={group} value={group}>{group}</option>
-                        ))}
-                    </select>
-                    <button type="submit">Añadir</button>
-                </form>
+        <form onSubmit={handleSubmit} className="add-exercise-form">
+            <h4>Añadir Nuevo Ejercicio</h4>
+            <div className="form-group-inline">
+                <input
+                    type="text"
+                    placeholder="Nombre del ejercicio"
+                    value={newExerciseName}
+                    onChange={e => setNewExerciseName(e.target.value)}
+                    required
+                />
             </div>
-        </div>
+            <div className="form-group-inline">
+                <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)} required>
+                    {Object.keys(library).sort().map(group => (
+                        <option key={group} value={group}>{group}</option>
+                    ))}
+                </select>
+            </div>
+            <div className="form-group-inline">
+                <button type="submit" className="cta-button">Añadir</button>
+            </div>
+        </form>
     );
 };
 
+// --- Trainer Request System ---
 
-// --- Generic Components ---
+const RequestsViewAdmin: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
+    const [requests, setRequests] = useState<TrainerRequest[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-const ConfirmationModal: React.FC<{
-    message: string;
-    onConfirm: () => void;
-    onCancel: () => void;
-    confirmText?: string;
-    cancelText?: string;
-    confirmClass?: 'delete' | 'archive';
-}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass }) => {
-    return (
-        <div className="modal-overlay">
-            <div className="modal-content">
-                <p>{message}</p>
-                <div className="modal-actions">
-                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
-                    <button 
-                        onClick={onConfirm} 
-                        className={`cta-button ${confirmClass === 'delete' ? 'delete-selected-button' : (confirmClass === 'archive' ? 'archive-selected-button' : '')}`}
-                    >
-                        {confirmText}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Trainer Request/Ticket System ---
-
-const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
-    const [filter, setFilter] = useState<'new' | 'read' | 'resolved' | 'all'>('all');
-    
-    const filteredRequests = useMemo(() => {
-        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        if (filter === 'all') return sorted;
-        return sorted.filter(r => r.status === filter);
-    }, [requests, filter]);
-
-    if (requests.length === 0) {
-        return <div className="placeholder">No hay solicitudes de clientes.</div>;
-    }
-
-    return (
-        <div className="requests-view-container">
-            <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
-                <button className={`view-toggle-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
-                <button className={`view-toggle-button ${filter === 'new' ? 'active' : ''}`} onClick={() => setFilter('new')}>Nuevos</button>
-                <button className={`view-toggle-button ${filter === 'read' ? 'active' : ''}`} onClick={() => setFilter('read')}>Leídos</button>
-                <button className={`view-toggle-button ${filter === 'resolved' ? 'active' : ''}`} onClick={() => setFilter('resolved')}>Resueltos</button>
-            </div>
-            <div className="request-list">
-                {filteredRequests.map(req => (
-                    <RequestCard key={req._id} request={req} onUpdate={onUpdateRequest} />
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const RequestCard: React.FC<{ request: TrainerRequest, onUpdate: () => void }> = ({ request, onUpdate }) => {
-
-    const handleUpdateStatus = async (newStatus: 'read' | 'resolved') => {
-        const success = await apiClient.updateRequestStatus(request._id, newStatus);
-        if (success) onUpdate();
+    const fetchRequests = async () => {
+        setIsLoading(true);
+        const data = await apiClient.getRequests(gymId);
+        setRequests(data);
+        setIsLoading(false);
     };
 
-    const handleDelete = async () => {
+    useEffect(() => {
+        fetchRequests();
+    }, [gymId]);
+
+    const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
+        const success = await apiClient.updateRequestStatus(id, status);
+        if (success) fetchRequests();
+    };
+
+    const handleDeleteRequest = async (id: string) => {
         if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
-            const success = await apiClient.deleteRequest(request._id);
-            if (success) onUpdate();
+            const success = await apiClient.deleteRequest(id);
+            if (success) fetchRequests();
         }
     };
     
+    // Sort requests by date, newest first
+    const sortedRequests = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return (
-        <div className={`request-card status-${request.status}`}>
-            <div className="request-card-header">
-                <div className="request-card-info">
-                    <h4>{request.clientName}</h4>
-                    <span>{new Date(request.createdAt).toLocaleString('es-ES')}</span>
+        <div className="admin-dashboard animated-fade-in">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                    <h1>Bandeja de Entrada</h1>
                 </div>
-                <span className={`request-status-badge status-${request.status}`}>{request.status.toUpperCase()}</span>
+                <button onClick={onBack} className="back-button">Volver al Panel</button>
             </div>
-            <div className="request-card-body">
-                <strong>{request.subject}</strong>
-                <p>{request.message}</p>
-            </div>
-            <div className="request-card-actions">
-                {request.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus('read')}>Marcar como Leído</button>}
-                {request.status === 'read' && <button className="action-btn save" onClick={() => handleUpdateStatus('resolved')}>Marcar como Resuelto</button>}
-                <button className="action-btn delete" onClick={handleDelete}>Borrar</button>
-            </div>
+            {isLoading ? (
+                 <div className="loading-container"><div className="spinner"></div>Cargando solicitudes...</div>
+            ) : requests.length === 0 ? (
+                <div className="placeholder">No hay solicitudes pendientes.</div>
+            ) : (
+                <div className="request-list-container">
+                    {sortedRequests.map(req => (
+                        <div key={req._id} className={`request-card status-${req.status}`}>
+                            <div className="request-card-header">
+                                <h4>{req.subject}</h4>
+                                <span className="request-date">{new Date(req.createdAt).toLocaleString()}</span>
+                            </div>
+                            <p className="request-client"><strong>Cliente:</strong> {req.clientName} (DNI: {req.clientId})</p>
+                            <p className="request-message">{req.message}</p>
+                            <div className="request-card-actions">
+                                {req.status === 'new' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'read')}>Marcar como Leído</button>}
+                                {req.status === 'read' && <button className="action-btn" onClick={() => handleUpdateStatus(req._id, 'resolved')}>Marcar como Resuelto</button>}
+                                <button className="action-btn delete" onClick={() => handleDeleteRequest(req._id)}>Eliminar</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
 
 
-// --- App Initialization ---
 const root = createRoot(document.getElementById("root")!);
-root.render(
-    <React.StrictMode>
-        <App />
-    </React.StrictMode>
-);
+root.render(<App />);

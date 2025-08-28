@@ -1,4 +1,5 @@
 
+
 :root {
   --background-color: #000000;
   --surface-color: #141414;
@@ -1238,7 +1239,7 @@ body {
 }
 .exercise-item {
     background-color: var(--background-color);
-    padding: 1.25rem 0.75rem;
+    padding: 1.25rem;
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
 }
@@ -1513,7 +1514,7 @@ body {
 .exercise-tracking > div {
     display: flex;
     flex-direction: column;
-    flex: 1;
+    flex: 1 1 80px; /* Let them grow from a basis of 80px */
 }
 .exercise-tracking label {
     font-size: 0.8rem;
@@ -2153,21 +2154,22 @@ input:checked + .slider:before {
 
 /* --- Client Chat Assistant (Fullscreen) --- */
 .chat-fullscreen-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2000;
     display: flex;
     flex-direction: column;
-    width: 100%;
-    max-width: 800px;
-    margin: 0 auto;
-    background-color: var(--surface-color);
-    border-radius: 12px;
-    height: calc(100vh - 4rem); /* Full viewport height minus some margin */
-    max-height: 800px;
+    background-color: var(--background-color);
     overflow: hidden;
-    border: 1px solid var(--border-color);
 }
 
 .chat-fullscreen-container .main-header {
     flex-shrink: 0;
+    background-color: var(--surface-color);
+    margin-bottom: 0;
 }
 
 .close-button {
@@ -2195,7 +2197,7 @@ input:checked + .slider:before {
 .chat-message {
   display: flex;
   gap: 1rem;
-  max-width: 95%;
+  max-width: 85%;
 }
 .chat-message.user {
   align-self: flex-end;
@@ -2228,7 +2230,7 @@ input:checked + .slider:before {
   padding: 0.75rem 1.25rem;
   border-radius: 18px;
   line-height: 1.5;
-  max-width: calc(100% - 50px);
+  max-width: 100%;
 }
 .message-content p {
   margin: 0;
@@ -2343,6 +2345,15 @@ input:checked + .slider:before {
     height: 20px;
     line-height: 1;
     cursor: pointer;
+}
+
+.ai-assistant-button {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+.ai-assistant-button:hover {
+    background-color: var(--primary-color-hover);
+    border-color: var(--primary-color-hover);
 }
 
 
@@ -2553,11 +2564,6 @@ input:checked + .slider:before {
         width: 100%;
     }
 
-    .exercise-tracking {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-    }
     .progress-list-header {
         display: none;
     }
