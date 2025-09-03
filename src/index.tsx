@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -2185,15 +2186,20 @@ const ClientOnboardingView: React.FC<{
             }
 
             if (planType === 'full' || planType === 'nutrition') {
-                setGenerationProgress(prev => ({ ...prev, diet1: 'loading' }));
-                const diet1 = await generateDietForClient(clientData);
-                setClientData(prev => ({ ...prev, dietPlans: [diet1, prev.dietPlans?.[1] ?? null] }));
-                setGenerationProgress(prev => ({ ...prev, diet1: 'done' }));
+                // Set both diet statuses to 'loading' to show spinners simultaneously.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
+
+                // Generate both diet plans in parallel.
+                const [diet1, diet2] = await Promise.all([
+                    generateDietForClient(clientData),
+                    generateDietForClient(clientData)
+                ]);
                 
-                setGenerationProgress(prev => ({ ...prev, diet2: 'loading' }));
-                const diet2 = await generateDietForClient(clientData);
-                setClientData(prev => ({ ...prev, dietPlans: [prev.dietPlans?.[0] ?? null, diet2] }));
-                setGenerationProgress(prev => ({ ...prev, diet2: 'done' }));
+                // Once both are complete, update the client data with the new plans.
+                setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
+                
+                // Set both diet statuses to 'done' to show success indicators.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
             }
 
             setGenerationState('success');
