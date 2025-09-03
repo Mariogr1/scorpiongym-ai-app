@@ -1,7 +1,4 @@
 
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -652,6 +649,7 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
     return (
         <div className="modal-overlay">
             <div className="modal-content edit-modal">
+                <button className="close-button" onClick={onClose}>&times;</button>
                 <h3>Editando: {gym.name}</h3>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
@@ -707,7 +705,7 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content qr-modal" onClick={(e) => e.stopPropagation()}>
-                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
+                <button className="close-button" onClick={onClose}>&times;</button>
                 <h3>Comparte la App con tus Clientes</h3>
                 <p>Los clientes pueden escanear este código QR para acceder a la aplicación en sus teléfonos.</p>
                 <div className="qr-code-container">
@@ -2377,7 +2375,7 @@ const RequestModal: React.FC<{
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
-                <button className="close-button" onClick={onClose} style={{top: '1rem', right: '1rem'}}>&times;</button>
+                <button className="close-button" onClick={onClose}>&times;</button>
                 <h3>Contactar al Entrenador</h3>
 
                 {status === 'success' ? (
