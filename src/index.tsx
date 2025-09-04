@@ -2,6 +2,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -2341,7 +2343,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
             <div className="animated-fade-in">
                 {activeTab === 'bodyWeight' && (
                     <div className="progress-section">
-                        <h3>Registrar Peso Corporal</h3>
                         <form onSubmit={handleAddBodyWeight} className="add-weight-form">
                             <input
                                 type="number"
@@ -2374,7 +2375,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
                 {activeTab === 'exercises' && (
                     <div className="progress-section">
-                        <h3>Progreso en Ejercicios</h3>
                         {exercisesWithLogs.length === 0 ? (
                             <p>Aún no has registrado progreso en ningún ejercicio.</p>
                         ) : (
@@ -2446,53 +2446,57 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
     if (clientData.planStatus === 'pending') {
         return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
     }
+    
+    // Using a portal-like approach for the chat to break out of the main layout constraints
+    if (showChat) {
+        return (
+            <ChatAssistant 
+                clientData={clientData} 
+                setClientData={setClientData} 
+                onClose={() => setShowChat(false)} 
+            />
+        );
+    }
+
 
     return (
         <div className="client-view-container">
-            {showChat ? (
-                <ChatAssistant 
-                    clientData={clientData} 
-                    setClientData={setClientData} 
-                    onClose={() => setShowChat(false)} 
-                />
-            ) : (
-                <>
-                    <header>
-                        <h1>Bienvenido, {clientData.profile.name}!</h1>
-                        <div className="client-header-actions">
-                            <button onClick={() => setShowChat(true)} className="header-nav-button ai-assistant-button">Asistente IA</button>
-                            <button onClick={onLogout} className="logout-button">Salir</button>
-                        </div>
-                    </header>
+            <header>
+                <h1>Bienvenido, {clientData.profile.name}!</h1>
+                <div className="client-header-actions">
+                    <button onClick={() => setShowChat(true)} className="header-nav-button ai-assistant-button">Asistente IA</button>
+                    <button onClick={onLogout} className="logout-button">Salir</button>
+                </div>
+            </header>
 
-                    {isPlanExpired() ? (
-                        <div className="expired-view">
-                             <h2>Tu plan ha expirado</h2>
-                             <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
-                        </div>
-                    ) : (
-                        <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
-                    )}
-                </>
+            {isPlanExpired() ? (
+                <div className="expired-view">
+                     <h2>Tu plan ha expirado</h2>
+                     <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
+                </div>
+            ) : (
+                <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
             )}
         </div>
     );
 };
 
-// FIX: Added missing ChatAssistant component.
 const ChatAssistant: React.FC<{
     clientData: ClientData;
     setClientData: (data: ClientData) => void;
     onClose: () => void;
 }> = ({ clientData, setClientData, onClose }) => {
     const [chat, setChat] = useState<Chat | null>(null);
-    const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string }[]>([
-        { role: 'model', text: '¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy con tu entrenamiento o nutrición?' }
+    const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; image?: string }[]>([
+        { role: 'model', text: '¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy con tu entrenamiento, nutrición o analizando una foto de tu comida?' }
     ]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [image, setImage] = useState<{ b64: string; mimeType: string } | null>(null);
+
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
     
@@ -2532,25 +2536,72 @@ const ChatAssistant: React.FC<{
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    const handleSendMessage = async () => {
-        if (!userInput.trim() || isLoading || !chat || !canAsk) return;
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-        const newUserMessage = { role: 'user' as const, text: userInput };
-        setMessages(prev => [...prev, newUserMessage]);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = (reader.result as string).split(',')[1];
+            setImage({ b64: base64String, mimeType: file.type });
+        };
+        reader.readAsDataURL(file);
+        if(fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
+    };
+    
+    const handleSendMessage = async () => {
+        if ((!userInput.trim() && !image) || isLoading || !canAsk) return;
+
+        const userMessageText = userInput;
+        const attachedImage = image; // Capture before clearing state
+        
+        const userMessageForDisplay: { role: 'user'; text: string; image?: string } = {
+            role: 'user',
+            text: userMessageText,
+            image: attachedImage ? `data:${attachedImage.mimeType};base64,${attachedImage.b64}` : undefined
+        };
+        
+        setMessages(prev => [...prev, userMessageForDisplay]);
         setUserInput('');
+        setImage(null);
         setIsLoading(true);
         setError('');
 
         try {
-            const result: GenerateContentResponse = await chat.sendMessage({ message: userInput });
-            const responseText = result.text;
+            let responseText = '';
+
+            if (attachedImage) {
+                const calorieSystemInstruction = `Eres "Scorpion AI", un asistente de nutrición. Tu única tarea es analizar la imagen de la comida proporcionada y estimar las calorías y macronutrientes (proteínas, carbohidratos, grasas).
+                - **Respuesta:** Proporciona una respuesta clara y concisa. Primero, identifica la comida. Luego, da una estimación de las calorías y los macros en gramos.
+                - **Formato:** Usa una lista o un párrafo corto. Ejemplo: "Esto parece ser [Comida]. Estimación: Calorías: X, Proteínas: Yg, Carbs: Zg, Grasas: Ag."
+                - **Limitación:** No des consejos de salud ni de dieta. Solo analiza la imagen. Si no puedes identificar la comida, dilo claramente.`;
+
+                const parts = [
+                    { inlineData: { mimeType: attachedImage.mimeType, data: attachedImage.b64 } },
+                    { text: `Analiza esta comida. ${userMessageText}` }
+                ];
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts },
+                    config: { systemInstruction: calorieSystemInstruction }
+                });
+                responseText = response.text;
+                // Note: This special request does not get added to the main 'chat' history object
+                // to keep that conversation's context clean (as a fitness coach).
+            } else if (chat) {
+                const result: GenerateContentResponse = await chat.sendMessage({ message: userMessageText });
+                responseText = result.text;
+            } else {
+                 throw new Error("Chat not initialized.");
+            }
+
             setMessages(prev => [...prev, { role: 'model', text: responseText }]);
 
-            // Update usage count
             const newUsage = { date: today, count: usage + 1 };
             const updatedClientData = { ...clientData, aiUsage: newUsage };
-            setClientData(updatedClientData); // Update parent state
-            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage }); // Persist to DB
+            setClientData(updatedClientData);
+            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
 
         } catch (err) {
             console.error(err);
@@ -2563,43 +2614,66 @@ const ChatAssistant: React.FC<{
     };
 
     return (
-        <div className="chat-assistant-container">
-            <header className="chat-header">
-                <h2>Asistente IA</h2>
-                <div className="chat-usage">
-                    <span>Preguntas hoy: {usage}/{limit}</span>
+        <div className="chat-fullscreen-container">
+             <div className="main-header" style={{ padding: '1rem', margin: 0, borderBottom: `1px solid var(--border-color)`, flexShrink: 0 }}>
+                <div className="header-title-wrapper">
+                    <h1>Asistente IA</h1>
+                    <p>Preguntas hoy: {usage}/{limit}</p>
                 </div>
-                <button onClick={onClose} className="close-button" aria-label="Cerrar chat">&times;</button>
-            </header>
+                <div className="admin-header-nav">
+                    <button onClick={onClose} className="back-button">Cerrar</button>
+                </div>
+            </div>
+
             <div className="chat-messages">
                 {messages.map((msg, index) => (
-                    <div key={index} className={`chat-bubble ${msg.role}`}>
-                        <p>{msg.text}</p>
+                    <div key={index} className={`chat-message ${msg.role}`}>
+                        <div className="avatar">{msg.role === 'user' ? 'TÚ' : 'AI'}</div>
+                        <div className="message-content">
+                            {msg.image && <img src={msg.image} alt="Adjunto" />}
+                            {msg.text && <p>{msg.text}</p>}
+                        </div>
                     </div>
                 ))}
-                {isLoading && (
-                    <div className="chat-bubble model">
-                        <div className="spinner small"></div>
+                 {isLoading && (
+                    <div className="chat-message model">
+                        <div className="avatar">AI</div>
+                        <div className="message-content">
+                            <div className="chat-typing-indicator">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </div>
                     </div>
                 )}
                 <div ref={messagesEndRef} />
             </div>
+
             <div className="chat-input-area">
+                 {image && (
+                    <div className="chat-image-preview">
+                        <img src={`data:${image.mimeType};base64,${image.b64}`} alt="Preview" />
+                        <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+                    </div>
+                )}
                 {!canAsk ? (
                     <div className="limit-reached-message">
                         Has alcanzado tu límite de preguntas diarias.
                     </div>
                 ) : (
                      <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+                         <input type="file" id="image-upload" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} ref={fileInputRef} />
+                         <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
+                         </button>
                         <input
                             type="text"
                             value={userInput}
                             onChange={(e) => setUserInput(e.target.value)}
-                            placeholder="Escribe tu pregunta aquí..."
+                            placeholder="Escribe tu pregunta..."
                             disabled={isLoading}
                         />
-                        <button type="submit" disabled={isLoading || !userInput.trim()}>
-                            Enviar
+                        <button type="submit" disabled={isLoading || (!userInput.trim() && !image)}>
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
                         </button>
                     </form>
                 )}
