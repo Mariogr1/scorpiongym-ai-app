@@ -823,47 +823,77 @@ const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () =
     );
 };
 
-// FIX: Added missing ExerciseLibraryManager component.
 const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
     const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+
+    // UI State
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
+    const [editingExercise, setEditingExercise] = useState<{ group: string; index: number; data: ExerciseDefinition } | null>(null);
+    
+    // Add Form State
+    const [newExerciseName, setNewExerciseName] = useState('');
+    const [newExerciseVideoUrl, setNewExerciseVideoUrl] = useState('');
+    const [newExerciseGroup, setNewExerciseGroup] = useState('');
+    const [isAdding, setIsAdding] = useState(false);
 
     useEffect(() => {
         const fetchLibrary = async () => {
             setIsLoading(true);
             const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
             setLibrary(fetchedLibrary);
+            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+                const firstGroup = Object.keys(fetchedLibrary)[0];
+                setNewExerciseGroup(firstGroup);
+                setActiveGroup(firstGroup);
+            }
             setIsLoading(false);
         };
         fetchLibrary();
     }, [gymId]);
 
-    const handleSave = async () => {
-        if (!library) return;
+    const handleSetLibrary = (newLibrary: ExerciseLibrary) => {
+        setLibrary(newLibrary);
+        setSaveStatus('idle');
+    };
+
+    const handleSaveLibrary = async () => {
+        if (!library || editingExercise) return;
         setIsSaving(true);
-        setError('');
         const success = await apiClient.saveExerciseLibrary(library, gymId);
-        if (!success) {
-            setError('No se pudo guardar la biblioteca.');
+        if (success) {
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } else {
+            alert('No se pudo guardar la biblioteca.');
         }
         setIsSaving(false);
     };
-
-    const handleExerciseChange = (group: string, index: number, field: keyof ExerciseDefinition, value: string | boolean) => {
-        if (!library) return;
-        const newLibrary = { ...library };
-        // @ts-ignore
-        newLibrary[group][index][field] = value;
-        setLibrary(newLibrary);
+    
+    const handleToggleGroup = (group: string) => {
+        setActiveGroup(prev => (prev === group ? null : group));
     };
-
-    const handleAddExercise = (group: string) => {
-        if (!library) return;
+    
+    const handleAddExercise = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newExerciseName.trim() || !newExerciseGroup || !library) return;
+        
+        setIsAdding(true);
+        const newExercise: ExerciseDefinition = {
+            name: newExerciseName.trim(),
+            videoUrl: newExerciseVideoUrl.trim(),
+            isEnabled: true,
+        };
+        
         const newLibrary = { ...library };
-        newLibrary[group].push({ name: 'Nuevo Ejercicio', isEnabled: true, videoUrl: '' });
-        setLibrary(newLibrary);
+        newLibrary[newExerciseGroup] = [...newLibrary[newExerciseGroup], newExercise].sort((a,b) => a.name.localeCompare(b.name));
+        handleSetLibrary(newLibrary);
+        
+        setNewExerciseName('');
+        setNewExerciseVideoUrl('');
+        setIsAdding(false);
     };
     
     const handleDeleteExercise = (group: string, index: number) => {
@@ -871,67 +901,164 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         if (window.confirm(`¿Seguro que quieres eliminar "${library[group][index].name}"?`)) {
             const newLibrary = { ...library };
             newLibrary[group].splice(index, 1);
-            setLibrary(newLibrary);
+            handleSetLibrary(newLibrary);
         }
+    };
+    
+    const handleStartEdit = (group: string, index: number) => {
+        if (!library) return;
+        setEditingExercise({ group, index, data: { ...library[group][index] } });
+    };
+    
+    const handleCancelEdit = () => setEditingExercise(null);
+
+    const handleUpdateEditingExercise = (field: 'name' | 'videoUrl', value: string) => {
+        if (!editingExercise) return;
+        setEditingExercise({ ...editingExercise, data: { ...editingExercise.data, [field]: value }});
+    };
+
+    const handleSaveEdit = () => {
+        if (!editingExercise || !library) return;
+        const { group, index, data } = editingExercise;
+        const newLibrary = { ...library };
+        newLibrary[group][index] = data;
+        handleSetLibrary(newLibrary);
+        setEditingExercise(null);
+    };
+
+    const handleToggleEnabled = (group: string, index: number, isEnabled: boolean) => {
+        if (!library) return;
+        const newLibrary = { ...library };
+        newLibrary[group][index].isEnabled = isEnabled;
+        handleSetLibrary(newLibrary);
     };
 
     if (isLoading) {
         return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
     }
+    if (!library) {
+        return <div className="error-container">No se pudo cargar la biblioteca de ejercicios.</div>
+    }
 
     return (
-        <div className="exercise-library-manager animated-fade-in">
+        <div className="library-container animated-fade-in">
             <div className="main-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Biblioteca de Ejercicios</h2>
                 <div>
                     <button onClick={onBack} className="back-button" style={{marginRight: '1rem'}}>Volver</button>
-                    <button onClick={handleSave} className="cta-button" disabled={isSaving}>
-                        {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+                    <button onClick={handleSaveLibrary} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`} disabled={isSaving || editingExercise !== null}>
+                        {isSaving ? 'Guardando...' : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
                     </button>
                 </div>
             </div>
+            <div className="library-instructions">
+                <p>Gestiona los ejercicios disponibles para la generación de rutinas. Puedes añadir, editar, eliminar y habilitar o deshabilitar ejercicios para cada grupo muscular.</p>
+            </div>
 
-            {error && <p className="error-text">{error}</p>}
-            
-            <div className="library-groups">
-                {library && Object.entries(library).map(([group, exercises]) => (
-                    <div key={group} className="library-group">
-                        <h3>{group}</h3>
-                        <div className="exercise-editor-list">
-                            {exercises.map((ex, index) => (
-                                <div key={index} className="exercise-editor-item">
-                                    <input 
-                                        type="text" 
-                                        value={ex.name} 
-                                        onChange={(e) => handleExerciseChange(group, index, 'name', e.target.value)}
-                                        className="exercise-name-input"
-                                    />
-                                    <input 
-                                        type="text" 
-                                        value={ex.videoUrl} 
-                                        placeholder="URL del video (opcional)"
-                                        onChange={(e) => handleExerciseChange(group, index, 'videoUrl', e.target.value)}
-                                        className="exercise-video-input"
-                                    />
-                                    <label className="checkbox-label">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={ex.isEnabled}
-                                            onChange={(e) => handleExerciseChange(group, index, 'isEnabled', e.target.checked)}
-                                        />
-                                        Habilitado
-                                    </label>
-                                    <button onClick={() => handleDeleteExercise(group, index)} className="action-btn delete" aria-label="Eliminar ejercicio">&times;</button>
+            <div className="add-exercise-container">
+                <div className="add-exercise-form-wrapper">
+                    <h3>Añadir Nuevo Ejercicio</h3>
+                    <form className="add-exercise-form" onSubmit={handleAddExercise}>
+                        <input 
+                            type="text" 
+                            placeholder="Nombre del Ejercicio" 
+                            value={newExerciseName}
+                            onChange={e => setNewExerciseName(e.target.value)}
+                            required 
+                        />
+                        <input 
+                            type="url" 
+                            placeholder="URL del Video (Opcional)"
+                            value={newExerciseVideoUrl}
+                            onChange={e => setNewExerciseVideoUrl(e.target.value)}
+                        />
+                         <select value={newExerciseGroup} onChange={e => setNewExerciseGroup(e.target.value)}>
+                            {Object.keys(library).map(group => <option key={group} value={group}>{group}</option>)}
+                        </select>
+                        <button type="submit" disabled={isAdding || !newExerciseName.trim()}>
+                            {isAdding ? 'Añadiendo...' : 'Añadir'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div className="library-accordion">
+                {Object.entries(library).map(([group, exercises]) => (
+                    <div key={group} className="library-accordion-item">
+                        <button 
+                            className={`library-accordion-header ${activeGroup === group ? 'active' : ''}`}
+                            onClick={() => handleToggleGroup(group)}
+                            aria-expanded={activeGroup === group}
+                            aria-controls={`content-${group}`}
+                        >
+                            {group} ({exercises.length})
+                            <span className="icon">+</span>
+                        </button>
+                        <div id={`content-${group}`} className={`library-accordion-content ${activeGroup === group ? 'open' : ''}`} role="region">
+                            <div className="exercise-entry-list">
+                                <div className="exercise-entry-header">
+                                    <span>Habilitado</span>
+                                    <span>Nombre</span>
+                                    <span>URL del Video</span>
+                                    <span>Acciones</span>
                                 </div>
-                            ))}
+                                {exercises.map((ex, index) => {
+                                    const isEditing = editingExercise?.group === group && editingExercise.index === index;
+                                    return (
+                                        <div key={`${group}-${index}`} className="exercise-entry-row">
+                                            {isEditing ? (
+                                                <>
+                                                    <label className="switch">
+                                                        <input type="checkbox" checked={editingExercise.data.isEnabled} disabled />
+                                                        <span className="slider round"></span>
+                                                    </label>
+                                                    <input 
+                                                        type="text"
+                                                        className="editing-input"
+                                                        value={editingExercise.data.name}
+                                                        onChange={e => handleUpdateEditingExercise('name', e.target.value)} 
+                                                    />
+                                                    <input
+                                                        type="url"
+                                                        className="editing-input"
+                                                        value={editingExercise.data.videoUrl}
+                                                        onChange={e => handleUpdateEditingExercise('videoUrl', e.target.value)}
+                                                    />
+                                                    <div className="exercise-row-actions">
+                                                        <button className="action-btn save" onClick={handleSaveEdit}>Guardar</button>
+                                                        <button className="action-btn cancel" onClick={handleCancelEdit}>Cancelar</button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <label className="switch">
+                                                        <input type="checkbox" checked={ex.isEnabled} onChange={e => handleToggleEnabled(group, index, e.target.checked)} />
+                                                        <span className="slider round"></span>
+                                                    </label>
+                                                    <span className="exercise-name-lib">{ex.name}</span>
+                                                    {ex.videoUrl ? (
+                                                        <a href={ex.videoUrl} target="_blank" rel="noopener noreferrer" className="video-url-display">{ex.videoUrl.substring(0, 30)}...</a>
+                                                    ) : (
+                                                        <span className="video-url-display disabled">Sin video</span>
+                                                    )}
+                                                    <div className="exercise-row-actions">
+                                                        <button className="action-btn edit" onClick={() => handleStartEdit(group, index)}>Editar</button>
+                                                        <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)}>Eliminar</button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <button onClick={() => handleAddExercise(group)} className="cta-button secondary" style={{marginTop: '1rem'}}>+ Añadir Ejercicio a {group}</button>
                     </div>
                 ))}
             </div>
         </div>
     );
 };
+
 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
