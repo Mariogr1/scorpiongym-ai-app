@@ -24,7 +24,7 @@ export interface Exercise {
     repeticiones: string;
     descanso: string;
     tecnicaAvanzada?: string;
-    youtubeLink?: string;
+    videoUrl?: string;
 }
 
 export interface DayPlan {
@@ -90,7 +90,7 @@ export interface BodyWeightEntry {
 export interface ExerciseDefinition {
     name: string;
     isEnabled: boolean;
-    youtubeLink: string;
+    videoUrl: string;
 }
 
 export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;

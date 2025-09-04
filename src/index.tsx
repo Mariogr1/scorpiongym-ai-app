@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -126,6 +127,32 @@ const calculateTargetWeight = (height: number): string => {
 
 
 // --- React Components ---
+
+const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({ videoUrl, onClose }) => {
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => {
+            window.removeEventListener('keydown', handleEsc);
+        };
+    }, [onClose]);
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content video-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <video src={videoUrl} controls autoPlay playsInline width="100%" height="auto">
+                    Tu navegador no soporta la reproducción de video.
+                </video>
+            </div>
+        </div>
+    );
+};
+
 
 const SvgImage: React.FC<{ svgString: string | null | undefined, altText: string }> = ({ svgString, altText }) => {
     if (!svgString) {
@@ -1341,6 +1368,30 @@ const ProfileEditor: React.FC<{
 
 // --- Plan Generators ---
 
+const enrichRoutineWithVideos = (routine: Routine, library: ExerciseLibrary): Routine => {
+    const newRoutine = JSON.parse(JSON.stringify(routine)); // Deep copy to avoid mutation
+    newRoutine.phases.forEach((phase: Phase) => {
+        phase.routine.dias.forEach((dia: DayPlan) => {
+            dia.ejercicios.forEach((ejercicio: Exercise) => {
+                let found = false;
+                for (const group in library) {
+                    const foundEx = library[group].find(libEx => libEx.name === ejercicio.nombre);
+                    if (foundEx) {
+                        ejercicio.videoUrl = foundEx.videoUrl;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    ejercicio.videoUrl = ''; // Ensure property exists
+                }
+            });
+        });
+    });
+    return newRoutine;
+};
+
+
 const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; isClientOnboarding?: boolean }> = ({ clientData, setClientData, gymId, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
@@ -1433,8 +1484,10 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
             }
             const generatedPlan: Routine = JSON.parse(jsonString);
 
-            setCurrentRoutine(generatedPlan);
-            setClientData({ ...clientData, routine: generatedPlan, routineGeneratedDate: new Date().toISOString() });
+            const enrichedPlan = enrichRoutineWithVideos(generatedPlan, exerciseLibrary);
+
+            setCurrentRoutine(enrichedPlan);
+            setClientData({ ...clientData, routine: enrichedPlan, routineGeneratedDate: new Date().toISOString() });
             setIsEditing(false); // Salir del modo edición al generar un nuevo plan
         } catch (err) {
             console.error(err);
@@ -1445,9 +1498,11 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     };
     
     const handleSaveChanges = async () => {
+        if (!currentRoutine) return;
         setIsGenerating(true); // Re-use loading state for saving
+        const enrichedRoutineToSave = enrichRoutineWithVideos(currentRoutine, exerciseLibrary);
         const success = await apiClient.saveClientData(clientData.dni, { 
-            routine: currentRoutine,
+            routine: enrichedRoutineToSave,
             routineGeneratedDate: clientData.routineGeneratedDate 
         });
         if (success) {
@@ -1559,9 +1614,22 @@ const RoutinePlan: React.FC<{
     }
     
     const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
-        const newRoutine = { ...routine };
+        const newRoutine = JSON.parse(JSON.stringify(routine)); // Deep copy to be safe
         // @ts-ignore
         newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios[exerciseIndex][field] = value;
+
+        // If exercise name changes, find its new video URL
+        if (field === 'nombre') {
+            let newUrl = '';
+            for (const group in exerciseLibrary) {
+                const foundEx = exerciseLibrary[group].find(libEx => libEx.name === value);
+                if (foundEx) {
+                    newUrl = foundEx.videoUrl;
+                    break;
+                }
+            }
+            newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios[exerciseIndex].videoUrl = newUrl;
+        }
         onRoutineChange(newRoutine);
     };
 
@@ -1579,6 +1647,7 @@ const RoutinePlan: React.FC<{
             repeticiones: '10',
             descanso: '60s',
             tecnicaAvanzada: '',
+            videoUrl: Object.values(exerciseLibrary).flat()[0]?.videoUrl || '',
         };
         newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.push(newExercise);
         onRoutineChange(newRoutine);
@@ -1741,7 +1810,7 @@ const DayCard: React.FC<{
                                 exerciseLibrary={exerciseLibrary}
                             />
                         ) : (
-                           <ExerciseView exercise={exercise} />
+                           <ExerciseView exercise={exercise} onPlayVideo={() => {}} />
                         )}
                     </li>
                 ))}
@@ -1835,16 +1904,16 @@ const ExerciseItemEditor: React.FC<{
     );
 };
 
-const ExerciseView: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
+const ExerciseView: React.FC<{ exercise: Exercise; onPlayVideo: (url: string) => void }> = ({ exercise, onPlayVideo }) => {
      const techOption = advancedTechniqueOptions.find(opt => opt.value === exercise.tecnicaAvanzada);
     return (
          <>
             <div className="exercise-name-wrapper">
                 <span className="exercise-name">{exercise.nombre}</span>
-                 {exercise.youtubeLink && (
-                    <a href={exercise.youtubeLink} target="_blank" rel="noopener noreferrer" className="video-link" aria-label="Ver video del ejercicio">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10,15.5V8.5L16,12M20,4.4C19.4,4.2 15.7,4 12,4C8.3,4 4.6,4.19 4,4.38C2.44,4.9 2,8.4 2,12C2,15.59 2.44,19.1 4,19.61C4.6,19.81 8.3,20 12,20C15.7,20 19.4,19.81 20,19.61C21.56,19.1 22,15.59 22,12C22,8.4 21.56,4.9 20,4.4Z"></path></svg>
-                    </a>
+                 {exercise.videoUrl && (
+                    <button onClick={() => onPlayVideo(exercise.videoUrl!)} className="video-link" aria-label="Ver video del ejercicio">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg>
+                    </button>
                  )}
             </div>
             <div className="exercise-details">
@@ -2117,7 +2186,8 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string): 
     const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
     const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
-    return JSON.parse(jsonString);
+    const generatedPlan: Routine = JSON.parse(jsonString);
+    return enrichRoutineWithVideos(generatedPlan, exerciseLibrary);
 };
 
 const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> => {
@@ -2661,6 +2731,7 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
 const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void }> = ({ clientData, onProgressLogged, onRequestChange }) => {
     const { routine, routineGeneratedDate } = clientData;
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
 
     const expirationDateString = useMemo(() => {
         if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
@@ -2675,6 +2746,7 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
 
     return (
         <div className="plan-container animated-fade-in">
+             {playingVideoUrl && <VideoPlayerModal videoUrl={playingVideoUrl} onClose={() => setPlayingVideoUrl(null)} />}
              <div className="plan-header">
                 <h2>Mi Rutina: {routine.planName}</h2>
                 <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
@@ -2691,6 +2763,7 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
                 setActivePhaseIndex={setActivePhaseIndex}
                 clientData={clientData}
                 onProgressLogged={onProgressLogged}
+                onPlayVideo={setPlayingVideoUrl}
             />
         </div>
     );
@@ -2702,7 +2775,8 @@ const AccordionPhasesClient: React.FC<{
     setActivePhaseIndex: (index: number) => void;
     clientData: ClientData;
     onProgressLogged: () => void;
-}> = ({ phases, activePhaseIndex, setActivePhaseIndex, clientData, onProgressLogged }) => {
+    onPlayVideo: (url: string) => void;
+}> = ({ phases, activePhaseIndex, setActivePhaseIndex, clientData, onProgressLogged, onPlayVideo }) => {
     
     const togglePhase = (index: number) => {
         setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
@@ -2725,6 +2799,7 @@ const AccordionPhasesClient: React.FC<{
                             phase={phase}
                             clientData={clientData}
                             onProgressLogged={onProgressLogged}
+                            onPlayVideo={onPlayVideo}
                         />
                     </div>
                 </div>
@@ -2737,7 +2812,8 @@ const PhaseContentClient: React.FC<{
     phase: Phase;
     clientData: ClientData;
     onProgressLogged: () => void;
-}> = ({ phase, clientData, onProgressLogged }) => {
+    onPlayVideo: (url: string) => void;
+}> = ({ phase, clientData, onProgressLogged, onPlayVideo }) => {
     const [activeDayIndex, setActiveDayIndex] = useState(0);
 
     const dayPlan = phase.routine.dias[activeDayIndex];
@@ -2763,7 +2839,7 @@ const PhaseContentClient: React.FC<{
                 <ul className="exercise-list">
                      {dayPlan.ejercicios.map((exercise, index) => (
                         <li key={index} className="exercise-item">
-                            <ExerciseView exercise={exercise} />
+                            <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} />
                             <ProgressTracker 
                                 exerciseName={exercise.nombre} 
                                 clientData={clientData} 
@@ -3272,7 +3348,7 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
 const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
     const [library, setLibrary] = useState<ExerciseLibrary>({});
     const [isLoading, setIsLoading] = useState(true);
-    const [editingExercise, setEditingExercise] = useState<{ group: string, index: number, name: string, link: string } | null>(null);
+    const [editingExercise, setEditingExercise] = useState<{ group: string, index: number, name: string, videoUrl: string } | null>(null);
     const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
 
     useEffect(() => {
@@ -3305,7 +3381,7 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
             alert(`El ejercicio "${name}" ya existe en el grupo "${group}".`);
             return;
         }
-        newLibrary[group].push({ name, isEnabled: true, youtubeLink: '' });
+        newLibrary[group].push({ name, isEnabled: true, videoUrl: '' });
         newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
         handleSaveChanges(newLibrary);
     };
@@ -3318,14 +3394,14 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
     
     const handleUpdateExercise = () => {
         if (!editingExercise) return;
-        const { group, index, name, link } = editingExercise;
+        const { group, index, name, videoUrl } = editingExercise;
         const newLibrary = { ...library };
         // Check for duplicates if name changed
         if (newLibrary[group][index].name !== name && newLibrary[group].some((ex, i) => i !== index && ex.name.toLowerCase() === name.toLowerCase())) {
              alert(`El ejercicio "${name}" ya existe en este grupo.`);
              return;
         }
-        newLibrary[group][index] = { name, isEnabled: newLibrary[group][index].isEnabled, youtubeLink: link };
+        newLibrary[group][index] = { name, isEnabled: newLibrary[group][index].isEnabled, videoUrl: videoUrl };
         newLibrary[group].sort((a, b) => a.name.localeCompare(b.name));
         handleSaveChanges(newLibrary);
         setEditingExercise(null);
@@ -3366,7 +3442,7 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
                                 <div className="exercise-entry-header">
                                     <span>Activo</span>
                                     <span>Nombre del Ejercicio</span>
-                                    <span>Link de YouTube (Opcional)</span>
+                                    <span>URL del Video (Opcional)</span>
                                     <span>Acciones</span>
                                 </div>
                                 {library[group].map((exercise, index) => {
@@ -3394,14 +3470,14 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
                                                     <input 
                                                         type="text" 
                                                         className="editing-input"
-                                                        value={editingExercise.link} 
-                                                        onChange={(e) => setEditingExercise({...editingExercise, link: e.target.value})}
-                                                        placeholder="https://youtu.be/..."
+                                                        value={editingExercise.videoUrl} 
+                                                        onChange={(e) => setEditingExercise({...editingExercise, videoUrl: e.target.value})}
+                                                        placeholder="https://res.cloudinary.com/..."
                                                     />
                                                 ) : (
-                                                    <a href={exercise.youtubeLink || '#'} target="_blank" rel="noopener noreferrer" className={`video-link-lib ${!exercise.youtubeLink ? 'disabled' : ''}`}>
-                                                        {exercise.youtubeLink ? 'Ver Video' : 'Sin video'}
-                                                    </a>
+                                                    <span className="video-link-lib-display">
+                                                        {exercise.videoUrl ? exercise.videoUrl : 'Sin video'}
+                                                    </span>
                                                 )}
                                              </div>
                                             <div className="exercise-row-actions">
@@ -3412,7 +3488,7 @@ const LibraryContent: React.FC<{ gymId: string }> = ({ gymId }) => {
                                                     </>
                                                 ) : (
                                                      <>
-                                                        <button className="action-btn edit" onClick={() => setEditingExercise({ group, index, name: exercise.name, link: exercise.youtubeLink })}>Editar</button>
+                                                        <button className="action-btn edit" onClick={() => setEditingExercise({ group, index, name: exercise.name, videoUrl: exercise.videoUrl })}>Editar</button>
                                                         <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)}>Borrar</button>
                                                      </>
                                                 )}
