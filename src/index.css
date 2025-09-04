@@ -735,7 +735,7 @@ body {
     border-radius: 8px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color: 0.2s ease;
+    transition: background-color 0.2s ease;
 }
 .selection-toggle-button:hover {
     background-color: var(--secondary-button-hover);
@@ -808,7 +808,7 @@ body {
     cursor: pointer;
     padding: 0.6rem 1rem;
     border-radius: 8px;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
     flex-shrink: 0;
     white-space: nowrap;
 }
@@ -1718,10 +1718,6 @@ body {
 .progress-view {
     padding: 1rem 0;
 }
-.progress-view h2 {
-    text-align: center;
-    margin-bottom: 2rem;
-}
 .progress-tabs-nav {
     display: flex;
     border-bottom: 1px solid var(--border-color);
@@ -1759,9 +1755,17 @@ body {
     display: flex;
     gap: 1rem;
     margin-bottom: 2rem;
+    align-items: center;
 }
 .add-weight-form input {
     flex-grow: 1;
+}
+
+.cta-button.register-button {
+    padding: 0.7rem 1.5rem;
+    font-size: 1rem;
+    width: auto;
+    flex-shrink: 0;
 }
 
 .exercise-select-dropdown {

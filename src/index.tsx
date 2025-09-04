@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -2324,7 +2325,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
     return (
         <div className="progress-view animated-fade-in">
-            <h2 style={{textAlign: "center"}}>Mi Progreso</h2>
             <nav className="progress-tabs-nav">
                 <button 
                     className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} 
@@ -2351,8 +2351,8 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
                                 onChange={(e) => setWeight(e.target.value)}
                                 required
                             />
-                            <button type="submit" className="cta-button" disabled={isSaving}>
-                                {isSaving ? 'Guardando...' : 'Guardar Peso'}
+                            <button type="submit" className="cta-button register-button" disabled={isSaving}>
+                                {isSaving ? 'Guardando...' : 'Registrar'}
                             </button>
                         </form>
                         <h4>Historial de Peso</h4>
