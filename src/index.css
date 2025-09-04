@@ -1756,9 +1756,25 @@ body {
     gap: 1rem;
     margin-bottom: 2rem;
     align-items: center;
+    justify-content: center; /* Center the items */
 }
 .add-weight-form input {
-    flex-grow: 1;
+    /* No flex-grow, fixed width is better for this input */
+    width: 150px;
+    padding: 0.7rem 1rem;
+    font-size: 1.2rem;
+    text-align: center;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    /* Remove browser default spinner on number inputs for cleaner look */
+    -moz-appearance: textfield;
+}
+.add-weight-form input::-webkit-outer-spin-button,
+.add-weight-form input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .cta-button.register-button {
