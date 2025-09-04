@@ -518,7 +518,7 @@ body {
     padding: 0.6rem 1rem;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
     font-weight: 500;
     position: relative;
 }
@@ -952,7 +952,7 @@ body {
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color: 0.2s ease;
+  transition: background-color 0.2s ease;
   width: 100%;
 }
 .cta-button:hover:not(:disabled) {
@@ -1525,26 +1525,23 @@ body {
 
 .exercise-tracking {
     display: grid;
-    /* Use minmax to ensure columns are of equal flexible width, ignoring content size */
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-columns: 1fr 1fr auto;
     gap: 0.75rem;
-    align-items: end; /* Aligns inputs and button along their bottom edge */
+    align-items: end; 
     margin-top: 1.25rem;
     padding-top: 1.25rem;
-    border-top: 1px solid var(--border-color); /* Visual separator */
+    border-top: 1px solid var(--border-color); 
 }
 
 .exercise-tracking > div {
     display: flex;
     flex-direction: column;
-    min-width: 0; /* Prevents content from overflowing and stretching the grid cell */
 }
 
 .exercise-tracking label {
     font-size: 0.8rem;
     color: var(--text-secondary-color);
     margin-bottom: 0.25rem;
-    white-space: nowrap; /* Prevents "Peso (kg)" from wrapping */
 }
 
 .exercise-tracking input {
@@ -1559,7 +1556,7 @@ body {
 
 .exercise-tracking .cta-button.secondary {
     flex-shrink: 0;
-    width: 44px;
+    width: 40px;
     height: 40px;
     padding: 0;
     font-size: 1.5rem;
@@ -1567,62 +1564,17 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-}
-.save-progress-button {
-    margin-top: 1.5rem;
-    padding: 0.8rem 1.5rem;
-    width: auto;
-    background-color: var(--success-color);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color: 0.2s;
-}
-.save-progress-button.saved {
-    background-color: var(--success-color);
-    opacity: 0.7;
-}
-.save-progress-button:hover {
-    background-color: #5cb85c;
-}
-
-.body-weight-logger {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
-    background-color: var(--surface-color);
-    padding: 1.5rem 0.75rem;
-    border-radius: 12px;
-    max-width: 400px;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-}
-.body-weight-logger .input-group {
-    display: flex;
-    gap: 0.5rem;
-    width: 100%;
-}
-.body-weight-logger input {
-    flex-grow: 1;
-    font-size: 1rem;
-    padding: 0.6rem;
-}
-.body-weight-logger .log-button {
-    background-color: var(--archive-color);
-    border: none;
-    color: white;
-    padding: 0 1rem;
-    border-radius: 6px;
-    cursor: pointer;
     transition: all 0.2s ease;
 }
-.log-button.saved {
+.exercise-tracking .cta-button.secondary.saved {
     background-color: var(--success-color);
 }
+.exercise-tracking .cta-button.secondary svg {
+    width: 24px;
+    height: 24px;
+    fill: white;
+}
+
 
 .expired-view {
     padding: 4rem 2rem;
@@ -1763,11 +1715,12 @@ body {
 
 
 /* --- Progress View --- */
-.progress-view-container {
-    padding: 1rem;
-    background-color: var(--surface-color);
-    border-radius: 12px;
-    min-height: 400px;
+.progress-view {
+    padding: 1rem 0;
+}
+.progress-view h2 {
+    text-align: center;
+    margin-bottom: 2rem;
 }
 .progress-tabs-nav {
     display: flex;
@@ -1783,6 +1736,8 @@ body {
     font-size: 1rem;
     position: relative;
     transition: color 0.2s;
+    flex-grow: 1;
+    text-align: center;
 }
 .progress-tab-button:hover { color: var(--text-color); }
 .progress-tab-button.active {
@@ -1791,6 +1746,22 @@ body {
 }
 .progress-tab-button.active::after {
     content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background-color: var(--primary-color);
+}
+
+.progress-section {
+    margin-bottom: 2rem;
+}
+.progress-section h3 {
+    margin-bottom: 1.5rem;
+}
+
+.add-weight-form {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.add-weight-form input {
+    flex-grow: 1;
 }
 
 .exercise-select-dropdown {
@@ -1803,36 +1774,26 @@ body {
     margin-bottom: 2rem;
     font-size: 1rem;
 }
-.progress-list-container { margin-top: 2rem; }
-.progress-list-container h3 { margin-bottom: 1rem; }
-.progress-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.progress-list-header, .progress-list-row {
+
+.log-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.log-list li {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
     gap: 1rem;
     padding: 0.75rem 1rem;
     background-color: var(--background-color);
     border-radius: 6px;
     align-items: center;
+    grid-template-columns: 2fr 1fr 1fr;
 }
-.progress-list-header { color: var(--text-secondary-color); font-weight: 600; }
-.progress-list-row span:nth-child(2) { color: var(--success-color); font-weight: 600; }
-/* Styles for IMC value in list */
-.progress-list-row.weight span:nth-child(3).underweight,
-.progress-list-row.weight span:nth-child(3).obesity {
-    color: var(--primary-color);
-    font-weight: 700;
-}
-.progress-list-row.weight span:nth-child(3).normal {
-    color: var(--success-color);
-    font-weight: 700;
-}
-.progress-list-row.weight span:nth-child(3).overweight {
-    color: #f1c40f;
-    font-weight: 700;
-}
-.progress-list-header.weight, .progress-list-row.weight { grid-template-columns: 2fr 1fr 1fr; }
-.progress-list-row.weight span:nth-child(2) { color: var(--archive-color); }
+.log-list li span:nth-child(2) { color: var(--success-color); font-weight: 600; }
+.log-list li.weight-log span:nth-child(2) { color: var(--archive-color); }
+.log-list li.weight-log .bmi-category { font-weight: 700; }
+
 
 /* --- Client Profile View --- */
 .client-profile-view {
@@ -2556,7 +2517,7 @@ input:checked + .slider:before {
         padding-left: 1rem;
         padding-right: 1rem;
     }
-    .main-tabs-nav {
+    .main-tabs-nav, .progress-tabs-nav {
         border-bottom: 1px solid var(--border-color);
     }
     
@@ -2577,44 +2538,32 @@ input:checked + .slider:before {
     }
 
     .exercise-tracking {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
+        grid-template-columns: 1fr 1fr 40px;
     }
-    .progress-list-header {
-        display: none;
-    }
-    .progress-list-row {
+
+    .log-list li {
         display: block;
         padding: 1rem;
         border-left: 4px solid var(--primary-color);
     }
-    .progress-list-row span {
+    .log-list li span {
         display: flex;
         justify-content: space-between;
         align-items: center;
         font-size: 1rem;
         padding: 0.25rem 0;
     }
-    .progress-list-row span::before {
+    .log-list li span::before {
         font-weight: 600;
         color: var(--text-secondary-color);
     }
-    .progress-list-row span:nth-child(1)::before {
-        content: 'Fecha:';
-    }
-    .progress-list-row span:nth-child(2)::before {
-        content: 'Peso (kg):';
-    }
-    .progress-list-row span:nth-child(3)::before {
-        content: 'Reps:';
-    }
-    .progress-list-row.weight span:nth-child(2)::before {
-        content: 'Peso (kg):';
-    }
-    .progress-list-row.weight span:nth-child(3)::before {
-        content: 'IMC:';
-    }
+    .log-list li:not(.weight-log) span:nth-child(1)::before { content: 'Fecha:'; }
+    .log-list li:not(.weight-log) span:nth-child(2)::before { content: 'Peso (kg):'; }
+    .log-list li:not(.weight-log) span:nth-child(3)::before { content: 'Reps:'; }
+    .log-list li.weight-log span:nth-child(1)::before { content: 'Fecha:'; }
+    .log-list li.weight-log span:nth-child(2)::before { content: 'Peso (kg):'; }
+    .log-list li.weight-log span:nth-child(3)::before { content: 'IMC:'; }
+
 
     .agreement-buttons {
         flex-direction: column;

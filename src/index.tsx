@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -827,7 +828,6 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
     const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
 
     // UI State
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
@@ -837,37 +837,31 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
     const [newExerciseName, setNewExerciseName] = useState('');
     const [newExerciseVideoUrl, setNewExerciseVideoUrl] = useState('');
     const [newExerciseGroup, setNewExerciseGroup] = useState('');
-    const [isAdding, setIsAdding] = useState(false);
+
+    const fetchLibrary = async () => {
+        setIsLoading(true);
+        const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+        setLibrary(fetchedLibrary);
+        if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+            const firstGroup = Object.keys(fetchedLibrary)[0];
+            setNewExerciseGroup(firstGroup);
+            setActiveGroup(firstGroup);
+        }
+        setIsLoading(false);
+    };
 
     useEffect(() => {
-        const fetchLibrary = async () => {
-            setIsLoading(true);
-            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
-            setLibrary(fetchedLibrary);
-            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
-                const firstGroup = Object.keys(fetchedLibrary)[0];
-                setNewExerciseGroup(firstGroup);
-                setActiveGroup(firstGroup);
-            }
-            setIsLoading(false);
-        };
         fetchLibrary();
     }, [gymId]);
 
-    const handleSetLibrary = (newLibrary: ExerciseLibrary) => {
-        setLibrary(newLibrary);
-        setSaveStatus('idle');
-    };
-
-    const handleSaveLibrary = async () => {
-        if (!library || editingExercise) return;
+    const handleUpdateAndSaveLibrary = async (newLibrary: ExerciseLibrary) => {
         setIsSaving(true);
-        const success = await apiClient.saveExerciseLibrary(library, gymId);
+        const success = await apiClient.saveExerciseLibrary(newLibrary, gymId);
         if (success) {
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
+            setLibrary(newLibrary); // Update local state on successful save
         } else {
-            alert('No se pudo guardar la biblioteca.');
+            alert('Error: No se pudieron guardar los cambios.');
+            fetchLibrary(); // Re-fetch to revert to last saved state
         }
         setIsSaving(false);
     };
@@ -876,11 +870,10 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         setActiveGroup(prev => (prev === group ? null : group));
     };
     
-    const handleAddExercise = (e: React.FormEvent) => {
+    const handleAddExercise = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newExerciseName.trim() || !newExerciseGroup || !library) return;
+        if (!newExerciseName.trim() || !newExerciseGroup || !library || isSaving) return;
         
-        setIsAdding(true);
         const newExercise: ExerciseDefinition = {
             name: newExerciseName.trim(),
             videoUrl: newExerciseVideoUrl.trim(),
@@ -889,24 +882,24 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         
         const newLibrary = { ...library };
         newLibrary[newExerciseGroup] = [...newLibrary[newExerciseGroup], newExercise].sort((a,b) => a.name.localeCompare(b.name));
-        handleSetLibrary(newLibrary);
+        
+        await handleUpdateAndSaveLibrary(newLibrary);
         
         setNewExerciseName('');
         setNewExerciseVideoUrl('');
-        setIsAdding(false);
     };
     
-    const handleDeleteExercise = (group: string, index: number) => {
-        if (!library) return;
+    const handleDeleteExercise = async (group: string, index: number) => {
+        if (!library || isSaving) return;
         if (window.confirm(`¿Seguro que quieres eliminar "${library[group][index].name}"?`)) {
             const newLibrary = { ...library };
             newLibrary[group].splice(index, 1);
-            handleSetLibrary(newLibrary);
+            await handleUpdateAndSaveLibrary(newLibrary);
         }
     };
     
     const handleStartEdit = (group: string, index: number) => {
-        if (!library) return;
+        if (!library || isSaving) return;
         setEditingExercise({ group, index, data: { ...library[group][index] } });
     };
     
@@ -917,20 +910,20 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         setEditingExercise({ ...editingExercise, data: { ...editingExercise.data, [field]: value }});
     };
 
-    const handleSaveEdit = () => {
-        if (!editingExercise || !library) return;
+    const handleSaveEdit = async () => {
+        if (!editingExercise || !library || isSaving) return;
         const { group, index, data } = editingExercise;
         const newLibrary = { ...library };
         newLibrary[group][index] = data;
-        handleSetLibrary(newLibrary);
+        await handleUpdateAndSaveLibrary(newLibrary);
         setEditingExercise(null);
     };
 
-    const handleToggleEnabled = (group: string, index: number, isEnabled: boolean) => {
-        if (!library) return;
+    const handleToggleEnabled = async (group: string, index: number, isEnabled: boolean) => {
+        if (!library || isSaving) return;
         const newLibrary = { ...library };
         newLibrary[group][index].isEnabled = isEnabled;
-        handleSetLibrary(newLibrary);
+        await handleUpdateAndSaveLibrary(newLibrary);
     };
 
     if (isLoading) {
@@ -944,15 +937,10 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         <div className="library-container animated-fade-in">
             <div className="main-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Biblioteca de Ejercicios</h2>
-                <div>
-                    <button onClick={onBack} className="back-button" style={{marginRight: '1rem'}}>Volver</button>
-                    <button onClick={handleSaveLibrary} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`} disabled={isSaving || editingExercise !== null}>
-                        {isSaving ? 'Guardando...' : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
-                    </button>
-                </div>
+                 <button onClick={onBack} className="back-button" style={{marginRight: '1rem'}}>Volver</button>
             </div>
             <div className="library-instructions">
-                <p>Gestiona los ejercicios disponibles para la generación de rutinas. Puedes añadir, editar, eliminar y habilitar o deshabilitar ejercicios para cada grupo muscular.</p>
+                <p>Gestiona los ejercicios disponibles para la generación de rutinas. Los cambios se guardan automáticamente.</p>
             </div>
 
             <div className="add-exercise-container">
@@ -965,18 +953,20 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
                             value={newExerciseName}
                             onChange={e => setNewExerciseName(e.target.value)}
                             required 
+                            disabled={isSaving}
                         />
                         <input 
                             type="url" 
                             placeholder="URL del Video (Opcional)"
                             value={newExerciseVideoUrl}
                             onChange={e => setNewExerciseVideoUrl(e.target.value)}
+                            disabled={isSaving}
                         />
-                         <select value={newExerciseGroup} onChange={e => setNewExerciseGroup(e.target.value)}>
+                         <select value={newExerciseGroup} onChange={e => setNewExerciseGroup(e.target.value)} disabled={isSaving}>
                             {Object.keys(library).map(group => <option key={group} value={group}>{group}</option>)}
                         </select>
-                        <button type="submit" disabled={isAdding || !newExerciseName.trim()}>
-                            {isAdding ? 'Añadiendo...' : 'Añadir'}
+                        <button type="submit" disabled={isSaving || !newExerciseName.trim()}>
+                            {isSaving ? '...' : 'Añadir'}
                         </button>
                     </form>
                 </div>
@@ -1025,14 +1015,14 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
                                                         onChange={e => handleUpdateEditingExercise('videoUrl', e.target.value)}
                                                     />
                                                     <div className="exercise-row-actions">
-                                                        <button className="action-btn save" onClick={handleSaveEdit}>Guardar</button>
-                                                        <button className="action-btn cancel" onClick={handleCancelEdit}>Cancelar</button>
+                                                        <button className="action-btn save" onClick={handleSaveEdit} disabled={isSaving}>Guardar</button>
+                                                        <button className="action-btn cancel" onClick={handleCancelEdit} disabled={isSaving}>Cancelar</button>
                                                     </div>
                                                 </>
                                             ) : (
                                                 <>
                                                     <label className="switch">
-                                                        <input type="checkbox" checked={ex.isEnabled} onChange={e => handleToggleEnabled(group, index, e.target.checked)} />
+                                                        <input type="checkbox" checked={ex.isEnabled} onChange={e => handleToggleEnabled(group, index, e.target.checked)} disabled={isSaving} />
                                                         <span className="slider round"></span>
                                                     </label>
                                                     <span className="exercise-name-lib">{ex.name}</span>
@@ -1042,8 +1032,8 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
                                                         <span className="video-url-display disabled">Sin video</span>
                                                     )}
                                                     <div className="exercise-row-actions">
-                                                        <button className="action-btn edit" onClick={() => handleStartEdit(group, index)}>Editar</button>
-                                                        <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)}>Eliminar</button>
+                                                        <button className="action-btn edit" onClick={() => handleStartEdit(group, index)} disabled={isSaving}>Editar</button>
+                                                        <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)} disabled={isSaving}>Eliminar</button>
                                                     </div>
                                                 </>
                                             )}
@@ -1315,12 +1305,15 @@ const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = 
 const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>(gym.planType === 'nutrition' ? 'diet' : 'routine');
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
 
      const fetchClientData = async () => {
         setIsLoading(true);
         const data = await apiClient.getClientData(dni);
         setClientData(data);
+        if (data && data.planType === 'nutrition' && activeTab === 'routine') {
+            setActiveTab('diet');
+        }
         setIsLoading(false);
     };
 
@@ -1336,7 +1329,7 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
         return <div className="error-container">No se pudieron cargar los datos del cliente.</div>;
     }
     
-    const planType = gym.planType || 'full';
+    const planType = clientData.planType || 'full';
 
 
     return (
@@ -2281,11 +2274,22 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
     );
 };
 
-// FIX: Added missing ProgressView component.
 const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
+    const [activeTab, setActiveTab] = useState<'bodyWeight' | 'exercises'>('bodyWeight');
     const [weight, setWeight] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [selectedExercise, setSelectedExercise] = useState('');
 
+    const exercisesWithLogs = useMemo(() => {
+        return Object.keys(clientData.progressLog || {}).filter(name => clientData.progressLog[name]?.length > 0);
+    }, [clientData.progressLog]);
+
+    useEffect(() => {
+        if (exercisesWithLogs.length > 0 && !selectedExercise) {
+            setSelectedExercise(exercisesWithLogs[0]);
+        }
+    }, [exercisesWithLogs, selectedExercise]);
+    
     const handleAddBodyWeight = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!weight) return;
@@ -2307,76 +2311,101 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
         }
         setIsSaving(false);
     };
-    
-    // Group exercise logs by exercise name
-    const exerciseLogs = useMemo(() => {
-        return Object.entries(clientData.progressLog || {}).filter(([_, logs]) => logs.length > 0);
-    }, [clientData.progressLog]);
+
+    const sortedBodyWeightLog = useMemo(() => {
+        return [...(clientData.bodyWeightLog || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [clientData.bodyWeightLog]);
+
+    const sortedExerciseLog = useMemo(() => {
+        if (!selectedExercise || !clientData.progressLog?.[selectedExercise]) return [];
+        return [...clientData.progressLog[selectedExercise]].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [clientData.progressLog, selectedExercise]);
+
 
     return (
         <div className="progress-view animated-fade-in">
-            <h2>Mi Progreso</h2>
+            <h2 style={{textAlign: "center"}}>Mi Progreso</h2>
+            <nav className="progress-tabs-nav">
+                <button 
+                    className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('bodyWeight')}>
+                    Peso Corporal
+                </button>
+                <button 
+                    className={`progress-tab-button ${activeTab === 'exercises' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('exercises')}>
+                    Ejercicios
+                </button>
+            </nav>
 
-            <div className="progress-section">
-                <h3>Peso Corporal</h3>
-                <form onSubmit={handleAddBodyWeight} className="add-weight-form">
-                    <input
-                        type="number"
-                        step="0.1"
-                        placeholder="Peso actual en kg"
-                        value={weight}
-                        onChange={(e) => setWeight(e.target.value)}
-                        required
-                    />
-                    <button type="submit" className="cta-button secondary" disabled={isSaving}>
-                        {isSaving ? 'Guardando...' : 'Añadir Registro'}
-                    </button>
-                </form>
-                <div className="weight-log-history">
-                    <h4>Historial de Peso</h4>
-                    {(!clientData.bodyWeightLog || clientData.bodyWeightLog.length === 0) ? (
-                        <p>Aún no hay registros de peso.</p>
-                    ) : (
-                        <ul className="log-list">
-                            {/* Sort descending by date */}
-                            {[...clientData.bodyWeightLog].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(entry => (
-                                <li key={entry.date}>
-                                    <span>{new Date(entry.date).toLocaleDateString()}</span>
-                                    <span><strong>{entry.weight} kg</strong></span>
-                                    {entry.imc && <span className={`bmi-category ${entry.imcCategoryClass}`}>IMC: {entry.imc}</span>}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </div>
-
-            <div className="progress-section">
-                <h3>Progreso en Ejercicios</h3>
-                {exerciseLogs.length === 0 ? (
-                     <p>Aún no has registrado progreso en ningún ejercicio.</p>
-                ) : (
-                    <div className="exercise-progress-accordion">
-                    {exerciseLogs.map(([exerciseName, logs]) => (
-                        <details key={exerciseName} className="exercise-progress-item">
-                            <summary>{exerciseName} ({logs.length} registros)</summary>
+            <div className="animated-fade-in">
+                {activeTab === 'bodyWeight' && (
+                    <div className="progress-section">
+                        <h3>Registrar Peso Corporal</h3>
+                        <form onSubmit={handleAddBodyWeight} className="add-weight-form">
+                            <input
+                                type="number"
+                                step="0.1"
+                                placeholder="Peso actual en kg"
+                                value={weight}
+                                onChange={(e) => setWeight(e.target.value)}
+                                required
+                            />
+                            <button type="submit" className="cta-button" disabled={isSaving}>
+                                {isSaving ? 'Guardando...' : 'Guardar Peso'}
+                            </button>
+                        </form>
+                        <h4>Historial de Peso</h4>
+                        {sortedBodyWeightLog.length === 0 ? (
+                            <p>Aún no hay registros de peso.</p>
+                        ) : (
                             <ul className="log-list">
-                                {[...logs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(log => (
-                                     <li key={log.date}>
-                                        <span>{new Date(log.date).toLocaleDateString()}</span>
-                                        <span>Peso: <strong>{log.weight} kg</strong></span>
-                                        <span>Reps: <strong>{log.repetitions}</strong></span>
+                                {sortedBodyWeightLog.map(entry => (
+                                    <li key={entry.date} className="weight-log">
+                                        <span>{new Date(entry.date).toLocaleDateString()}</span>
+                                        <span><strong>{entry.weight} kg</strong></span>
+                                        {entry.imc && <span className={`bmi-category ${entry.imcCategoryClass}`}>IMC: {entry.imc}</span>}
                                     </li>
                                 ))}
                             </ul>
-                        </details>
-                    ))}
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'exercises' && (
+                    <div className="progress-section">
+                        <h3>Progreso en Ejercicios</h3>
+                        {exercisesWithLogs.length === 0 ? (
+                            <p>Aún no has registrado progreso en ningún ejercicio.</p>
+                        ) : (
+                            <>
+                                <select 
+                                    className="exercise-select-dropdown" 
+                                    value={selectedExercise} 
+                                    onChange={e => setSelectedExercise(e.target.value)}
+                                >
+                                    {exercisesWithLogs.map(name => <option key={name} value={name}>{name}</option>)}
+                                </select>
+                                
+                                <h4>Historial de {selectedExercise}</h4>
+                                <ul className="log-list">
+                                    {sortedExerciseLog.map(log => (
+                                        <li key={log.date}>
+                                            <span>{new Date(log.date).toLocaleDateString()}</span>
+                                            <span><strong>{log.weight} kg</strong></span>
+                                            <span><strong>{log.repetitions} reps</strong></span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
         </div>
     );
 };
+
 
 
 // --- Client View ---
@@ -3380,7 +3409,11 @@ const ProgressTracker: React.FC<{
                 />
             </div>
             <button type="submit" disabled={isSaving || !weight || !repetitions} className={`cta-button secondary ${isSaved ? 'saved' : ''}`}>
-                {isSaving ? <span className="spinner small"></span> : (isSaved ? '¡Guardado!' : 'Guardar')}
+                {isSaving ? <span className="spinner small"></span> : (isSaved ? 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41-1.41L9,16.17z"></path></svg>
+                    : 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
+                )}
             </button>
         </form>
     );
