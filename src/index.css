@@ -764,14 +764,19 @@ body {
     font-weight: 600;
 }
 .video-link {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
     color: var(--text-secondary-color);
     transition: color 0.2s;
     flex-shrink: 0;
     margin-left: 1rem;
 }
 .video-link svg {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
+    display: block;
 }
 .video-link:hover {
     color: var(--primary-color);
@@ -1619,4 +1624,40 @@ input:checked + .slider:before {
 }
 .save-progress-button:hover {
     background-color: #5cb85c;
+}
+
+/* --- Video Player Modal --- */
+.modal-content.video-modal {
+  max-width: 900px;
+  padding: 1rem;
+  background-color: var(--background-color);
+  overflow: hidden;
+}
+
+.video-modal video {
+  width: 100%;
+  border-radius: 8px;
+  max-height: 80vh;
+}
+
+.close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1.5rem;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: white;
+  font-size: 2rem;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 40px;
+  text-align: center;
+  z-index: 10;
+  transition: background-color 0.2s;
+}
+
+.close-button:hover {
+  background: rgba(0,0,0,0.8);
 }

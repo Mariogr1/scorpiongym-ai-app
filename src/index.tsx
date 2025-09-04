@@ -1912,7 +1912,7 @@ const ExerciseView: React.FC<{ exercise: Exercise; onPlayVideo: (url: string) =>
                 <span className="exercise-name">{exercise.nombre}</span>
                  {exercise.videoUrl && (
                     <button onClick={() => onPlayVideo(exercise.videoUrl!)} className="video-link" aria-label="Ver video del ejercicio">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28px" height="28px"><path d="M10,15L15.19,12L10,9V15M21.56,7.17C21.69,7.64 21.78,8.27 21.84,9.08C21.91,9.91 21.94,10.96 21.94,12C21.94,13.04 21.91,14.09 21.84,14.92C21.78,15.73 21.69,16.36 21.56,16.83C21.31,17.73 20.73,18.31 19.83,18.56C19.36,18.69 18.73,18.78 17.92,18.84C17.09,18.91 16.04,18.94 15,18.94C13.96,18.94 12.91,18.91 12.08,18.84C11.27,18.78 10.64,18.69 10.17,18.56C9.27,18.31 8.69,17.73 8.44,16.83C8.31,16.36 8.22,15.73 8.16,14.92C8.09,14.09 8.06,13.04 8.06,12C8.06,10.96 8.09,9.91 8.16,9.08C8.22,8.27 8.31,7.64 8.44,7.17C8.69,6.27 9.27,5.69 10.17,5.44C10.64,5.31 11.27,5.22 12.08,5.16C12.91,5.09 13.96,5.06 15,5.06C16.04,5.06 17.09,5.09 17.92,5.16C18.73,5.22 19.36,5.31 19.83,5.44C20.73,5.69 21.31,6.27 21.56,7.17Z"/></svg>
                     </button>
                  )}
             </div>
