@@ -4,8 +4,8 @@ import clientPromise from './util/mongodb.js';
 
 const DEFAULT_EXERCISE_LIBRARY = {
     "Pecho": [
-        { name: "Apertura con Banda", isEnabled: true, videoUrl: "https://res.cloudinary.com/dxztecjss/video/upload/v1757101381/aperturaBanda_bhukpv.mp4" },
-        { name: "Apertura con Mancuernas en Banco Declinado", isEnabled: true, videoUrl: "https://res.cloudinary.com/dxztecjss/video/upload/v1757102276/aperturaBancoDeclinado_ni0r06.mp4" },
+        { name: "Apertura con Banda", isEnabled: true, videoUrl: "" },
+        { name: "Apertura con Mancuernas en Banco Declinado", isEnabled: true, videoUrl: "" },
         { name: "Apertura con Mancuernas en Banco Inclinado", isEnabled: true, videoUrl: "" },
         { name: "Apertura con Mancuernas en Banco Plano", isEnabled: true, videoUrl: "" },
         { name: "Apertura en Máquina", isEnabled: true, videoUrl: "" },
