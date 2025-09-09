@@ -46,7 +46,6 @@ export interface Routine {
     planName: string;
     totalDurationWeeks: number;
     phases: Phase[];
-    routineGeneratedDate?: string;
 }
 
 export interface FoodItem {
@@ -416,8 +415,4 @@ export const apiClient = {
       return false;
     }
   },
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607

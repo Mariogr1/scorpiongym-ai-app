@@ -1,6 +1,7 @@
 
 
 import clientPromise from './util/mongodb.js';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req, res) {
   const client = await clientPromise;
@@ -30,11 +31,13 @@ export default async function handler(req, res) {
           return res.status(409).json({ message: 'Gym with this username already exists' });
         }
         
-        // In a real production app, password should be hashed.
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
         const newGym = {
           name,
           username,
-          password,
+          password: hashedPassword,
           dailyQuestionLimit: Number(dailyQuestionLimit) || 10, // Default to 10 if not provided or invalid
           logoSvg: logoSvg || null,
           planType: planType || 'full',

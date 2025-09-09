@@ -3,6 +3,7 @@
 
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -23,10 +24,9 @@ export default async function handler(req, res) {
         const updateData = {};
         if (name) updateData.name = name;
         
-        // In a real production app, password should be hashed.
-        // Following project's current convention of storing plaintext.
         if (password) {
-            updateData.password = password;
+            const salt = await bcrypt.genSalt(10);
+            updateData.password = await bcrypt.hash(password, salt);
         }
 
         if (dailyQuestionLimit !== undefined) {

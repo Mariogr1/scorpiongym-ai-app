@@ -1,12 +1,9 @@
-<<<<<<< HEAD
 
 
 
 
 
 
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -185,12 +182,8 @@ const App: React.FC = () => {
         // Check session storage to maintain login state
         const loggedInClient = sessionStorage.getItem('loggedInClientDni');
         const loggedInGym = sessionStorage.getItem('loggedInGym');
-<<<<<<< HEAD
         const loggedInUserType = sessionStorage.getItem('userType');
 
-=======
-        
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
         if (loggedInClient) {
             setCurrentClientDni(loggedInClient);
             setView('clientView');
@@ -211,10 +204,7 @@ const App: React.FC = () => {
             const isValid = await apiClient.loginClient(id, code!);
             if (isValid) {
                 sessionStorage.setItem('loggedInClientDni', id);
-<<<<<<< HEAD
                 sessionStorage.setItem('userType', 'client');
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                 setCurrentClientDni(id);
                 setView('clientView');
             } else {
@@ -224,10 +214,7 @@ const App: React.FC = () => {
              const gymData = await apiClient.gymLogin(id, code!);
              if (gymData) {
                  sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
-<<<<<<< HEAD
                  sessionStorage.setItem('userType', 'gym');
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                  setCurrentGym(gymData);
                  if (gymData.username === 'superadmin') {
                     setView('superAdminDashboard');
@@ -363,10 +350,7 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
 
 // --- Super Admin View ---
 
-<<<<<<< HEAD
 // FIX: Added missing ConfirmationModal component.
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -377,11 +361,7 @@ const ConfirmationModal: React.FC<{
 }> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass = '' }) => {
     return (
         <div className="modal-overlay" onClick={onCancel}>
-<<<<<<< HEAD
             <div className="modal-content confirmation-modal" onClick={(e) => e.stopPropagation()}>
-=======
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                 <p>{message}</p>
                 <div className="modal-actions">
                     <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
@@ -621,10 +601,7 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
                 </div>
                 <div className="form-group">
                     <label>Tipo de Plan</label>
-<<<<<<< HEAD
                     {/* FIX: Cast the string value from the select event to the PlanType union type to satisfy the state setter's type requirement. */}
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                     <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
                         <option value="full">Plan Completo (Rutina y Nutrición)</option>
                         <option value="routine">Solo Plan de Rutina</option>
@@ -772,10 +749,7 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-<<<<<<< HEAD
 // FIX: Added missing RequestsView and RequestSection components.
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -2439,12 +2413,8 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-<<<<<<< HEAD
     const [showChat, setShowChat] = useState(false);
 
-=======
-    
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
     const fetchClientData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
         const data = await apiClient.getClientData(dni);
@@ -2455,7 +2425,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
     useEffect(() => {
         fetchClientData();
     }, [dni]);
-<<<<<<< HEAD
 
     const isPlanExpired = () => {
         if (!clientData?.routineGeneratedDate || !clientData?.routine?.totalDurationWeeks) {
@@ -2465,8 +2434,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
         const expirationDate = new Date(generatedDate.setDate(generatedDate.getDate() + clientData.routine.totalDurationWeeks * 7));
         return new Date() > expirationDate;
     };
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
     
     if (isLoading) {
         return <div className="loading-container"><div className="spinner"></div></div>;
@@ -2475,7 +2442,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
         return <div className="error-container">No se encontraron datos para este cliente.</div>;
     }
 
-<<<<<<< HEAD
     // --- View Routing based on client status ---
     if (clientData.planStatus === 'pending') {
         return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
@@ -2642,99 +2608,11 @@ const ChatAssistant: React.FC<{
             const errorMessage = "Lo siento, ocurrió un error al procesar tu pregunta. Por favor, inténtalo de nuevo.";
             setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
             setError(err instanceof Error ? err.message : "Error desconocido.");
-=======
-    if (clientData.planStatus === 'pending') {
-        return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
-    }
-
-    return (
-        <ClientDashboard 
-            clientData={clientData}
-            onLogout={onLogout}
-            onDataUpdate={() => fetchClientData(false)}
-        />
-    );
-};
-
-const ChatModal: React.FC<{ 
-    onClose: () => void;
-    clientData: ClientData;
-    onUsageUpdate: () => void;
-}> = ({ onClose, clientData, onUsageUpdate }) => {
-    const [chat, setChat] = useState<Chat | null>(null);
-    const [history, setHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([]);
-    const [message, setMessage] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const chatContentRef = useRef<HTMLDivElement>(null);
-
-    const dailyLimit = clientData.dailyQuestionLimit ?? 5;
-    const today = new Date().toISOString().split('T')[0];
-    const usage = clientData.aiUsage?.date === today ? clientData.aiUsage.count : 0;
-    const remainingQuestions = Math.max(0, dailyLimit - usage);
-
-    const initializeChat = () => {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const systemInstruction = `
-            Sos "Scorpion AI", un asistente de fitness y nutrición experto.
-            Estás hablando con un cliente con este perfil: ${JSON.stringify(clientData.profile)}.
-            Y este es su plan de entrenamiento actual: ${JSON.stringify(clientData.routine)}.
-            Y su plan de nutrición: ${JSON.stringify(clientData.dietPlans)}.
-            
-            TUS REGLAS:
-            1. Sé amable, motivador y directo. Usa "vos" en lugar de "tú".
-            2. Tus respuestas deben ser cortas y concisas.
-            3. NO respondas preguntas que no estén relacionadas con fitness, entrenamiento, nutrición o el plan del cliente. Si te preguntan otra cosa, amablemente decí que solo podés ayudar con temas de fitness.
-            4. Basá tus respuestas en el perfil y los planes del cliente.
-            5. No des consejos médicos. Si preguntan por lesiones o dolor, recomendá que hablen con su entrenador o un médico.
-        `;
-        const newChat = ai.chats.create({ 
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: systemInstruction,
-            },
-        });
-        setChat(newChat);
-    };
-
-    useEffect(() => {
-        initializeChat();
-        setHistory([{ role: 'model', text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI, tu asistente. ¿En qué te puedo ayudar hoy? Tenés ${remainingQuestions} consultas restantes.` }]);
-    }, []);
-
-    useEffect(() => {
-        if (chatContentRef.current) {
-            chatContentRef.current.scrollTop = chatContentRef.current.scrollHeight;
-        }
-    }, [history]);
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!message.trim() || isLoading || !chat || remainingQuestions <= 0) return;
-
-        const userMessage = message.trim();
-        setHistory(prev => [...prev, { role: 'user', text: userMessage }]);
-        setMessage('');
-        setIsLoading(true);
-
-        try {
-            const result = await chat.sendMessage({ message: userMessage });
-            const text = result.text;
-            setHistory(prev => [...prev, { role: 'model', text: text }]);
-            
-            const newCount = usage + 1;
-            await apiClient.saveClientData(clientData.dni, { aiUsage: { date: today, count: newCount } });
-            onUsageUpdate();
-
-        } catch (error) {
-            console.error("Chat error:", error);
-            setHistory(prev => [...prev, { role: 'model', text: "Lo siento, hubo un error al procesar tu pregunta. Intenta de nuevo." }]);
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
         } finally {
             setIsLoading(false);
         }
     };
 
-<<<<<<< HEAD
     return (
         <div className="chat-fullscreen-container">
              <div className="main-header" style={{ padding: '1rem', margin: 0, borderBottom: `1px solid var(--border-color)`, flexShrink: 0 }}>
@@ -2799,43 +2677,6 @@ const ChatModal: React.FC<{
                         </button>
                     </form>
                 )}
-=======
-
-    return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content chat-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="chat-header">
-                    <h3>Asistente Scorpion AI</h3>
-                    <p>Consultas restantes hoy: <strong>{remainingQuestions}</strong></p>
-                    <button className="close-button" onClick={onClose}>&times;</button>
-                </div>
-                <div className="chat-content" ref={chatContentRef}>
-                     {history.map((msg, index) => (
-                        <div key={index} className={`chat-message ${msg.role}`}>
-                            <p>{msg.text}</p>
-                        </div>
-                    ))}
-                    {isLoading && (
-                        <div className="chat-message model">
-                            <div className="typing-indicator">
-                                <span></span><span></span><span></span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <form className="chat-input-form" onSubmit={handleSendMessage}>
-                    <input
-                        type="text"
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder={remainingQuestions > 0 ? "Escribe tu consulta..." : "Límite de consultas alcanzado."}
-                        disabled={isLoading || remainingQuestions <= 0}
-                    />
-                    <button type="submit" disabled={isLoading || !message.trim() || remainingQuestions <= 0}>
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
-                    </button>
-                </form>
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
             </div>
         </div>
     );
@@ -2937,29 +2778,19 @@ const ClientOnboardingView: React.FC<{
             }
 
             if (planType === 'full' || planType === 'nutrition') {
-<<<<<<< HEAD
                 // Set both diet statuses to 'loading' to show spinners simultaneously.
                 setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
 
                 // Generate both diet plans in parallel.
-=======
-                setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
-
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                 const [diet1, diet2] = await Promise.all([
                     generateDietForClient(clientData),
                     generateDietForClient(clientData)
                 ]);
                 
-<<<<<<< HEAD
                 // Once both are complete, update the client data with the new plans.
                 setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
                 
                 // Set both diet statuses to 'done' to show success indicators.
-=======
-                setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
-                
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
                 setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
             }
 
@@ -3100,7 +2931,6 @@ const GenerationProgressIndicator: React.FC<{
     );
 };
 
-<<<<<<< HEAD
 // Fix: Add missing RequestModal component definition.
 const RequestModal: React.FC<{
     client: ClientData;
@@ -3371,8 +3201,6 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
 
 
 
-=======
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
 const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
     const [isChecked, setIsChecked] = useState(false);
     
@@ -3424,87 +3252,11 @@ Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, en
 };
 
 
-<<<<<<< HEAD
 // --- Client Portal: Routine Tracker ---
 
 const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void, onPlayVideo: (url: string) => void }> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
     const { routine, routineGeneratedDate, gymId } = clientData;
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-=======
-// --- Client Portal ---
-
-const ClientDashboard: React.FC<{
-    clientData: ClientData;
-    onLogout: () => void;
-    onDataUpdate: () => void;
-}> = ({ clientData, onLogout, onDataUpdate }) => {
-    const planType = clientData.planType || 'full';
-    const defaultTab = planType === 'nutrition' ? 'diet' : 'routine';
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'support'>(defaultTab);
-    const [showChatModal, setShowChatModal] = useState(false);
-    const [videoUrl, setVideoUrl] = useState<string | null>(null);
-
-    const handlePlayVideo = (url: string) => {
-        setVideoUrl(url);
-    };
-    
-    return (
-        <div className="client-dashboard-client-view">
-            <header className="client-header">
-                <div className="client-header-info">
-                    <h1>{clientData.profile.name}</h1>
-                    <p>Objetivo: {clientData.profile.goal}</p>
-                </div>
-                <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-            </header>
-            <main>
-                 <nav className="client-main-nav">
-                     {(planType === 'full' || planType === 'routine') && (
-                        <button className={activeTab === 'routine' ? 'active' : ''} onClick={() => setActiveTab('routine')}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6,2L3,5V20A2,2 0 0,0 5,22H19A2,2 0 0,0 21,20V5L18,2H6M6,4H10V6H14V4H18V8H6V4M13.5,10A1.5,1.5 0 0,1 15,11.5A1.5,1.5 0 0,1 13.5,13A1.5,1.5 0 0,1 12,11.5A1.5,1.5 0 0,1 13.5,10M9.5,12A1.5,1.5 0 0,1 11,13.5A1.5,1.5 0 0,1 9.5,15A1.5,1.5 0 0,1 8,13.5A1.5,1.5 0 0,1 9.5,12M13.5,14A1.5,1.5 0 0,1 15,15.5A1.5,1.5 0 0,1 13.5,17A1.5,1.5 0 0,1 12,15.5A1.5,1.5 0 0,1 13.5,14Z" /></svg>
-                            <span>Rutina</span>
-                        </button>
-                     )}
-                     {(planType === 'full' || planType === 'nutrition') && (
-                        <button className={activeTab === 'diet' ? 'active' : ''} onClick={() => setActiveTab('diet')}>
-                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16,4.16C16.5,4.16 17.06,4.26 17.58,4.44L19.72,2.3C18.1,1.5 16.03,1 14,1C12.12,1 10.38,1.38 8.84,2.06L10.94,4.16C12.03,3.68 13.16,3.41 14.33,3.26C14.89,3.21 15.45,3.18 16,3.18V4.16M11.5,22C11.5,22 16,17.5 16,12.5C16,10 14,8 11.5,8S7,10 7,12.5C7,17.5 11.5,22 11.5,22M11.5,11A1.5,1.5 0 0,1 13,12.5A1.5,1.5 0 0,1 11.5,14A1.5,1.5 0 0,1 10,12.5A1.5,1.5 0 0,1 11.5,11Z" /></svg>
-                             <span>Nutrición</span>
-                         </button>
-                      )}
-                     <button className={activeTab === 'progress' ? 'active' : ''} onClick={() => setActiveTab('progress')}>
-                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,20L12.7,20.7L13.41,20L12.7,19.3L12,20M17,10C17,7.24 14.76,5 12,5C9.24,5 7,7.24 7,10C7,11.05 7.33,12.04 7.9,12.86L4.22,16.53L5.64,17.95L9.12,14.47C9.96,14.81 10.95,15.05 12,15.05C14.76,15.05 17,12.81 17,10M12,7A3,3 0 0,1 15,10A3,3 0 0,1 12,13A3,3 0 0,1 9,10A3,3 0 0,1 12,7M21.5,18.5L19.5,20.5L16,17L14.5,18.5L18,22L23,17L21.5,18.5Z" /></svg>
-                         <span>Progreso</span>
-                     </button>
-                      <button className={activeTab === 'support' ? 'active' : ''} onClick={() => setActiveTab('support')}>
-                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M13,19H11V17H13V19M13,15H11V7H13V15Z" /></svg>
-                         <span>Ayuda</span>
-                     </button>
-                 </nav>
-
-                <div className="client-content-area">
-                    {activeTab === 'routine' && <ClientRoutineView clientData={clientData} onDataUpdate={onDataUpdate} onPlayVideo={handlePlayVideo} />}
-                    {activeTab === 'diet' && <ClientDietPlanView dietPlans={clientData.dietPlans} />}
-                    {activeTab === 'progress' && <ClientProgressView clientData={clientData} onDataUpdate={onDataUpdate} />}
-                    {activeTab === 'support' && <SupportView clientData={clientData} />}
-                </div>
-
-            </main>
-             {clientData.dailyQuestionLimit !== 0 && (
-                <button className="chat-fab" onClick={() => setShowChatModal(true)} aria-label="Abrir chat con IA">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4M11,6V8H13V6H11M8,9V11H16V9H8M8,13V15H16V13H8Z" /></svg>
-                </button>
-            )}
-             {showChatModal && <ChatModal onClose={() => setShowChatModal(false)} clientData={clientData} onUsageUpdate={onDataUpdate} />}
-             {videoUrl && <VideoPlayerModal videoUrl={videoUrl} onClose={() => setVideoUrl(null)} />}
-        </div>
-    );
-};
-
-const ClientRoutineView: React.FC<{ clientData: ClientData, onDataUpdate: () => void, onPlayVideo: (url: string) => void }> = ({ clientData, onDataUpdate, onPlayVideo }) => {
-    const { routine, routineGeneratedDate, gymId, dni, progressLog } = clientData;
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-    const [activeDayIndex, setActiveDayIndex] = useState(0);
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
 
     useEffect(() => {
@@ -3515,7 +3267,6 @@ const ClientRoutineView: React.FC<{ clientData: ClientData, onDataUpdate: () => 
         fetchLibrary();
     }, [gymId]);
 
-<<<<<<< HEAD
     const expirationDateString = useMemo(() => {
         if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
         const generated = new Date(routineGeneratedDate);
@@ -3548,72 +3299,10 @@ const ClientRoutineView: React.FC<{ clientData: ClientData, onDataUpdate: () => 
                 exerciseLibrary={exerciseLibrary}
                 onPlayVideo={onPlayVideo}
             />
-=======
-    useEffect(() => {
-        if (!routine) return;
-        const startDate = new Date(routineGeneratedDate || Date.now());
-        const today = new Date();
-        const daysSinceStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 3600 * 24));
-        const weeksSinceStart = Math.floor(daysSinceStart / 7);
-
-        let cumulativeWeeks = 0;
-        let currentPhaseIndex = 0;
-        for (let i = 0; i < routine.phases.length; i++) {
-            cumulativeWeeks += routine.phases[i].durationWeeks;
-            if (weeksSinceStart < cumulativeWeeks) {
-                currentPhaseIndex = i;
-                break;
-            }
-        }
-        setActivePhaseIndex(currentPhaseIndex);
-
-        const numTrainingDays = routine.phases[currentPhaseIndex]?.routine.dias.length || 1;
-        if (numTrainingDays > 0) {
-            setActiveDayIndex(daysSinceStart % numTrainingDays);
-        }
-    }, [routine, routineGeneratedDate]);
-    
-    if (!routine || !exerciseLibrary) return <div className="loading-container"><div className="spinner"></div></div>;
-
-    const activePhase = routine.phases[activePhaseIndex];
-    if (!activePhase) return <p>No hay fase activa en la rutina.</p>;
-    const dayPlan = activePhase.routine.dias[activeDayIndex];
-
-    return (
-        <div className="client-routine-view animated-fade-in">
-            <div className="client-routine-header"><h2>{routine.planName}</h2></div>
-            <div className="client-phase-selector">
-                 {routine.phases.map((phase, index) => (
-                    <button key={index} className={activePhaseIndex === index ? 'active' : ''} onClick={() => setActivePhaseIndex(index)}>
-                       {phase.phaseName}
-                    </button>
-                ))}
-            </div>
-            <div className="client-phase-content">
-                <h3>{activePhase.phaseName} ({activePhase.durationWeeks} semanas)</h3>
-                 <nav className="day-tabs-nav client-days">
-                    {activePhase.routine.dias.map((dia, index) => (
-                        <button key={index} className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`} onClick={() => setActiveDayIndex(index)}>
-                            {dia.dia}
-                        </button>
-                    ))}
-                </nav>
-                {dayPlan ? (
-                    <ClientDayPlanView 
-                        dayPlan={dayPlan} 
-                        onPlayVideo={onPlayVideo}
-                        dni={dni}
-                        progressLog={progressLog || {}}
-                        onProgressUpdate={onDataUpdate}
-                    />
-                ) : <div className="placeholder">Selecciona un día.</div>}
-            </div>
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
         </div>
     );
 };
 
-<<<<<<< HEAD
 const AccordionPhasesClient: React.FC<{
     phases: Phase[];
     activePhaseIndex: number;
@@ -3712,159 +3401,10 @@ const PhaseContentClient: React.FC<{
                 </ul>
                 {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
             </div>
-=======
-const ClientDayPlanView: React.FC<{ 
-    dayPlan: DayPlan; 
-    onPlayVideo: (url: string) => void;
-    dni: string;
-    progressLog: ProgressLog;
-    onProgressUpdate: () => void;
-}> = ({ dayPlan, onPlayVideo, dni, progressLog, onProgressUpdate }) => {
-    return (
-        <div className="day-card client-day-card animated-fade-in">
-            <h4>{dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span></h4>
-             <ul className="exercise-list client-exercise-list">
-                {dayPlan.ejercicios.map((exercise, exerciseIndex) => (
-                    <li key={exerciseIndex} className="exercise-item client-exercise-item">
-                       <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} videoUrl={exercise.videoUrl} />
-                       <ProgressTracker 
-                            exerciseName={exercise.nombre} 
-                            dni={dni} 
-                            log={progressLog[exercise.nombre] || []}
-                            onProgressUpdate={onProgressUpdate}
-                       />
-                    </li>
-                ))}
-            </ul>
-             {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
-        </div>
-    );
-}
-
-const ClientDietPlanView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
-    const [activePlanIndex, setActivePlanIndex] = useState(0);
-    const plan = dietPlans[activePlanIndex];
-
-    if (!plan) {
-         return <div className="placeholder" style={{padding: '2rem'}}>No se ha generado un plan de nutrición.</div>
-    }
-
-    return (
-        <div className="client-diet-plan-view animated-fade-in">
-            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
-                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
-                {dietPlans[1] && 
-                    <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
-                }
-            </div>
-             <ClientDietView dietPlan={plan} />
         </div>
     );
 };
 
-const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
-     <div className="diet-plan-view animated-fade-in">
-        <h3>{dietPlan.planTitle}</h3>
-        <div className="diet-summary-grid">
-            <div className="summary-card calories"><span className="summary-value">{dietPlan.summary.totalCalories}</span><span className="summary-label">Calorías Totales</span></div>
-            <div className="summary-card protein"><span className="summary-value">{dietPlan.summary.macronutrients.proteinGrams}g</span><span className="summary-label">Proteínas</span></div>
-            <div className="summary-card carbs"><span className="summary-value">{dietPlan.summary.macronutrients.carbsGrams}g</span><span className="summary-label">Carbohidratos</span></div>
-            <div className="summary-card fat"><span className="summary-value">{dietPlan.summary.macronutrients.fatGrams}g</span><span className="summary-label">Grasas</span></div>
-        </div>
-        <div className="meals-container">
-            {dietPlan.meals.map((meal, index) => (
-                <div key={index} className="meal-card">
-                    <h4>{meal.mealName}</h4>
-                    <ul className="food-item-list">
-                        {meal.foodItems.map((item, itemIndex) => (
-                            <li key={itemIndex}><span>{item.food}</span><span className="food-amount">{item.amount}</span></li>
-                        ))}
-                    </ul>
-                </div>
-            ))}
-        </div>
-        <div className="recommendations-card">
-            <h4>Recomendaciones Generales</h4>
-            <ul>{dietPlan.recommendations.map((rec, index) => (<li key={index}>{rec}</li>))}</ul>
-        </div>
-    </div>
-);
-
-const ClientProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
-     return (
-        <div className="client-progress-view animated-fade-in">
-            <h2>Mi Progreso</h2>
-            <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />
-        </div>
-    );
-}
-
-const SupportView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const [subject, setSubject] = useState('');
-    const [message, setMessage] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSending(true);
-        const success = await apiClient.createRequest({
-            clientId: clientData.dni,
-            clientName: clientData.profile.name,
-            gymId: clientData.gymId,
-            subject,
-            message
-        });
-        if (success) {
-            setSendStatus('success');
-            setSubject('');
-            setMessage('');
-            setTimeout(() => setSendStatus('idle'), 3000);
-        } else {
-            setSendStatus('error');
-        }
-        setIsSending(false);
-    };
-
-    return (
-        <div className="support-view animated-fade-in">
-            <h2>Contactar a mi Entrenador</h2>
-            <p>¿Tenés alguna duda o necesitás hacer un cambio en tu plan? Enviale un mensaje directo a tu entrenador.</p>
-            <form onSubmit={handleSubmit} className="support-form">
-                <div className="form-group">
-                    <label htmlFor="support-subject">Asunto</label>
-                    <input 
-                        type="text" 
-                        id="support-subject" 
-                        value={subject} 
-                        onChange={e => setSubject(e.target.value)}
-                        required 
-                        placeholder="Ej: Duda sobre un ejercicio"
-                    />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="support-message">Mensaje</label>
-                    <textarea 
-                        id="support-message" 
-                        rows={6} 
-                        value={message} 
-                        onChange={e => setMessage(e.target.value)} 
-                        required
-                        placeholder="Escribí tu mensaje acá..."
-                    ></textarea>
-                </div>
-                 <button type="submit" className="cta-button" disabled={isSending}>
-                    {isSending ? 'Enviando...' : 'Enviar Mensaje'}
-                </button>
-                {sendStatus === 'success' && <p className="success-text" style={{marginTop: '1rem'}}>¡Mensaje enviado con éxito!</p>}
-                {sendStatus === 'error' && <p className="error-text" style={{marginTop: '1rem'}}>No se pudo enviar el mensaje. Intentalo de nuevo.</p>}
-            </form>
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
-        </div>
-    );
-};
-
-<<<<<<< HEAD
 
 const ProgressTracker: React.FC<{
     exerciseName: string;
@@ -3914,55 +3454,10 @@ const ProgressTracker: React.FC<{
             alert("Error al guardar el progreso.");
         }
         
-=======
-const ProgressTracker: React.FC<{ 
-    exerciseName: string, 
-    dni: string, 
-    log: ProgressLogEntry[],
-    onProgressUpdate: () => void
-}> = ({ exerciseName, dni, log, onProgressUpdate }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [weight, setWeight] = useState('');
-    const [repetitions, setRepetitions] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const weightInputRef = useRef<HTMLInputElement>(null);
-
-    const lastLog = log.length > 0 ? log.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] : null;
-
-    useEffect(() => {
-        if (isExpanded) {
-            weightInputRef.current?.focus();
-        }
-    }, [isExpanded]);
-
-    const handleAddLog = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!weight || !repetitions) return;
-        setIsSaving(true);
-        const newEntry: ProgressLogEntry = {
-            date: new Date().toISOString(),
-            weight: parseFloat(weight),
-            repetitions: parseInt(repetitions, 10)
-        };
-        const allLogs = await apiClient.getClientData(dni).then(data => data?.progressLog || {});
-        
-        const newLog = [...(allLogs[exerciseName] || []), newEntry];
-        allLogs[exerciseName] = newLog;
-
-        const success = await apiClient.saveClientData(dni, { progressLog: allLogs });
-        if (success) {
-            setWeight('');
-            setRepetitions('');
-            onProgressUpdate();
-        } else {
-            alert('No se pudo guardar el progreso.');
-        }
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
         setIsSaving(false);
     };
 
     return (
-<<<<<<< HEAD
         <form onSubmit={handleSubmit} className="exercise-tracking">
             <div>
                 <label htmlFor={`weight-${exerciseName}`}>Peso (kg)</label>
@@ -3995,47 +3490,9 @@ const ProgressTracker: React.FC<{
                 )}
             </button>
         </form>
-=======
-        <div className={`progress-tracker ${isExpanded ? 'expanded' : ''}`}>
-            <div className="progress-summary" onClick={() => setIsExpanded(!isExpanded)}>
-                <span className="last-log-display">
-                    {lastLog ? `Última vez: ${lastLog.weight}kg x ${lastLog.repetitions} reps` : 'Sin registros'}
-                </span>
-                <button className="expand-progress-btn">
-                    {isExpanded ? 'Cerrar' : 'Registrar'}
-                </button>
-            </div>
-            {isExpanded && (
-                <form onSubmit={handleAddLog} className="add-progress-form animated-fade-in">
-                    <input 
-                        ref={weightInputRef}
-                        type="number" 
-                        placeholder="Peso (kg)" 
-                        value={weight} 
-                        onChange={e => setWeight(e.target.value)} 
-                        required 
-                    />
-                    <input 
-                        type="number" 
-                        placeholder="Reps" 
-                        value={repetitions} 
-                        onChange={e => setRepetitions(e.target.value)} 
-                        required
-                    />
-                    <button type="submit" disabled={isSaving}>
-                        {isSaving ? '...' : '+'}
-                    </button>
-                </form>
-            )}
-        </div>
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607
     );
 };
 
 
 const root = createRoot(document.getElementById("root")!);
-<<<<<<< HEAD
 root.render(<App />);
-=======
-root.render(<App />);
->>>>>>> f4ae20e1e0c120090d83d2d1621de46472dc5607

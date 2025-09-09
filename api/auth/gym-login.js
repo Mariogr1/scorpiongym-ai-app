@@ -1,5 +1,6 @@
 
 import clientPromise from '../util/mongodb.js';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -22,10 +23,12 @@ export default async function handler(req, res) {
         let superAdminUser = await gymsCollection.findOne({ username: 'superadmin' });
         if (!superAdminUser) {
             console.log("Superadmin user not found, creating one with default password.");
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash('admin', salt);
             const defaultSuperAdmin = {
                 name: 'Super Administrador',
                 username: 'superadmin',
-                password: 'admin', // Default password, can be changed from the dashboard
+                password: hashedPassword, // Default password, can be changed from the dashboard
                 dailyQuestionLimit: 999
             };
             await gymsCollection.insertOne(defaultSuperAdmin);
@@ -38,8 +41,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // In a real production app, use bcrypt.compare(password, gym.password)
-    const passwordMatch = (password === gym.password);
+    const passwordMatch = await bcrypt.compare(password, gym.password);
 
     if (!passwordMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
