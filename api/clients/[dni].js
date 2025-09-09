@@ -34,8 +34,6 @@ export default async function handler(req, res) {
                 if (gym) {
                     clientData.dailyQuestionLimit = gym.dailyQuestionLimit;
                     clientData.planType = gym.planType;
-                    // FIX: Attach the gym's logo to the client data object to be used in the frontend.
-                    clientData.gymLogo = gym.logoSvg;
                 }
             } catch (e) {
                  console.error(`Could not fetch gym details for client ${dni}:`, e);

@@ -112,8 +112,6 @@ export interface ClientData {
     dailyQuestionLimit?: number; // Added from Gym
     planType?: PlanType;
     aiUsage?: { date: string; count: number }; // Added to track usage
-    // FIX: Added optional gymLogo property to align the type with its usage in the frontend.
-    gymLogo?: string;
 }
 
 export interface ClientListItem {
