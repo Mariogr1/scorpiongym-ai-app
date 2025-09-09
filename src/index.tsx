@@ -1,15 +1,18 @@
 
 
+
+
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse, Chat } from "@google/genai";
 import "./index.css";
 
 import {
     apiClient,
-    SUPER_ADMIN_PASSWORD,
     advancedTechniqueOptions,
     // Types
     Profile,
@@ -23,1581 +26,1023 @@ import {
     ExerciseLibrary,
     ProgressLogEntry,
     ExerciseDefinition,
-    Gym
+    Gym,
+    Phase,
+    DayPlan,
+    Request as TrainerRequest, // Renamed to avoid conflict
+    PlanType
 } from './apiClient';
 
 
 // --- Utility Functions ---
-const getBmiDetails = (weight: number, heightCm: number): { bmi: number | null, category: string, categoryClass: string } => {
-    if (isNaN(weight) || weight <= 0 || isNaN(heightCm) || heightCm <= 0) {
-        return { bmi: null, category: 'N/A', categoryClass: '' };
+
+/**
+ * Extracts a JSON object or array from a string that might contain extraneous text.
+ * @param text The string to search within.
+ * @returns The extracted JSON string, or null if not found.
+ */
+const extractJson = (text: string): string | null => {
+    if (!text) return null;
+
+    // Find the first occurrence of '{' or '['
+    const firstBracket = text.indexOf('{');
+    const firstSquare = text.indexOf('[');
+    let startIndex = -1;
+
+    // Determine the start index, preferring the first one found
+    if (firstBracket !== -1 && firstSquare !== -1) {
+        startIndex = Math.min(firstBracket, firstSquare);
+    } else if (firstBracket !== -1) {
+        startIndex = firstBracket;
+    } else {
+        startIndex = firstSquare;
     }
 
-    const heightM = heightCm / 100;
-    const bmiValue = weight / (heightM * heightM);
-
-    if (isNaN(bmiValue) || !isFinite(bmiValue)) {
-        return { bmi: null, category: 'N/A', categoryClass: '' };
+    if (startIndex === -1) {
+        return null; // No JSON object or array found
     }
 
-    let category = 'N/A';
+    const startChar = text[startIndex];
+    const endChar = startChar === '{' ? '}' : ']';
+    
+    // Find the last occurrence of the corresponding closing bracket/brace
+    const lastBracket = text.lastIndexOf(endChar);
+
+    if (lastBracket === -1 || lastBracket < startIndex) {
+        return null; // No valid JSON structure found
+    }
+    
+    const jsonStr = text.substring(startIndex, lastBracket + 1);
+
+    try {
+        JSON.parse(jsonStr);
+        return jsonStr;
+    } catch (e) {
+        // Fallback for potentially incomplete JSON at the end of streams
+        // This is a simplified approach. A more robust solution might involve bracket counting.
+        if (text.endsWith('```')) {
+            const strippedText = text.substring(0, text.length - 3);
+            const lastBracketFallback = strippedText.lastIndexOf(endChar);
+             if (lastBracketFallback !== -1 && lastBracketFallback > startIndex) {
+                const fixedJsonStr = strippedText.substring(startIndex, lastBracketFallback + 1);
+                 try {
+                    JSON.parse(fixedJsonStr);
+                    return fixedJsonStr;
+                } catch (e2) {
+                     return null;
+                }
+             }
+        }
+        return null;
+    }
+};
+
+
+/**
+ * Calculates BMI and its category.
+ * @param weight Weight in kg.
+ * @param height Height in cm.
+ * @returns An object with the BMI value and category class.
+ */
+const calculateBMI = (weight: number, height: number): { value: number; categoryClass: string } => {
+    if (!weight || !height) return { value: 0, categoryClass: 'unknown' };
+    const heightInMeters = height / 100;
+    const bmi = weight / (heightInMeters * heightInMeters);
+    const roundedBmi = Math.round(bmi * 10) / 10;
     let categoryClass = 'normal';
-    if (bmiValue < 18.5) { category = 'Bajo peso'; categoryClass = 'underweight'; }
-    else if (bmiValue < 25) { category = 'Peso normal'; categoryClass = 'normal'; }
-    else if (bmiValue < 30) { category = 'Sobrepeso'; categoryClass = 'overweight'; }
-    else { category = 'Obesidad'; categoryClass = 'obesity'; }
-
-    return { bmi: bmiValue, category, categoryClass };
+    if (roundedBmi < 18.5) categoryClass = 'underweight';
+    else if (roundedBmi >= 25 && roundedBmi < 30) categoryClass = 'overweight';
+    else if (roundedBmi >= 30) categoryClass = 'obesity';
+    return { value: roundedBmi, categoryClass: categoryClass };
 };
 
-const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(',')[1]);
-    reader.onerror = error => reject(error);
-});
-
-
-// --- COMPONENTES DE VISTAS ---
-
-// 0. Logo
-const Logo = () => <img src="/logo.svg" alt="ScorpionGYM AI Logo" className="app-logo" />;
-
-
-// 1. Modal de Confirmación
-const ConfirmationModal = ({
-  isOpen,
-  message,
-  onConfirm,
-  onCancel,
-  confirmText = "Confirmar",
-  cancelText = "Cancelar",
-}: {
-  isOpen: boolean;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  confirmText?: string;
-  cancelText?: string;
-}) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <p>{message}</p>
-        <div className="modal-actions">
-          <button className="cta-button secondary" onClick={onCancel}>
-            {cancelText}
-          </button>
-          <button className="cta-button" onClick={onConfirm}>
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+/**
+ * Calculates a healthy weight range based on height.
+ * @param height Height in cm.
+ * @returns A string representing the healthy weight range.
+ */
+const calculateTargetWeight = (height: number): string => {
+    if (!height) return 'N/A';
+    const heightInMeters = height / 100;
+    const lowerBound = 18.5 * (heightInMeters * heightInMeters);
+    const upperBound = 24.9 * (heightInMeters * heightInMeters);
+    return `${lowerBound.toFixed(1)}kg - ${upperBound.toFixed(1)}kg`;
 };
 
-// 2. Página de Bienvenida (Selección de Rol)
-const LandingPage = ({ onSelectRole }: { onSelectRole: (role: 'superadmin' | 'gym' | 'client') => void }) => (
-    <div className="login-container">
-        <header>
-            <Logo />
-            <h1>ScorpionGYM AI</h1>
-            <p>Tu plataforma de entrenamiento inteligente.</p>
-        </header>
-        <div className="landing-box">
-            <h2>Bienvenido</h2>
-            <p>¿Cómo querés acceder?</p>
-            <div className="role-selection">
-                <button className="cta-button" onClick={() => onSelectRole('superadmin')}>Acceso Administrador General</button>
-                <button className="cta-button" onClick={() => onSelectRole('gym')}>Acceso Gimnasio / Entrenador</button>
-                <button className="cta-button secondary" onClick={() => onSelectRole('client')}>Acceso Cliente</button>
+
+// --- React Components ---
+
+const SvgImage: React.FC<{ svgString: string | null | undefined, altText: string }> = ({ svgString, altText }) => {
+    if (!svgString) {
+        return null;
+    }
+    // Handles potential UTF-8 characters in SVG string for btoa
+    const toB64 = (str: string) => btoa(unescape(encodeURIComponent(str)));
+    const dataUri = `data:image/svg+xml;base64,${toB64(svgString)}`;
+    return <img src={dataUri} alt={altText} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />;
+};
+
+const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({ videoUrl, onClose }) => {
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => {
+            window.removeEventListener('keydown', handleEsc);
+        };
+    }, [onClose]);
+
+    return (
+        <div className="video-modal-overlay" onClick={onClose}>
+            <div className="video-modal-content" onClick={(e) => e.stopPropagation()}>
+                <button className="video-modal-close-btn" onClick={onClose} aria-label="Cerrar video">&times;</button>
+                <video src={videoUrl} controls autoPlay playsInline>
+                    Tu navegador no soporta la etiqueta de video.
+                </video>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
-// 3. Logins
-const SuperAdminLogin = ({ onLogin, onBack }: { onLogin: () => void; onBack: () => void; }) => {
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+
+/**
+ * Main application component that handles routing and state.
+ */
+const App: React.FC = () => {
+    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard'>('landing');
+    const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
+    const [currentGym, setCurrentGym] = useState<Gym | null>(null);
+    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
+    const [loginError, setLoginError] = useState<string>('');
+
+    useEffect(() => {
+        // Check session storage to maintain login state
+        const loggedInClient = sessionStorage.getItem('loggedInClientDni');
+        const loggedInGym = sessionStorage.getItem('loggedInGym');
+        const loggedInUserType = sessionStorage.getItem('userType');
+
+        if (loggedInClient) {
+            setCurrentClientDni(loggedInClient);
+            setView('clientView');
+        } else if (loggedInGym) {
+            const gymData = JSON.parse(loggedInGym);
+            setCurrentGym(gymData);
+            if (gymData.username === 'superadmin') {
+                setView('superAdminDashboard');
+            } else {
+                setView('adminDashboard');
+            }
+        }
+    }, []);
+
+    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string) => {
+        setLoginError('');
+        if (type === 'client') {
+            const isValid = await apiClient.loginClient(id, code!);
+            if (isValid) {
+                sessionStorage.setItem('loggedInClientDni', id);
+                sessionStorage.setItem('userType', 'client');
+                setCurrentClientDni(id);
+                setView('clientView');
+            } else {
+                setLoginError('DNI o código de acceso incorrecto.');
+            }
+        } else { // type === 'gym'
+             const gymData = await apiClient.gymLogin(id, code!);
+             if (gymData) {
+                 sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
+                 sessionStorage.setItem('userType', 'gym');
+                 setCurrentGym(gymData);
+                 if (gymData.username === 'superadmin') {
+                    setView('superAdminDashboard');
+                 } else {
+                    setView('adminDashboard');
+                 }
+             } else {
+                 setLoginError('Usuario o contraseña incorrecto.');
+             }
+        }
+    };
+    
+    const handleLogout = () => {
+        sessionStorage.clear();
+        setCurrentClientDni(null);
+        setCurrentGym(null);
+        setImpersonatedGym(null);
+        setView('landing');
+    };
+    
+    const handleSelectClient = (dni: string) => {
+        setCurrentClientDni(dni);
+        setView('clientDashboard');
+    };
+
+    const handleBackToAdmin = () => {
+        setCurrentClientDni(null);
+        setView('adminDashboard');
+    };
+    
+    const handleSelectGym = (gymToManage: Gym) => {
+        setImpersonatedGym(gymToManage);
+        setView('adminDashboard');
+    };
+
+    const handleBackToSuperAdmin = () => {
+        setImpersonatedGym(null);
+        setView('superAdminDashboard');
+    };
+
+    const renderView = () => {
+        switch (view) {
+            case 'landing':
+                return <LandingPage onIngresar={() => setView('login')} />;
+            case 'login':
+                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
+            case 'adminDashboard':
+                return <AdminDashboard 
+                            onSelectClient={handleSelectClient} 
+                            onLogout={handleLogout} 
+                            gym={impersonatedGym || currentGym!} 
+                            loggedInGym={currentGym!}
+                            onBackToSuperAdmin={handleBackToSuperAdmin}
+                        />;
+            case 'clientDashboard':
+                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
+            case 'clientView':
+                return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
+            case 'superAdminDashboard':
+                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
+            default:
+                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
+        }
+    };
+
+    return <>{renderView()}</>;
+};
+
+// --- Landing & Login Views ---
+
+const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
+    return (
+        <div className="login-container landing-view">
+            <header>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" />
+                <h1>Scorpion AI</h1>
+                <p className="landing-subtitle">bienvenido a tu plataforma inteligente</p>
+            </header>
+            <div className="landing-actions">
+                <button className="cta-button" onClick={onIngresar}>Ingresar</button>
+            </div>
+        </div>
+    );
+};
+
+const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?: string) => void; error: string; onBack: () => void; }> = ({ onLogin, error, onBack }) => {
+    const [loginType, setLoginType] = useState<'client' | 'gym'>('client');
+    const [id, setId] = useState('');
+    const [code, setCode] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (password === SUPER_ADMIN_PASSWORD) {
-            onLogin();
-        } else {
-            setError('Contraseña incorrecta.');
-            setPassword('');
-        }
+        onLogin(loginType, id, code);
     };
 
     return (
         <div className="login-container">
-            <header><Logo /></header>
+             <header>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+            </header>
             <div className="login-box">
-                <h2>Acceso de Súper Administrador</h2>
+                <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
+                    <button className={`view-toggle-button ${loginType === 'client' ? 'active' : ''}`} onClick={() => setLoginType('client')}>Cliente</button>
+                    <button className={`view-toggle-button ${loginType === 'gym' ? 'active' : ''}`} onClick={() => setLoginType('gym')}>Entrenador</button>
+                </div>
+
+                <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Entrenador'}</h2>
+                <p>{loginType === 'client' ? 'Ingresa tu DNI y código de acceso.' : 'Ingresa tu usuario y contraseña.'}</p>
                 <form onSubmit={handleSubmit}>
+                    <input
+                        type="text"
+                        placeholder={loginType === 'client' ? 'DNI' : 'Usuario'}
+                        value={id}
+                        onChange={(e) => setId(e.target.value)}
+                        required
+                    />
+                    <input
+                        type={loginType === 'client' ? 'text' : 'password'}
+                        placeholder={loginType === 'client' ? 'Código de Acceso' : 'Contraseña'}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        required
+                    />
+                    {error && <p className="error-text">{error}</p>}
+                    <button type="submit" className="cta-button">Ingresar</button>
+                </form>
+            </div>
+             <button onClick={onBack} className="back-button simple" style={{ marginTop: '2rem' }}>Volver</button>
+        </div>
+    );
+};
+
+
+// --- Super Admin View ---
+
+// FIX: Added missing ConfirmationModal component.
+const ConfirmationModal: React.FC<{
+    message: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    confirmClass?: string;
+}> = ({ message, onConfirm, onCancel, confirmText = 'Confirmar', cancelText = 'Cancelar', confirmClass = '' }) => {
+    return (
+        <div className="modal-overlay" onClick={onCancel}>
+            <div className="modal-content confirmation-modal" onClick={(e) => e.stopPropagation()}>
+                <p>{message}</p>
+                <div className="modal-actions">
+                    <button onClick={onCancel} className="cta-button secondary">{cancelText}</button>
+                    <button onClick={onConfirm} className={`cta-button ${confirmClass}`}>{confirmText}</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccessMessage('');
+
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+        if (password.length < 4) {
+            setError('La contraseña debe tener al menos 4 caracteres.');
+            return;
+        }
+
+        setIsSaving(true);
+        const success = await apiClient.updateGym(gymId, { password });
+        if (success) {
+            setSuccessMessage('¡Contraseña actualizada con éxito!');
+            setPassword('');
+            setConfirmPassword('');
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } else {
+            setError('No se pudo actualizar la contraseña.');
+        }
+        setIsSaving(false);
+    };
+
+    return (
+        <div className="password-management">
+            <h2>Gestionar Contraseña de Superadmin</h2>
+            <form onSubmit={handleSave}>
+                <div className="form-group">
+                    <label>Nueva Contraseña</label>
                     <input
                         type="password"
                         value={password}
-                        onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                        placeholder="Contraseña Maestra"
-                        aria-label="Contraseña de súper administrador"
+                        onChange={e => setPassword(e.target.value)}
+                        required
                     />
-                    {error && <p className="error-text">{error}</p>}
-                    <button type="submit" className="cta-button" disabled={!password}>Ingresar</button>
-                     <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
-                </form>
-            </div>
+                </div>
+                <div className="form-group">
+                    <label>Confirmar Nueva Contraseña</label>
+                    <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        required
+                    />
+                </div>
+                <button type="submit" className="cta-button" disabled={isSaving}>
+                    {isSaving ? 'Guardando...' : 'Guardar Contraseña'}
+                </button>
+            </form>
+            {error && <p className="error-text" style={{ marginTop: '1rem' }}>{error}</p>}
+            {successMessage && <p className="success-text" style={{ marginTop: '1rem' }}>{successMessage}</p>}
         </div>
     );
 };
 
-const GymLogin = ({ onLogin, onBack }: { onLogin: (gym: Gym) => void; onBack: () => void; }) => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGym: (gym: Gym) => void; }> = ({ gym, onLogout, onSelectGym }) => {
+    const [gyms, setGyms] = useState<Gym[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [editingGym, setEditingGym] = useState<Gym | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<Gym | null>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const fetchGyms = async () => {
         setIsLoading(true);
-        setError('');
-        const gym = await apiClient.gymLogin(username, password);
-        if (gym) {
-            onLogin(gym);
-        } else {
-            setError('Usuario o contraseña incorrectos.');
-            setIsLoading(false);
-        }
+        const fetchedGyms = await apiClient.getGyms();
+        setGyms(fetchedGyms);
+        setIsLoading(false);
     };
 
-    return (
-        <div className="login-container">
-            <header><Logo /></header>
-            <div className="login-box">
-                <h2>Acceso de Gimnasio / Entrenador</h2>
-                <form onSubmit={handleSubmit}>
-                    <input type="text" value={username} onChange={e => {setUsername(e.target.value); setError('')}} placeholder="Usuario" />
-                    <input type="password" value={password} onChange={e => {setPassword(e.target.value); setError('')}} placeholder="Contraseña" />
-                    {error && <p className="error-text">{error}</p>}
-                    <button type="submit" className="cta-button" disabled={!username || !password || isLoading}>
-                        {isLoading ? <span className="spinner small" /> : 'Ingresar'}
-                    </button>
-                    <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
-                </form>
-            </div>
-        </div>
-    );
-};
+    useEffect(() => {
+        fetchGyms();
+    }, []);
 
-const ClientLogin = ({ onLogin, onBack }: { onLogin: (dni: string) => void; onBack: () => void; }) => {
-    const [dni, setDni] = useState('');
-    const [accessCode, setAccessCode] = useState('');
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const handleGymCreated = () => {
+        fetchGyms();
+    };
+    
+    const handleGymUpdated = () => {
+        setEditingGym(null);
+        fetchGyms();
+    };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsLoading(true);
-        setError('');
-        const success = await apiClient.loginClient(dni, accessCode);
+    const handleGymDeleted = async () => {
+        if (!showDeleteConfirm) return;
+        const success = await apiClient.deleteGym(showDeleteConfirm._id);
         if (success) {
-            onLogin(dni);
+            setShowDeleteConfirm(null);
+            fetchGyms();
         } else {
-            setError('DNI o código incorrectos, o cliente inactivo.');
-            setIsLoading(false);
+            alert("Error al eliminar el gimnasio.");
         }
     };
-    
+
     return (
-         <div className="login-container">
-             <header><Logo /></header>
-            <div className="login-box">
-                <h2>Acceso de Cliente</h2>
-                <form onSubmit={handleSubmit}>
-                    <input type="text" value={dni} onChange={e => {setDni(e.target.value); setError('')}} placeholder="DNI" />
-                    <input type="password" value={accessCode} onChange={e => {setAccessCode(e.target.value); setError('')}} placeholder="Código de Acceso" />
-                    {error && <p className="error-text">{error}</p>}
-                    <button type="submit" className="cta-button" disabled={!dni || !accessCode || isLoading}>
-                        {isLoading ? <span className="spinner small" /> : 'Ingresar'}
-                    </button>
-                    <button type="button" className="back-button simple" onClick={onBack}>← Volver</button>
-                </form>
+        <div className="admin-dashboard">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                    <h1>Panel de Super Administrador</h1>
+                </div>
+                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
             </div>
-        </div>
-    );
-};
-
-// --- Chat Assistant for Client ---
-const ChatAssistantModal = ({ isOpen, onClose, ai, clientData, onUpdateClientData }: { isOpen: boolean; onClose: () => void; ai: GoogleGenAI | null; clientData: ClientData | null; onUpdateClientData: (updates: Partial<ClientData>) => void; }) => {
-    const [messages, setMessages] = useState<{ role: 'user' | 'model', text: string, image?: string }[]>([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [image, setImage] = useState<{b64: string, mimeType: string} | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        // This effect should only run when the modal is opened, not on every data update.
-        if (isOpen && clientData) {
-            setMessages([{ role: 'model' as const, text: `¡Hola ${clientData.profile.name}! Soy Scorpion AI. ¿En qué puedo ayudarte hoy con tu plan? Puedo darte alternativas para comidas, ejercicios, o analizar una foto de tu comida para darte una estimación de sus calorías.` }]);
-            setInput('');
-            setImage(null);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
-
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-    
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (file) {
-            if (file.size > 4 * 1024 * 1024) { // 4MB limit
-                alert("La imagen es muy grande. Por favor, elegí una de menos de 4MB.");
-                return;
-            }
-            const b64 = await toBase64(file);
-            setImage({ b64, mimeType: file.type });
-        }
-    };
-
-
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if ((!input.trim() && !image) || isLoading || !ai || !clientData) return;
-
-        // --- Daily Question Limit Check ---
-        const limit = clientData.dailyQuestionLimit;
-        if (typeof limit === 'number' && limit >= 0) {
-            const today = new Date().toISOString().split('T')[0];
-            const usage = clientData.aiUsage || { date: today, count: 0 };
-            const currentCount = usage.date === today ? usage.count : 0;
             
-            if (currentCount >= limit) {
-                setMessages(prev => [...prev, { role: 'model', text: `Llegaste a tu límite de ${limit} consultas por hoy. ¡Nos vemos mañana!` }]);
-                setInput('');
-                setImage(null);
-                return;
-            }
-        }
-        
-        const userMessage = { role: 'user' as const, text: input, image: image ? `data:${image.mimeType};base64,${image.b64}` : undefined };
-        setMessages(prev => [...prev, userMessage]);
-        
-        const currentInput = input;
-        const currentImage = image;
-        setInput('');
-        setImage(null);
-        setIsLoading(true);
-        
-        let modelResponse = '';
-        setMessages(prev => [...prev, { role: 'model' as const, text: '' }]);
+            <PasswordManagement gymId={gym._id} />
 
-        const systemInstruction = `Sos "Scorpion AI", un asistente de IA para un cliente de gimnasio. Tu propósito es dar sugerencias rápidas y útiles sobre el plan de entrenamiento y nutrición del cliente, NUNCA para reemplazar el consejo del entrenador humano.
-        - **Tu Identidad:** Sos amigable, motivador y usas voseo (hablás de "vos").
-        - **Contexto del Cliente:** El plan actual del cliente es: ${JSON.stringify({ profile: clientData.profile, routine: clientData.routine, dietPlan: clientData.dietPlan })}
-        - **Análisis de Imágenes (NUEVA FUNCIÓN):** Si el usuario sube una imagen de una comida, tu tarea principal es analizarla, identificar los alimentos y dar una estimación de las calorías totales, proteínas, carbohidratos y grasas. Siempre DEBES aclarar que es una estimación aproximada.
-        - **Tus Límites (MUY IMPORTANTE):**
-            1. NO podés hacer cambios permanentes en el plan. Siempre debés aclarar que tus sugerencias son temporales y que para un cambio definitivo, debe hablar con su entrenador.
-            2. NO podés dar consejos médicos. Si te preguntan algo relacionado a una lesión o dolor, tu respuesta DEBE ser: "Para cualquier dolor o posible lesión, es fundamental que lo hables con tu entrenador y consultes a un médico o fisioterapeuta. Yo no puedo darte consejos médicos."
-            3. Sé conciso. Tus respuestas deben ser cortas y al punto.
-            4. Si te piden algo fuera de tu alcance (ej: "creame una rutina nueva"), negáte amablemente y recordá tu función: "Mi función es darte sugerencias rápidas para el día a día. Para cambios grandes como una rutina nueva, tenés que hablarlo con tu entrenador."`;
-        
-        const history = messages.map(msg => ({ role: msg.role, parts: [{ text: msg.text }] }));
-        
-        const parts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = [];
-        if (currentImage) {
-            parts.push({ inlineData: { mimeType: currentImage.mimeType, data: currentImage.b64 } });
-        }
-        const promptText = currentImage && !currentInput ? "Analizá esta comida y dame una estimación de sus calorías y macronutrientes (proteínas, carbohidratos, grasas)." : currentInput;
-        parts.push({ text: promptText });
-        
-        const contents = [...history, { role: 'user' as const, parts }];
+            <AddGymForm onGymCreated={handleGymCreated} />
 
-        try {
-            const responseStream = await ai.models.generateContentStream({ model: "gemini-2.5-flash", contents, config: { systemInstruction } });
+            {editingGym && (
+                <EditGymModal 
+                    gym={editingGym} 
+                    onClose={() => setEditingGym(null)} 
+                    onGymUpdated={handleGymUpdated} 
+                />
+            )}
+            
+            {showDeleteConfirm && (
+                <ConfirmationModal
+                    message={`¿Estás seguro de que quieres eliminar el gimnasio "${showDeleteConfirm.name}"? Esta acción es irreversible y eliminará a todos sus clientes y datos asociados.`}
+                    onConfirm={handleGymDeleted}
+                    onCancel={() => setShowDeleteConfirm(null)}
+                    confirmText="Eliminar"
+                    confirmClass="delete"
+                />
+            )}
 
-            for await (const chunk of responseStream) {
-                modelResponse += chunk.text;
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    newMessages[newMessages.length - 1].text = modelResponse;
-                    return newMessages;
-                });
-            }
-
-            // --- Update Usage Count ---
-            const today = new Date().toISOString().split('T')[0];
-            const usage = clientData.aiUsage || { date: today, count: 0 };
-            const newCount = usage.date === today ? usage.count + 1 : 1;
-            const newUsage = { date: today, count: newCount };
-            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
-            onUpdateClientData({ aiUsage: newUsage });
-
-
-        } catch (error) {
-            console.error("Error with AI chat:", error);
-            const errorMessage = { role: 'model' as const, text: 'Oops, algo salió mal. Por favor, intentá de nuevo.' };
-            setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1] = errorMessage;
-                return newMessages;
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="chat-modal-overlay" onClick={onClose}>
-            <div className="chat-modal-content" onClick={(e) => e.stopPropagation()}>
-                <header className="chat-modal-header">
-                    <h3>Asistente Scorpion AI</h3>
-                    <button className="close-button" onClick={onClose}>&times;</button>
-                </header>
-                <div className="chat-messages">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={`chat-message ${msg.role}`}>
-                            <div className="avatar">{msg.role === 'model' ? 'AI' : 'TÚ'}</div>
-                            <div className="message-content">
-                                {msg.image && <img src={msg.image} alt="Adjunto de usuario" />}
-                                {msg.text ? <p>{msg.text}</p> : <div className="chat-typing-indicator"><span></span><span></span><span></span></div>}
+            {isLoading ? (
+                <div className="loading-container"><div className="spinner"></div>Cargando gimnasios...</div>
+            ) : (
+                <div className="gym-list">
+                    {gyms.filter(g => g.username !== 'superadmin').map(gym => (
+                        <div key={gym._id} className="gym-card" onClick={() => onSelectGym(gym)}>
+                           <div className="gym-card-header">
+                                {gym.logoSvg && (
+                                    <div className="gym-card-logo">
+                                        <SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} />
+                                    </div>
+                                )}
+                                <div className="gym-card-info">
+                                    <h3>{gym.name}</h3>
+                                    <p>Usuario: {gym.username} | Límite IA: {gym.dailyQuestionLimit || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div className="gym-card-actions">
+                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingGym(gym); }}>Editar</button>
+                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(gym); }}>Eliminar</button>
                             </div>
                         </div>
                     ))}
-                    <div ref={messagesEndRef} />
                 </div>
-                <div className="chat-input-area">
-                    {image && (
-                        <div className="chat-image-preview">
-                            <img src={`data:${image.mimeType};base64,${image.b64}`} alt="Previsualización" />
-                            <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+            )}
+        </div>
+    );
+};
+
+
+const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) => {
+    const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(10);
+    const [logoSvg, setLogoSvg] = useState<string | null>(null);
+    const [planType, setPlanType] = useState<PlanType>('full');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && file.type === "image/svg+xml") {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setLogoSvg(e.target?.result as string);
+            };
+            reader.readAsText(file);
+        } else {
+            alert("Por favor, selecciona un archivo SVG.");
+        }
+    };
+
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setError('');
+        const success = await apiClient.createGym(name, username, password, dailyQuestionLimit, logoSvg, planType);
+        if (success) {
+            setName('');
+            setUsername('');
+            setPassword('');
+            setDailyQuestionLimit(10);
+            setLogoSvg(null);
+            setPlanType('full');
+            onGymCreated();
+        } else {
+            setError('No se pudo crear el gimnasio. El nombre de usuario puede que ya exista.');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="add-gym-container">
+            <h3>Añadir Nuevo Gimnasio</h3>
+            <form onSubmit={handleSubmit} className="add-gym-form">
+                <div className="form-group">
+                    <label>Nombre del Gimnasio</label>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                    <label>Usuario</label>
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </div>
+                 <div className="form-group">
+                    <label>Límite Preguntas IA / día</label>
+                    <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                </div>
+                <div className="form-group">
+                    <label>Tipo de Plan</label>
+                    {/* FIX: Cast the string value from the select event to the PlanType union type to satisfy the state setter's type requirement. */}
+                    <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                        <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                        <option value="routine">Solo Plan de Rutina</option>
+                        <option value="nutrition">Solo Plan de Nutrición</option>
+                    </select>
+                </div>
+                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Logo (SVG)</label>
+                    <div className="file-input-wrapper">
+                        <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
+                        <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
+                        <div className="file-input-preview">
+                            {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
                         </div>
-                    )}
-                    <form onSubmit={handleSendMessage}>
-                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
-                         <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
-                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.586 10.414l-8-8A2 2 0 0012 2H4a2 2 0 00-2 2v16a2 2 0 002 2h16a2 2 0 002-2V11a1 1 0 00-1-1zm-9.172 2.172a3 3 0 114.242-4.242 3 3 0 01-4.242 4.242zM7 17a1 1 0 01-1-1 3 3 0 013-3h8a1 1 0 010 2H9a1 1 0 00-1 1 1 1 0 01-1 1z"/></svg>
-                         </button>
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Escribí tu consulta acá..."
-                            disabled={isLoading}
-                            aria-label="Escribir mensaje al asistente de IA"
+                    </div>
+                </div>
+                <div className="add-gym-actions">
+                    <button type="submit" className="cta-button" disabled={isSubmitting}>
+                        {isSubmitting ? 'Creando...' : 'Crear Gimnasio'}
+                    </button>
+                </div>
+            </form>
+            {error && <p className="error-text" style={{marginTop: '1rem'}}>{error}</p>}
+        </div>
+    );
+};
+
+
+const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () => void; }> = ({ gym, onClose, onGymUpdated }) => {
+    const [name, setName] = useState(gym.name);
+    const [password, setPassword] = useState('');
+    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(gym.dailyQuestionLimit || 10);
+    const [logoSvg, setLogoSvg] = useState<string | null>(gym.logoSvg || null);
+    const [planType, setPlanType] = useState<PlanType>(gym.planType || 'full');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const dataToUpdate: { name?: string; password?: string; dailyQuestionLimit?: number; logoSvg?: string | null; planType?: PlanType; } = {
+            name: name,
+            dailyQuestionLimit: dailyQuestionLimit,
+            logoSvg: logoSvg,
+            planType: planType,
+        };
+        if (password) {
+            dataToUpdate.password = password;
+        }
+        
+        const success = await apiClient.updateGym(gym._id, dataToUpdate);
+        if (success) {
+            onGymUpdated();
+        } else {
+            alert("Error al actualizar el gimnasio.");
+        }
+        setIsSubmitting(false);
+    };
+    
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file && file.type === "image/svg+xml") {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setLogoSvg(e.target?.result as string);
+            };
+            reader.readAsText(file);
+        } else {
+            alert("Por favor, selecciona un archivo SVG.");
+        }
+    };
+    
+    const handleRemoveLogo = () => {
+        setLogoSvg(null);
+    };
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal">
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Editando: {gym.name}</h3>
+                <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label>Nombre del Gimnasio</label>
+                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+                    </div>
+                    <div className="form-group">
+                        <label>Nueva Contraseña (dejar en blanco para no cambiar)</label>
+                        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                        <label>Límite Preguntas IA / día</label>
+                        <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                    </div>
+                    <div className="form-group">
+                        <label>Tipo de Plan</label>
+                        <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                            <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                            <option value="routine">Solo Plan de Rutina</option>
+                            <option value="nutrition">Solo Plan de Nutrición</option>
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Logo (SVG)</label>
+                        <div className="file-input-wrapper">
+                             <label htmlFor="svg-upload-edit" className="file-input-label">Cambiar SVG</label>
+                             <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
+                             {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
+                             <div className="file-input-preview">
+                                {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="modal-actions" style={{marginTop: '2rem'}}>
+                        <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                        <button type="submit" className="cta-button" disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
+
+// --- Admin/Coach Views ---
+const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const appUrl = window.location.origin;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(appUrl)}`;
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content qr-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Comparte la App con tus Clientes</h3>
+                <p>Los clientes pueden escanear este código QR para acceder a la aplicación en sus teléfonos.</p>
+                <div className="qr-code-container">
+                    <img src={qrCodeUrl} alt="QR Code para la aplicación" />
+                </div>
+                <p className="app-url-display">O comparte este enlace: <a href={appUrl} target="_blank" rel="noopener noreferrer">{appUrl}</a></p>
+                <button onClick={onClose} className="cta-button secondary" style={{ marginTop: '1.5rem' }}>Cerrar</button>
+            </div>
+        </div>
+    );
+};
+
+// FIX: Added missing RequestsView and RequestSection components.
+const RequestSection: React.FC<{
+    title: string;
+    requests: TrainerRequest[];
+    onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
+    onDelete: (id: string) => void;
+}> = ({ title, requests, onUpdateStatus, onDelete }) => {
+    if (requests.length === 0) return null;
+    
+    return (
+        <div className="request-section">
+            <h3>{title} ({requests.length})</h3>
+            <div className="request-list">
+                {requests.map(req => (
+                    <div key={req._id} className={`request-card status-${req.status}`}>
+                        <div className="request-card-header">
+                            <h4>{req.subject}</h4>
+                            <span className="request-date">{new Date(req.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="request-client"><strong>Cliente:</strong> {req.clientName} ({req.clientId})</p>
+                        <p className="request-message">{req.message}</p>
+                        <div className="request-card-actions">
+                            {req.status === 'new' && <button className="action-btn" onClick={() => onUpdateStatus(req._id, 'read')}>Marcar como Leído</button>}
+                            {req.status === 'read' && <button className="action-btn" onClick={() => onUpdateStatus(req._id, 'resolved')}>Marcar como Resuelto</button>}
+                            <button className="action-btn delete" onClick={() => onDelete(req._id)}>Eliminar</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
+        setIsLoading(true);
+        await apiClient.updateRequestStatus(id, status);
+        onUpdateRequest();
+        setIsLoading(false);
+    };
+    
+    const handleDelete = async (id: string) => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar esta solicitud?")) {
+            setIsLoading(true);
+            await apiClient.deleteRequest(id);
+            onUpdateRequest();
+            setIsLoading(false);
+        }
+    };
+    
+    // Sort requests by date, newest first
+    const sortedRequests = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const newRequests = sortedRequests.filter(r => r.status === 'new');
+    const readRequests = sortedRequests.filter(r => r.status === 'read');
+    const resolvedRequests = sortedRequests.filter(r => r.status === 'resolved');
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    }
+    
+    return (
+        <div className="requests-view animated-fade-in">
+             <h2>Bandeja de Entrada de Solicitudes</h2>
+             {requests.length === 0 ? (
+                <div className="placeholder" style={{marginTop: '2rem'}}>No hay solicitudes pendientes.</div>
+             ) : (
+                <>
+                    <RequestSection title="Nuevas Solicitudes" requests={newRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                    <RequestSection title="Solicitudes Leídas" requests={readRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                    <RequestSection title="Solicitudes Resueltas" requests={resolvedRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
+                </>
+             )}
+        </div>
+    );
+};
+
+const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
+    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // UI State
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
+    const [editingExercise, setEditingExercise] = useState<{ group: string; index: number; data: ExerciseDefinition } | null>(null);
+    
+    // Add Form State
+    const [newExerciseName, setNewExerciseName] = useState('');
+    const [newExerciseVideoUrl, setNewExerciseVideoUrl] = useState('');
+    const [newExerciseGroup, setNewExerciseGroup] = useState('');
+
+    const fetchLibrary = async () => {
+        setIsLoading(true);
+        const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+        setLibrary(fetchedLibrary);
+        if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+            const firstGroup = Object.keys(fetchedLibrary)[0];
+            setNewExerciseGroup(firstGroup);
+            setActiveGroup(firstGroup);
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchLibrary();
+    }, [gymId]);
+
+    const handleUpdateAndSaveLibrary = async (newLibrary: ExerciseLibrary) => {
+        setIsSaving(true);
+        const success = await apiClient.saveExerciseLibrary(newLibrary, gymId);
+        if (success) {
+            setLibrary(newLibrary); // Update local state on successful save
+        } else {
+            alert('Error: No se pudieron guardar los cambios.');
+            fetchLibrary(); // Re-fetch to revert to last saved state
+        }
+        setIsSaving(false);
+    };
+    
+    const handleToggleGroup = (group: string) => {
+        setActiveGroup(prev => (prev === group ? null : group));
+    };
+    
+    const handleAddExercise = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newExerciseName.trim() || !newExerciseGroup || !library || isSaving) return;
+        
+        const newExercise: ExerciseDefinition = {
+            name: newExerciseName.trim(),
+            videoUrl: newExerciseVideoUrl.trim(),
+            isEnabled: true,
+        };
+        
+        const newLibrary = { ...library };
+        newLibrary[newExerciseGroup] = [...newLibrary[newExerciseGroup], newExercise].sort((a,b) => a.name.localeCompare(b.name));
+        
+        await handleUpdateAndSaveLibrary(newLibrary);
+        
+        setNewExerciseName('');
+        setNewExerciseVideoUrl('');
+    };
+    
+    const handleDeleteExercise = async (group: string, index: number) => {
+        if (!library || isSaving) return;
+        if (window.confirm(`¿Seguro que quieres eliminar "${library[group][index].name}"?`)) {
+            const newLibrary = { ...library };
+            newLibrary[group].splice(index, 1);
+            await handleUpdateAndSaveLibrary(newLibrary);
+        }
+    };
+    
+    const handleStartEdit = (group: string, index: number) => {
+        if (!library || isSaving) return;
+        setEditingExercise({ group, index, data: { ...library[group][index] } });
+    };
+    
+    const handleCancelEdit = () => setEditingExercise(null);
+
+    const handleUpdateEditingExercise = (field: 'name' | 'videoUrl', value: string) => {
+        if (!editingExercise) return;
+        setEditingExercise({ ...editingExercise, data: { ...editingExercise.data, [field]: value }});
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingExercise || !library || isSaving) return;
+        const { group, index, data } = editingExercise;
+        const newLibrary = { ...library };
+        newLibrary[group][index] = data;
+        await handleUpdateAndSaveLibrary(newLibrary);
+        setEditingExercise(null);
+    };
+
+    const handleToggleEnabled = async (group: string, index: number, isEnabled: boolean) => {
+        if (!library || isSaving) return;
+        const newLibrary = { ...library };
+        newLibrary[group][index].isEnabled = isEnabled;
+        await handleUpdateAndSaveLibrary(newLibrary);
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
+    }
+    if (!library) {
+        return <div className="error-container">No se pudo cargar la biblioteca de ejercicios.</div>
+    }
+
+    return (
+        <div className="library-container animated-fade-in">
+            <div className="main-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h2>Biblioteca de Ejercicios</h2>
+                 <button onClick={onBack} className="back-button" style={{marginRight: '1rem'}}>Volver</button>
+            </div>
+            <div className="library-instructions">
+                <p>Gestiona los ejercicios disponibles para la generación de rutinas. Los cambios se guardan automáticamente.</p>
+            </div>
+
+            <div className="add-exercise-container">
+                <div className="add-exercise-form-wrapper">
+                    <h3>Añadir Nuevo Ejercicio</h3>
+                    <form className="add-exercise-form" onSubmit={handleAddExercise}>
+                        <input 
+                            type="text" 
+                            placeholder="Nombre del Ejercicio" 
+                            value={newExerciseName}
+                            onChange={e => setNewExerciseName(e.target.value)}
+                            required 
+                            disabled={isSaving}
                         />
-                        <button type="submit" disabled={isLoading || (!input.trim() && !image)} aria-label="Enviar mensaje">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                        <input 
+                            type="url" 
+                            placeholder="URL del Video (Opcional)"
+                            value={newExerciseVideoUrl}
+                            onChange={e => setNewExerciseVideoUrl(e.target.value)}
+                            disabled={isSaving}
+                        />
+                         <select value={newExerciseGroup} onChange={e => setNewExerciseGroup(e.target.value)} disabled={isSaving}>
+                            {Object.keys(library).map(group => <option key={group} value={group}>{group}</option>)}
+                        </select>
+                        <button type="submit" disabled={isSaving || !newExerciseName.trim()}>
+                            {isSaving ? '...' : 'Añadir'}
                         </button>
                     </form>
                 </div>
             </div>
-        </div>
-    );
-};
 
-
-// --- Componente de Gráfico de Peso Corporal y IMC ---
-const BodyWeightChart = ({ data }: { data: BodyWeightEntry[] }) => {
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string; type: 'weight' | 'imc' } | null>(null);
-
-    if (!data || data.length < 1) {
-        return <div className="placeholder">Se necesita al menos 1 registro de peso para mostrar el gráfico.</div>;
-    }
-    
-    const width = 500;
-    const height = 300;
-    const margin = { top: 30, right: 50, bottom: 50, left: 50 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
-
-    const weights = data.map(d => d.weight);
-    const imcs = data.map(d => d.imc || 0);
-
-    const maxWeight = Math.max(0, ...weights);
-    const maxImc = Math.max(0, ...imcs);
-
-    const yScaleWeight = (weight: number) => margin.top + innerHeight - ((weight / (maxWeight || 1)) * innerHeight);
-    const yScaleImc = (imc: number) => margin.top + innerHeight - ((imc / (maxImc || 1)) * innerHeight);
-
-    const numEntries = data.length;
-    const groupPadding = 0.2;
-    const groupWidth = innerWidth / numEntries;
-    const barAreaWidth = groupWidth * (1 - groupPadding);
-    const barWidth = barAreaWidth / 2;
-
-    const yAxisTicksWeight = Array.from({ length: 5 }, (_, i) => Math.round((maxWeight / 4) * i));
-    const yAxisTicksImc = Array.from({ length: 5 }, (_, i) => parseFloat(((maxImc / 4) * i).toFixed(1)));
-
-    return (
-        <div className="chart-container body-weight-chart-container">
-            <h4>Evolución del Peso Corporal y IMC</h4>
-            <svg viewBox={`0 0 ${width} ${height}`} className="body-weight-chart" aria-label="Gráfico de evolución de peso corporal e IMC">
-                {/* Y-axis Left (Weight) */}
-                <g className="axis y-axis-left" aria-hidden="true">
-                    {yAxisTicksWeight.map((tick, i) => (
-                        <g key={`y-left-${i}`} transform={`translate(0, ${yScaleWeight(tick)})`}>
-                            <line x1={margin.left} x2={width - margin.right} strokeDasharray="2,2" />
-                            <text x={margin.left - 8} dy="0.32em">{tick}</text>
-                        </g>
-                    ))}
-                    <text transform="rotate(-90)" y="10" x={-(margin.top + innerHeight / 2)} textAnchor="middle" className="axis-label">Peso (kg)</text>
-                </g>
-
-                {/* Y-axis Right (IMC) */}
-                <g className="axis y-axis-right" aria-hidden="true">
-                    {yAxisTicksImc.map((tick, i) => (
-                        <g key={`y-right-${i}`} transform={`translate(0, ${yScaleImc(tick)})`}>
-                            <text x={width - margin.right + 8} dy="0.32em">{tick}</text>
-                        </g>
-                    ))}
-                    <text transform="rotate(90)" y={-(width - 15)} x={margin.top + innerHeight / 2} textAnchor="middle" className="axis-label">IMC</text>
-                </g>
-                
-                {/* X-axis */}
-                <g className="axis x-axis" aria-hidden="true">
-                    {data.map((d, i) => {
-                        const groupXStart = margin.left + i * groupWidth;
-                        return (
-                            <text key={`x-label-${i}`} x={groupXStart + groupWidth / 2} y={height - margin.bottom + 20} textAnchor="middle">
-                                {new Date(d.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
-                            </text>
-                        );
-                    })}
-                </g>
-
-                {/* Bars */}
-                <g className="chart-bars">
-                    {data.map((d, i) => {
-                        const groupXStart = margin.left + i * groupWidth;
-                        const paddingOffset = (groupWidth * groupPadding) / 2;
-                        const x1 = groupXStart + paddingOffset;
-                        const x2 = x1 + barWidth;
-                        const yWeight = yScaleWeight(d.weight);
-                        const yImc = yScaleImc(d.imc || 0);
-                        const barHeightWeight = (innerHeight + margin.top) - yWeight;
-                        const barHeightImc = (innerHeight + margin.top) - yImc;
-
-                        return (
-                            <g key={i}>
-                                <rect
-                                    className="bar-body-weight"
-                                    x={x1}
-                                    y={yWeight}
-                                    width={barWidth}
-                                    height={barHeightWeight > 0 ? barHeightWeight : 0}
-                                    onMouseEnter={() => setTooltip({ x: x1 + barWidth / 2, y: yWeight, content: `${d.weight} kg`, type: 'weight' })}
-                                    onMouseLeave={() => setTooltip(null)}
-                                    aria-label={`Registro ${i + 1}: ${d.weight} kg`}
-                                />
-                                {d.imc && (
-                                    <rect
-                                        className={`bar-imc ${d.imcCategoryClass || ''}`}
-                                        x={x2}
-                                        y={yImc}
-                                        width={barWidth}
-                                        height={barHeightImc > 0 ? barHeightImc : 0}
-                                        onMouseEnter={() => setTooltip({ x: x2 + barWidth / 2, y: yImc, content: `${d.imc.toFixed(1)} IMC`, type: 'imc' })}
-                                        onMouseLeave={() => setTooltip(null)}
-                                        aria-label={`Registro ${i + 1}: ${d.imc.toFixed(1)} IMC`}
-                                    />
-                                )}
-                            </g>
-                        );
-                    })}
-                </g>
-
-                {/* Tooltip */}
-                {tooltip && (
-                    <g transform={`translate(${tooltip.x}, ${tooltip.y})`} className="chart-tooltip" aria-hidden="true">
-                        <rect x="-35" y="-35" width="70" height="25" rx="5" className={`tooltip-bg ${tooltip.type}`} />
-                        <text x="0" y="-22" textAnchor="middle" className="tooltip-text">{tooltip.content}</text>
-                    </g>
-                )}
-            </svg>
-            <div className="chart-legend">
-                <span className="legend-item"><span className="legend-color-box body-weight"></span> Peso (kg)</span>
-                <span className="legend-item"><span className="legend-color-box imc"></span> IMC (Semáforo)</span>
-            </div>
-        </div>
-    );
-};
-
-// --- Componente de Gráfico de Progreso de Ejercicios ---
-const ExerciseProgressChart = ({ data }: { data: ProgressLogEntry[] }) => {
-    const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string; type: 'weight' | 'reps' } | null>(null);
-
-    if (!data || data.length < 1) {
-        return <div className="placeholder">Se necesita al menos 1 registro para mostrar el gráfico.</div>;
-    }
-
-    const width = 500;
-    const height = 300;
-    const margin = { top: 30, right: 50, bottom: 50, left: 50 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
-
-    const weights = data.map(d => d.weight);
-    const reps = data.map(d => d.repetitions);
-
-    const maxWeight = Math.max(0, ...weights);
-    const maxReps = Math.max(0, ...reps);
-
-    const yScaleWeight = (weight: number) => margin.top + innerHeight - ((weight / (maxWeight || 1)) * innerHeight);
-    const yScaleReps = (rep: number) => margin.top + innerHeight - ((rep / (maxReps || 1)) * innerHeight);
-
-    const numEntries = data.length;
-    const groupPadding = 0.2;
-    const groupWidth = innerWidth / numEntries;
-    const barAreaWidth = groupWidth * (1 - groupPadding);
-    const barWidth = barAreaWidth / 2;
-
-    const yAxisTicksWeight = Array.from({ length: 5 }, (_, i) => Math.round((maxWeight / 4) * i));
-    const yAxisTicksReps = Array.from({ length: 5 }, (_, i) => Math.round((maxReps / 4) * i));
-
-    return (
-        <div className="chart-container exercise-chart">
-            <h4>Progreso de Peso y Repeticiones</h4>
-            <svg viewBox={`0 0 ${width} ${height}`} className="exercise-progress-chart" aria-label="Gráfico de progreso de peso y repeticiones del ejercicio">
-                {/* Y-axis Left (Weight) */}
-                <g className="axis y-axis-left" aria-hidden="true">
-                    {yAxisTicksWeight.map((tick, i) => (
-                        <g key={`y-left-${i}`} transform={`translate(0, ${yScaleWeight(tick)})`}>
-                            <line x1={margin.left} x2={width - margin.right} strokeDasharray="2,2" />
-                            <text x={margin.left - 8} dy="0.32em">{tick}</text>
-                        </g>
-                    ))}
-                    <text transform="rotate(-90)" y="10" x={-(margin.top + innerHeight / 2)} textAnchor="middle" className="axis-label">Peso (kg)</text>
-                </g>
-
-                {/* Y-axis Right (Reps) */}
-                <g className="axis y-axis-right" aria-hidden="true">
-                    {yAxisTicksReps.map((tick, i) => (
-                        <g key={`y-right-${i}`} transform={`translate(0, ${yScaleReps(tick)})`}>
-                            <text x={width - margin.right + 8} dy="0.32em">{tick}</text>
-                        </g>
-                    ))}
-                    <text transform="rotate(90)" y={-(width - 15)} x={margin.top + innerHeight / 2} textAnchor="middle" className="axis-label">Reps</text>
-                </g>
-
-                {/* X-axis */}
-                <g className="axis x-axis" aria-hidden="true">
-                    {data.map((d, i) => {
-                        const groupXStart = margin.left + i * groupWidth;
-                        return (
-                            <text key={`x-label-${i}`} x={groupXStart + groupWidth / 2} y={height - margin.bottom + 20} textAnchor="middle">
-                                {new Date(d.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
-                            </text>
-                        );
-                    })}
-                </g>
-
-                {/* Bars */}
-                <g className="chart-bars">
-                    {data.map((d, i) => {
-                        const groupXStart = margin.left + i * groupWidth;
-                        const paddingOffset = (groupWidth * groupPadding) / 2;
-                        const x1 = groupXStart + paddingOffset;
-                        const x2 = x1 + barWidth;
-                        const yWeight = yScaleWeight(d.weight);
-                        const yReps = yScaleReps(d.repetitions);
-                        const barHeightWeight = (innerHeight + margin.top) - yWeight;
-                        const barHeightReps = (innerHeight + margin.top) - yReps;
-
-                        return (
-                            <g key={i}>
-                                <rect
-                                    className="bar-weight"
-                                    x={x1}
-                                    y={yWeight}
-                                    width={barWidth}
-                                    height={barHeightWeight > 0 ? barHeightWeight : 0}
-                                    onMouseEnter={() => setTooltip({ x: x1 + barWidth / 2, y: yWeight, content: `${d.weight} kg`, type: 'weight' })}
-                                    onMouseLeave={() => setTooltip(null)}
-                                    aria-label={`Registro ${i + 1}: ${d.weight} kg`}
-                                />
-                                <rect
-                                    className="bar-reps"
-                                    x={x2}
-                                    y={yReps}
-                                    width={barWidth}
-                                    height={barHeightReps > 0 ? barHeightReps : 0}
-                                    onMouseEnter={() => setTooltip({ x: x2 + barWidth / 2, y: yReps, content: `${d.repetitions} reps`, type: 'reps' })}
-                                    onMouseLeave={() => setTooltip(null)}
-                                     aria-label={`Registro ${i + 1}: ${d.repetitions} repeticiones`}
-                                />
-                            </g>
-                        );
-                    })}
-                </g>
-
-                {/* Tooltip */}
-                {tooltip && (
-                    <g transform={`translate(${tooltip.x}, ${tooltip.y})`} className="chart-tooltip" aria-hidden="true">
-                        <rect x="-35" y="-35" width="70" height="25" rx="5" className={`tooltip-bg ${tooltip.type}`} />
-                        <text x="0" y="-22" textAnchor="middle" className="tooltip-text">{tooltip.content}</text>
-                    </g>
-                )}
-            </svg>
-            <div className="chart-legend">
-                <span className="legend-item"><span className="legend-color-box weight"></span> Peso (kg)</span>
-                <span className="legend-item"><span className="legend-color-box reps"></span> Repeticiones</span>
-            </div>
-        </div>
-    );
-};
-
-
-// --- ProgressView Component (replaces ProgressList) ---
-interface ProgressViewProps {
-    progressLog: ProgressLog;
-    bodyWeightLog?: BodyWeightEntry[];
-}
-const ProgressView = ({ progressLog, bodyWeightLog }: ProgressViewProps) => {
-    const [activeProgressTab, setActiveProgressTab] = useState('exercises');
-
-    const availableExercises = useMemo(() => Object.keys(progressLog).filter(key => progressLog[key]?.length > 0), [progressLog]);
-    const [selectedExercise, setSelectedExercise] = useState(availableExercises[0] || '');
-
-    useEffect(() => {
-        if (!selectedExercise && availableExercises.length > 0) {
-            setSelectedExercise(availableExercises[0]);
-        }
-    }, [availableExercises, selectedExercise]);
-    
-    const hasExerciseData = availableExercises.length > 0;
-    const hasWeightData = bodyWeightLog && bodyWeightLog.length > 0;
-
-    useEffect(() => {
-        if (!hasExerciseData && hasWeightData) {
-            setActiveProgressTab('weight');
-        } else {
-             setActiveProgressTab('exercises');
-        }
-    }, [hasExerciseData, hasWeightData]);
-
-    const exerciseDataForChart = useMemo(() => {
-        if (!selectedExercise || !progressLog[selectedExercise]) return [];
-        return progressLog[selectedExercise]; // Chronological order for chart
-    }, [selectedExercise, progressLog]);
-
-    const exerciseHistoryForList = useMemo(() => {
-        return [...exerciseDataForChart].reverse(); // Reversed for list display
-    }, [exerciseDataForChart]);
-
-
-    if (!hasExerciseData && !hasWeightData) {
-        return <div className="placeholder">No hay datos de progreso registrados todavía. ¡Empezá a registrar tu entrenamiento y tu peso!</div>;
-    }
-    
-    return (
-        <div className="progress-view-container">
-            <div className="progress-tabs-nav">
-                {hasExerciseData && <button onClick={() => setActiveProgressTab('exercises')} className={`progress-tab-button ${activeProgressTab === 'exercises' ? 'active' : ''}`}>Progreso de Ejercicios</button>}
-                {hasWeightData && <button onClick={() => setActiveProgressTab('weight')} className={`progress-tab-button ${activeProgressTab === 'weight' ? 'active' : ''}`}>Progreso Peso Corporal</button>}
-            </div>
-
-            {activeProgressTab === 'exercises' && hasExerciseData && (
-                <div className="exercise-progress-view animated-fade-in">
-                    <div className="form-group">
-                        <label htmlFor="exercise-select">Seleccioná un ejercicio para ver tu progreso:</label>
-                        <select
-                            id="exercise-select"
-                            className="exercise-select-dropdown"
-                            value={selectedExercise}
-                            onChange={e => setSelectedExercise(e.target.value)}
-                        >
-                            {availableExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
-                        </select>
-                    </div>
-
-                    {exerciseDataForChart.length > 0 && <ExerciseProgressChart data={exerciseDataForChart} />}
-
-                    <div className="progress-list-container">
-                        <h3>Historial de {selectedExercise}</h3>
-                        <div className="progress-list">
-                            <div className="progress-list-header">
-                                <span>Fecha y Hora</span>
-                                <span>Peso (kg)</span>
-                                <span>Repeticiones</span>
-                            </div>
-                            {exerciseHistoryForList.map((entry, index) => (
-                                <div key={index} className="progress-list-row">
-                                    <span>{new Date(entry.date).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                    <span>{entry.weight} kg</span>
-                                    <span>{entry.repetitions}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {activeProgressTab === 'weight' && hasWeightData && (
-                 <div className="weight-progress-view animated-fade-in">
-                     <BodyWeightChart data={bodyWeightLog!} />
-                      <div className="progress-list-container">
-                          <h3>Historial de Peso Corporal</h3>
-                          <div className="progress-list">
-                              <div className="progress-list-header weight">
-                                  <span>Fecha y Hora</span>
-                                  <span>Peso (kg)</span>
-                                  <span>IMC</span>
-                              </div>
-                              {[...bodyWeightLog!].reverse().map((entry, index) => (
-                                  <div key={index} className="progress-list-row weight">
-                                      <span>{new Date(entry.date).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                      <span>{entry.weight} kg</span>
-                                      <span className={entry.imcCategoryClass || ''}>{entry.imc ? entry.imc.toFixed(1) : 'N/A'}</span>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                 </div>
-            )}
-        </div>
-    );
-};
-
-// --- Agreement View Component ---
-const AgreementView = ({ onAccept, onDecline }: { onAccept: () => void; onDecline: () => void; }) => {
-    const [isChecked, setIsChecked] = useState(false);
-    const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-
-    const termsText = `Última actualización: ${today}
-
-Bienvenido a la plataforma digital de ScorpionGym, ubicada en la ciudad de Villa Mercedes. Al acceder y utilizar este sistema, usted acepta los siguientes términos y condiciones. Si no está de acuerdo con alguno de ellos, por favor no utilice el servicio.
-
-1. Objeto del servicio
-Este sistema ofrece rutinas de entrenamiento y recomendaciones nutricionales generadas por algoritmos automatizados, en base a los datos ingresados por el usuario. El objetivo es brindar orientación general para mejorar el bienestar físico.
-
-2. Limitación de responsabilidad
-- Las rutinas y recomendaciones nutricionales no constituyen diagnóstico médico ni tratamiento personalizado.
-- El usuario reconoce que debe consultar a profesionales de la salud antes de iniciar cualquier plan de entrenamiento o dieta, especialmente si presenta condiciones médicas preexistentes.
-- ScorpionGym no se responsabiliza por daños, lesiones o perjuicios derivados del uso de la información proporcionada por la plataforma.
-
-3. Acceso y expiración de planes
-- Los planes generados tienen una duración limitada y expiran automáticamente en la fecha indicada.
-- Una vez vencido el plan, el usuario deberá solicitar uno nuevo a través del personal autorizado.
-- El acceso a la rutina o dieta está restringido al usuario registrado y no puede compartirse, copiarse ni reproducirse sin autorización.
-
-4. Propiedad intelectual
-- Todos los contenidos, algoritmos, rutinas y diseños del sistema son propiedad de ScorpionGym.
-- Está prohibida su reproducción, distribución o uso comercial sin autorización expresa.
-
-5. Protección de datos personales
-- La plataforma recopila datos físicos y objetivos de entrenamiento con fines de personalización.
-- Estos datos se almacenan de forma segura y no se comparten con terceros sin consentimiento.
-- El usuario puede solicitar la modificación o eliminación de sus datos conforme a la Ley 25.326 de Protección de Datos Personales.
-
-6. Modificaciones
-ScorpionGym se reserva el derecho de modificar estos términos en cualquier momento. Las actualizaciones serán publicadas en esta misma sección y entrarán en vigencia desde su publicación.
-
-7. Jurisdicción
-Este acuerdo se rige por las leyes de la República Argentina. Cualquier controversia será resuelta por los tribunales competentes de la ciudad de Villa Mercedes.
-
-Al utilizar esta plataforma, usted declara haber leído, comprendido y aceptado estos términos y condiciones.`;
-
-    const privacyText = `Última actualización: ${today}
-
-En ScorpionGym, respetamos y protegemos la privacidad de nuestros usuarios. Esta política explica cómo recopilamos, usamos y protegemos sus datos personales.
-
-1. Datos que recopilamos
-- Información física: edad, peso, altura, nivel de entrenamiento.
-- Objetivos personales: pérdida de grasa, ganancia muscular, mantenimiento.
-- Datos de progreso: carga utilizada, frecuencia, sensaciones, recuperación.
-- Información de contacto (si aplica): nombre, correo electrónico, teléfono.
-
-2. Finalidad del uso
-- Personalizar rutinas y recomendaciones.
-- Realizar seguimiento del progreso físico.
-- Mejorar la calidad del servicio y la experiencia del usuario.
-- Contactar al usuario en caso de actualizaciones o vencimiento de planes.
-
-3. Seguridad de los datos
-- Los datos se almacenan en servidores seguros con acceso restringido.
-- Se aplican medidas de protección como encriptación, autenticación y control de accesos.
-- No se comparten con terceros sin consentimiento expreso del usuario.
-
-4. Derechos del usuario
-- Acceder a sus datos personales.
-- Solicitar la rectificación, actualización o eliminación de sus datos.
-- Retirar el consentimiento para el uso de sus datos en cualquier momento.
-
-5. Modificaciones
-ScorpionGym se reserva el derecho de modificar esta política. Las actualizaciones serán publicadas en esta sección.
-
-6. Contacto
-Para consultas sobre esta política o sobre sus datos personales, puede comunicarse con nosotros en [Contacto de ScorpionGym].`;
-
-    return (
-        <div className="agreement-container">
-            <h1>Acuerdos de Uso y Privacidad</h1>
-            <p style={{textAlign: "center", color: "var(--text-secondary-color)", marginTop: "-1.5rem"}}>Para continuar, por favor leé y aceptá los siguientes términos.</p>
-            
-            <h2>📝 Términos y Condiciones de Uso</h2>
-            <div className="terms-box">
-                <p>{termsText}</p>
-            </div>
-            
-            <h2>🔐 Política de Privacidad</h2>
-             <div className="terms-box">
-                <p>{privacyText}</p>
-            </div>
-            
-            <div className="agreement-actions">
-                <div className="agreement-checkbox">
-                    <input id="terms-check" type="checkbox" checked={isChecked} onChange={() => setIsChecked(!isChecked)} />
-                    <label htmlFor="terms-check">He leído y acepto los Términos y Condiciones y la Política de Privacidad.</label>
-                </div>
-                <div className="agreement-buttons">
-                    <button className="cta-button secondary" onClick={onDecline}>Rechazar y Salir</button>
-                    <button className="cta-button" onClick={onAccept} disabled={!isChecked}>Aceptar y Continuar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-// 4. Portal del Cliente (Vista de solo lectura)
-const ClientPortal = ({ clientDni, onLogout, ai }: { clientDni: string, onLogout: () => void, ai: GoogleGenAI | null }) => {
-    const [clientData, setClientData] = useState<ClientData | null>(null);
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
-    const [activeTab, setActiveTab] = useState<'training' | 'nutrition' | 'progress'>('training');
-    const [selectedPhaseTabIndex, setSelectedPhaseTabIndex] = useState(0);
-    const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-    const [dailyWeights, setDailyWeights] = useState<Record<string, string>>({});
-    const [dailyReps, setDailyReps] = useState<Record<string, string>>({});
-    const [saveProgressText, setSaveProgressText] = useState("Guardar Progreso");
-    const [currentBodyWeight, setCurrentBodyWeight] = useState('');
-    const [logWeightText, setLogWeightText] = useState("Registrar");
-    const [isChatOpen, setIsChatOpen] = useState(false);
-
-
-    useEffect(() => {
-        const loadInitialData = async () => {
-          if (!clientDni) return;
-          const data = await apiClient.getClientData(clientDni);
-          setClientData(data);
-          if (data?.gymId) {
-              const library = await apiClient.getExerciseLibrary(data.gymId);
-              setExerciseLibrary(library);
-          }
-        };
-        loadInitialData();
-    }, [clientDni]);
-    
-    const updateClientDataLocally = (updates: Partial<ClientData>) => {
-        setClientData(prev => prev ? { ...prev, ...updates } : null);
-    };
-
-    const flatExerciseLibrary = useMemo(() => Object.values(exerciseLibrary).flat(), [exerciseLibrary]);
-
-    useEffect(() => {
-        setSelectedDayIndex(0);
-    }, [selectedPhaseTabIndex]);
-    
-    const { profile, routine, dietPlan, progressLog, bodyWeightLog, termsAccepted } = clientData || {};
-
-    const { bmi, bmiCategory } = useMemo(() => {
-        if (!profile?.weight || !profile?.height) return { bmi: null, bmiCategory: 'N/A' };
-        const { bmi, category } = getBmiDetails(parseFloat(profile.weight), parseFloat(profile.height));
-        return { bmi, bmiCategory: category };
-    }, [profile?.weight, profile?.height]);
-
-    const targetWeight = useMemo(() => {
-        if (!profile?.weight || !profile?.goal || !routine?.totalDurationWeeks) return null;
-        const currentWeight = parseFloat(profile.weight);
-        if (isNaN(currentWeight) || currentWeight <= 0) return null;
-        const { goal } = profile;
-        const { totalDurationWeeks } = routine;
-        let target;
-        if (goal === 'Pérdida de grasa') {
-            const weeklyLoss = currentWeight * 0.005;
-            target = currentWeight - (weeklyLoss * totalDurationWeeks);
-        } else if (goal === 'Hipertrofia') {
-            const weeklyGain = 0.2;
-            target = currentWeight + (weeklyGain * totalDurationWeeks);
-        } else {
-            target = currentWeight;
-        }
-        return target > 0 ? target : null;
-    }, [profile, routine]);
-
-
-    const handleWeightChange = (exerciseName: string, weight: string) => {
-        setDailyWeights(prev => ({ ...prev, [exerciseName]: weight }));
-    };
-
-    const handleRepChange = (exerciseName: string, reps: string) => {
-        setDailyReps(prev => ({ ...prev, [exerciseName]: reps }));
-    };
-
-    const handleLogBodyWeight = async () => {
-        if (!clientData || !clientDni || !currentBodyWeight || isNaN(parseFloat(currentBodyWeight)) || !profile?.height) return;
-
-        const now = new Date().toISOString();
-        const weight = parseFloat(currentBodyWeight);
-        const height = parseFloat(profile.height);
-        const { bmi, categoryClass } = getBmiDetails(weight, height);
-
-        const newLogEntry: BodyWeightEntry = { date: now, weight: weight, imc: bmi ?? undefined, imcCategoryClass: categoryClass };
-
-        const existingLog: BodyWeightEntry[] = clientData.bodyWeightLog ? [...clientData.bodyWeightLog] : [];
-        existingLog.push(newLogEntry);
-        existingLog.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        const updatedClientData: Partial<ClientData> = { bodyWeightLog: existingLog };
-        const success = await apiClient.saveClientData(clientDni, updatedClientData);
-        if (success) {
-            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
-            setCurrentBodyWeight('');
-            setLogWeightText("✓");
-            setTimeout(() => setLogWeightText("Registrar"), 2000);
-        }
-    };
-
-    const handleSaveProgress = async () => {
-        if (!clientData || !clientDni) return;
-
-        const now = new Date().toISOString();
-        const newProgressLog: ProgressLog = JSON.parse(JSON.stringify(clientData.progressLog || {}));
-        let progressWasSaved = false;
-
-        const exercisesToLog = new Set([...Object.keys(dailyWeights), ...Object.keys(dailyReps)]);
-
-        exercisesToLog.forEach(exerciseName => {
-            const weight = dailyWeights[exerciseName];
-            const reps = dailyReps[exerciseName];
-
-            if (!weight || isNaN(parseFloat(weight)) || !reps || isNaN(parseInt(reps, 10))) return;
-
-            if (!newProgressLog[exerciseName]) newProgressLog[exerciseName] = [];
-            
-            newProgressLog[exerciseName].push({ date: now, weight: parseFloat(weight), repetitions: parseInt(reps, 10) });
-            newProgressLog[exerciseName].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            progressWasSaved = true;
-        });
-
-        if (progressWasSaved) {
-            const updatedClientData = { progressLog: newProgressLog };
-            const success = await apiClient.saveClientData(clientDni, updatedClientData);
-            if (success) {
-                setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
-                setDailyWeights({});
-                setDailyReps({});
-                setSaveProgressText("Guardado ✓");
-                setTimeout(() => setSaveProgressText("Guardar Progreso"), 2000);
-            }
-        }
-    };
-    
-    const handleAcceptTerms = async () => {
-        if (!clientDni) return;
-        const updatedClientData = { termsAccepted: true };
-        const success = await apiClient.saveClientData(clientDni, updatedClientData);
-        if (success) {
-            setClientData(prev => prev ? { ...prev, ...updatedClientData } as ClientData : null);
-        }
-    };
-
-    const routinePlanInfo = useMemo(() => {
-        if (!clientData?.routine || !clientData?.routineGeneratedDate) return null;
-        const startDate = new Date(clientData.routineGeneratedDate);
-        const totalDurationMillis = clientData.routine.totalDurationWeeks * 7 * 24 * 60 * 60 * 1000;
-        const expirationDate = new Date(startDate.getTime() + totalDurationMillis);
-        const isExpired = new Date() > expirationDate;
-        return { expirationDate, isExpired };
-    }, [clientData]);
-
-    if (!clientData || !profile) return <div className="client-view-container"><div className="spinner"></div></div>;
-    
-    if (!termsAccepted) {
-        return <AgreementView onAccept={handleAcceptTerms} onDecline={onLogout} />;
-    }
-
-    const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
-    const selectedDay = selectedPhase?.routine?.dias?.[selectedDayIndex];
-    const hasProgressData = (progressLog && Object.keys(progressLog).some(key => progressLog[key].length > 0)) || (bodyWeightLog && bodyWeightLog.length > 0);
-    const lastWeightEntry = bodyWeightLog && bodyWeightLog.length > 0 ? bodyWeightLog[bodyWeightLog.length-1] : null;
-
-
-    if (routinePlanInfo?.isExpired) {
-        return (
-            <div className="client-view-container expired-view">
-                 <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-                <h2>Tu Plan Expiró</h2>
-                <p>¡Bien ahí! Completaste tu ciclo. 💪</p>
-                <p>Por favor, contactá a tu entrenador para que te arme un nuevo plan.</p>
-            </div>
-        );
-    }
-    
-    return (
-        <div className="client-view-container">
-            <header className="plan-header">
-                <h1>Plan para {profile.name}</h1>
-                {routinePlanInfo && <p>Válido hasta el {routinePlanInfo.expirationDate.toLocaleDateString()}.</p>}
-                {targetWeight !== null && routine && (
-                  <p className="target-weight-info">
-                      Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg
-                  </p>
-                )}
-                <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-            </header>
-            
-            {bmi !== null && (
-              <div className="bmi-display client-bmi">
-                  <span>IMC Actual: <strong>{bmi.toFixed(1)}</strong> ({bmiCategory})</span>
-              </div>
-            )}
-            
-            <div className="body-weight-logger">
-                <label htmlFor="body-weight-input">¿Tu peso corporal de hoy?</label>
-                <div className="input-group">
-                    <input 
-                        id="body-weight-input"
-                        type="number" 
-                        value={currentBodyWeight}
-                        onChange={e => setCurrentBodyWeight(e.target.value)}
-                        placeholder={lastWeightEntry ? `Último: ${lastWeightEntry.weight}kg` : "kg"}
-                        aria-label="Peso corporal en kilogramos"
-                    />
-                    <button onClick={handleLogBodyWeight} className={`log-button ${logWeightText === '✓' ? 'saved' : ''}`}>
-                        {logWeightText}
-                    </button>
-                </div>
-            </div>
-
-            <div className="main-tabs-nav">
-                <button onClick={() => setActiveTab('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
-                {dietPlan && <button onClick={() => setActiveTab('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>}
-                {hasProgressData && <button onClick={() => setActiveTab('progress')} className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`}>Progreso</button>}
-            </div>
-
-            {activeTab === 'training' && routine && (
-                <div className="plan-container">
-                     <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p></header>
-                     <div className="phases-container">
-                        <div className="accordion-phases">
-                            {routine.phases.map((phase, index) => (
-                                <div key={index} className="accordion-item">
-                                    <button
-                                        className={`accordion-header ${index === selectedPhaseTabIndex ? 'active' : ''}`}
-                                        onClick={() => setSelectedPhaseTabIndex(prev => prev === index ? -1 : index)}
-                                        aria-expanded={index === selectedPhaseTabIndex}
-                                    >
-                                        <span>{phase.phaseName} ({phase.durationWeeks} sem)</span>
-                                        <span className="accordion-header-icon">+</span>
-                                    </button>
-                                    <div className={`accordion-content ${index === selectedPhaseTabIndex ? 'open' : ''}`}>
-                                         {index === selectedPhaseTabIndex && (
-                                            <div className="phase-tab-content">
-                                                 <div className="day-tabs-nav">
-                                                     {phase.routine.dias.map((day, dayIndex) => (
-                                                         <button 
-                                                             key={dayIndex} 
-                                                             className={`day-tab-button ${dayIndex === selectedDayIndex ? 'active' : ''}`}
-                                                             onClick={() => setSelectedDayIndex(dayIndex)}>
-                                                             {day.dia}
-                                                         </button>
-                                                     ))}
-                                                 </div>
-                                                 {selectedDay && (
-                                                    <div className="routine-plan">
-                                                         <div className="day-card animated-fade-in">
-                                                           <h4>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h4>
-                                                           <ul className="exercise-list">
-                                                               {selectedDay.ejercicios.map((exercise, i) => {
-                                                                    const history = progressLog?.[exercise.nombre] || [];
-                                                                    const lastEntry = history.length > 0 ? history[history.length - 1] : null;
-                                                                    const lastWeight = lastEntry ? `Últ.: ${lastEntry.weight}kg` : 'kg';
-                                                                    const lastReps = lastEntry ? `Últ.: ${lastEntry.repetitions}` : 'reps';
-                                                                    const videoLink = flatExerciseLibrary.find(def => def.name === exercise.nombre)?.youtubeLink;
-            
-                                                                    return (
-                                                                    <li key={i} className="exercise-item">
-                                                                        <div className="exercise-name-wrapper">
-                                                                            <p className="exercise-name">{exercise.nombre}</p>
-                                                                            {videoLink && (
-                                                                              <a href={videoLink} target="_blank" rel="noopener noreferrer" className="video-link" aria-label={`Ver video de ${exercise.nombre}`}>
-                                                                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
-                                                                              </a>
-                                                                            )}
-                                                                        </div>
-                                                                       <div className="exercise-details">
-                                                                           <span>Series: {exercise.series}</span>
-                                                                           <span>Reps: {exercise.repeticiones}</span>
-                                                                           <span>Descanso: {exercise.descanso}s</span>
-                                                                       </div>
-                                                                        <div className="exercise-tracking">
-                                                                            <div>
-                                                                                <label htmlFor={`weight-${i}`}>Peso (kg)</label>
-                                                                                <input 
-                                                                                    id={`weight-${i}`}
-                                                                                    type="number" 
-                                                                                    className="weight-input"
-                                                                                    placeholder={lastWeight}
-                                                                                    value={dailyWeights[exercise.nombre] || ''}
-                                                                                    onChange={(e) => handleWeightChange(exercise.nombre, e.target.value)}
-                                                                                />
-                                                                            </div>
-                                                                            <div>
-                                                                                <label htmlFor={`reps-${i}`}>Repeticiones</label>
-                                                                                <input 
-                                                                                    id={`reps-${i}`}
-                                                                                    type="number" 
-                                                                                    className="reps-input"
-                                                                                    placeholder={lastReps}
-                                                                                    value={dailyReps[exercise.nombre] || ''}
-                                                                                    onChange={(e) => handleRepChange(exercise.nombre, e.target.value)}
-                                                                                />
-                                                                            </div>
-                                                                        </div>
-                                                                       {exercise.tecnicaAvanzada && (
-                                                                           <div className="advanced-technique">
-                                                                               <span>⚡️</span> {exercise.tecnicaAvanzada}
-                                                                           </div>
-                                                                       )}
-                                                                   </li>
-                                                               )})}
-                                                           </ul>
-                                                           <p className="cardio-note">{selectedDay.cardio}</p>
-                                                           <button className={`save-progress-button ${saveProgressText === 'Guardado ✓' ? 'saved' : ''}`} onClick={handleSaveProgress}>
-                                                                {saveProgressText}
-                                                           </button>
-                                                         </div>
-                                                    </div>
-                                                 )}
-                                            </div>
-                                         )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                     </div>
-                </div>
-            )}
-            
-            {activeTab === 'nutrition' && dietPlan && (
-                 <div className="diet-plan-container client-view">
-                      <h2>{dietPlan.planTitle}</h2>
-                      <div className="diet-summary">
-                          <div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div>
-                          <div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div>
-                          <div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div>
-                          <div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div>
-                      </div>
-                      <div className="meals-grid">
-                          {dietPlan.meals?.map((meal, index) => (
-                              <div key={index} className="meal-card">
-                                  <h4>{meal.mealName}</h4>
-                                  <ul>
-                                      {meal.foodItems?.map((item, i) => (
-                                          <li key={i}>{item.food} <span>({item.amount})</span></li>
-                                      ))}
-                                  </ul>
-                              </div>
-                          ))}
-                      </div>
-                      {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (
-                          <div className="recommendations-section">
-                              <h4>💡 Recomendaciones clave</h4>
-                              <ul>
-                                  {dietPlan.recommendations.map((rec, i) => (
-                                      <li key={i}>{rec}</li>
-                                  ))}
-                              </ul>
-                          </div>
-                      )}
-                </div>
-            )}
-
-            {activeTab === 'progress' && (
-                <ProgressView progressLog={progressLog} bodyWeightLog={bodyWeightLog} />
-            )}
-
-            <button className="chat-fab" onClick={() => setIsChatOpen(true)} aria-label="Abrir chat de asistencia">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"></path></svg>
-            </button>
-            <ChatAssistantModal isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} ai={ai} clientData={clientData} onUpdateClientData={updateClientDataLocally} />
-        </div>
-    );
-};
-
-// 5. Panel de Clientes para el Gimnasio
-const ClientDashboard = ({ clients, isSelectionMode, selectedClients, onClientSelect, onSelectionChange }: {
-    clients: ClientListItem[];
-    isSelectionMode: boolean;
-    selectedClients: Set<string>;
-    onClientSelect: (dni: string) => void;
-    onSelectionChange: (dni: string) => void;
-}) => {
-    
-    const handleCardClick = (e: React.MouseEvent<HTMLDivElement>, client: ClientListItem) => {
-        if (isSelectionMode) {
-             onSelectionChange(client.dni);
-        } else {
-             onClientSelect(client.dni);
-        }
-    };
-    
-    const handleCheckboxClick = (e: React.MouseEvent<HTMLInputElement>, dni: string) => {
-        e.stopPropagation();
-        onSelectionChange(dni);
-    };
-
-    return (
-        <div className="client-list">
-            {clients.length > 0 ? clients.map(client => (
-                <div 
-                    key={client.dni} 
-                    className={`client-card ${isSelectionMode ? 'selection-mode' : ''} ${selectedClients.has(client.dni) ? 'selected' : ''}`}
-                    onClick={(e) => handleCardClick(e, client)}
-                >
-                     {isSelectionMode && (
-                        <input 
-                            type="checkbox" 
-                            className="client-selection-checkbox" 
-                            checked={selectedClients.has(client.dni)}
-                            onClick={(e) => handleCheckboxClick(e, client.dni)}
-                            readOnly
-                        />
-                    )}
-                    <h3>{client.profile?.name || `DNI: ${client.dni}`}</h3>
-                    <p>DNI: {client.dni}</p>
-                    <p>Nivel: {client.profile?.level || 'N/A'}</p>
-                    <p>Plan actual: {client.planName}</p>
-                </div>
-            )) : <p>No hay clientes en esta vista.</p>}
-        </div>
-    );
-};
-
-// 6. Gestor de la Biblioteca de Ejercicios para el Gimnasio
-const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSave: (library: ExerciseLibrary, gymId: string) => Promise<boolean>, onBack: () => void }) => {
-    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
-    const [originalLibrary, setOriginalLibrary] = useState<ExerciseLibrary | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [saveButtonText, setSaveButtonText] = useState("Guardar Cambios");
-    const [newExerciseName, setNewExerciseName] = useState('');
-    const [selectedMuscleGroup, setSelectedMuscleGroup] = useState('');
-    
-    const [editingExercise, setEditingExercise] = useState<{ group: string; index: number } | null>(null);
-    const [editingText, setEditingText] = useState('');
-    const [deleteConfirmation, setDeleteConfirmation] = useState<{ group: string; index: number; name: string } | null>(null);
-    const [isUnsavedChangesModalOpen, setUnsavedChangesModalOpen] = useState(false);
-    const [openGroup, setOpenGroup] = useState<string | null>(null);
-    
-    const isDirty = useMemo(() => {
-        if (!library || !originalLibrary) return false;
-        return JSON.stringify(library) !== JSON.stringify(originalLibrary);
-    }, [library, originalLibrary]);
-
-    useEffect(() => {
-        const fetchLibrary = async () => {
-            setIsLoading(true);
-            const data = await apiClient.getExerciseLibrary(gymId);
-             if (data && Object.keys(data).length > 0) {
-                const deepCopy = JSON.parse(JSON.stringify(data));
-                setLibrary(data);
-                setOriginalLibrary(deepCopy);
-                const firstGroup = Object.keys(data)[0];
-                setSelectedMuscleGroup(firstGroup || '');
-                setOpenGroup(firstGroup || null);
-            } else {
-                setLibrary({});
-                setOriginalLibrary({});
-            }
-            setIsLoading(false);
-        };
-        fetchLibrary();
-    }, [gymId]);
-
-    const handleLinkChange = (group: string, index: number, link: string) => {
-        setLibrary(prev => {
-            if (!prev) return null;
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group][index].youtubeLink = link;
-            return newLibrary;
-        });
-    };
-
-    const handleEnabledChange = (group: string, index: number, isEnabled: boolean) => {
-        setLibrary(prev => {
-            if (!prev) return null;
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group][index].isEnabled = isEnabled;
-            return newLibrary;
-        });
-    };
-    
-    const handleAddNewExercise = () => {
-        if (!library || !newExerciseName.trim() || !selectedMuscleGroup) return;
-
-        const trimmedName = newExerciseName.trim();
-        
-        setLibrary(prevLibrary => {
-            if (!prevLibrary) return null;
-            const newLibrary = JSON.parse(JSON.stringify(prevLibrary));
-            const groupExercises = newLibrary[selectedMuscleGroup] || [];
-            
-            if (groupExercises.some((ex: ExerciseDefinition) => ex.name.toLowerCase() === trimmedName.toLowerCase())) {
-                alert('Este ejercicio ya existe en este grupo muscular.');
-                return prevLibrary; // Return original state if duplicate
-            }
-
-            const newExercise: ExerciseDefinition = { name: trimmedName, isEnabled: true, youtubeLink: '' };
-            groupExercises.push(newExercise);
-            groupExercises.sort((a: ExerciseDefinition, b: ExerciseDefinition) => a.name.localeCompare(b.name));
-            newLibrary[selectedMuscleGroup] = groupExercises;
-            
-            return newLibrary;
-        });
-        setNewExerciseName('');
-    };
-
-    const handleStartEdit = (group: string, index: number) => {
-        if (!library) return;
-        setEditingExercise({ group, index });
-        setEditingText(library[group][index].name);
-    };
-
-    const handleCancelEdit = () => {
-        setEditingExercise(null);
-        setEditingText('');
-    };
-
-    const handleSaveEdit = () => {
-        if (!editingExercise || !editingText.trim() || !library) {
-            handleCancelEdit();
-            return;
-        }
-
-        const { group, index } = editingExercise;
-        const newName = editingText.trim();
-
-        setLibrary(prev => {
-            if (!prev) return null;
-            if (prev[group].some((ex: ExerciseDefinition, i: number) => i !== index && ex.name.toLowerCase() === newName.toLowerCase())) {
-                alert("Ya existe un ejercicio con este nombre en el grupo.");
-                return prev;
-            }
-            
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group][index].name = newName;
-            newLibrary[group].sort((a: ExerciseDefinition, b: ExerciseDefinition) => a.name.localeCompare(b.name));
-            return newLibrary;
-        });
-        handleCancelEdit();
-    };
-
-    const handleDeleteRequest = (group: string, index: number) => {
-        if (!library) return;
-        setDeleteConfirmation({ group, index, name: library[group][index].name });
-    };
-
-    const confirmDelete = () => {
-        if (!deleteConfirmation) return;
-        const { group, index } = deleteConfirmation;
-        
-        setLibrary(prev => {
-            if (!prev) return null;
-            const newLibrary = JSON.parse(JSON.stringify(prev));
-            newLibrary[group].splice(index, 1);
-            return newLibrary;
-        });
-        setDeleteConfirmation(null);
-    };
-
-    const handleSave = async () => {
-        if (!library || !isDirty) return;
-        setSaveButtonText("Guardando...");
-        const success = await onSave(library, gymId);
-        if (success) {
-            setSaveButtonText("Guardado ✓");
-            setOriginalLibrary(JSON.parse(JSON.stringify(library)));
-            setTimeout(() => setSaveButtonText("Guardar Cambios"), 2000);
-        } else {
-            setSaveButtonText("Error al Guardar");
-            setTimeout(() => setSaveButtonText("Guardar Cambios"), 3000);
-            alert("No se pudieron guardar los cambios. Revisa la consola del navegador y los logs para más detalles.");
-        }
-    };
-    
-    const handleAttemptBackNavigation = () => {
-        if (isDirty) {
-            setUnsavedChangesModalOpen(true);
-        } else {
-            onBack();
-        }
-    };
-
-    if (isLoading) {
-        return (
-            <div className="library-container">
-                 <header className="main-header">
-                     <button onClick={onBack} className="back-button">← Volver al Panel</button>
-                 </header>
-                <div className="loading-container">
-                    <div className="spinner"></div>
-                    <p>Cargando biblioteca de ejercicios...</p>
-                </div>
-            </div>
-        );
-    }
-    
-    if (!library) {
-         return (
-             <div className="library-container">
-                 <header className="main-header">
-                     <button onClick={onBack} className="back-button">← Volver al Panel</button>
-                 </header>
-                 <div className="error-container">
-                     <p>No se pudo cargar la biblioteca de ejercicios. Por favor, intentá de nuevo.</p>
-                 </div>
-             </div>
-        );
-    }
-
-    return (
-        <div className="library-container">
-            <ConfirmationModal
-                isOpen={!!deleteConfirmation}
-                message={`¿Estás seguro de que querés eliminar el ejercicio "${deleteConfirmation?.name}"? Esta acción no se puede deshacer.`}
-                onConfirm={confirmDelete}
-                onCancel={() => setDeleteConfirmation(null)}
-            />
-            <ConfirmationModal
-                isOpen={isUnsavedChangesModalOpen}
-                message="Tenés cambios sin guardar. ¿Estás seguro de que querés salir y descartarlos?"
-                onConfirm={onBack}
-                onCancel={() => setUnsavedChangesModalOpen(false)}
-                confirmText="Salir sin guardar"
-                cancelText="Quedarme"
-            />
-            <header className="main-header">
-                <button onClick={handleAttemptBackNavigation} className="back-button">← Volver al Panel</button>
-                 <div className="header-title-wrapper">
-                    <h1>Biblioteca de Ejercicios</h1>
-                    <p>Gestioná los ejercicios disponibles y sus videos.</p>
-                </div>
-            </header>
-            
-            <div className="library-instructions">
-                <p>💡 Marcá los ejercicios que querés que la IA utilice para generar las rutinas. Podés agregar un link de YouTube para que el cliente vea la ejecución correcta.</p>
-            </div>
-            
-            <div className="add-exercise-container">
-                <div className="add-exercise-form-wrapper">
-                    <h3>Agregar Nuevo Ejercicio</h3>
-                    <div className="add-exercise-form">
-                        <input 
-                            type="text" 
-                            placeholder="Nombre del nuevo ejercicio" 
-                            value={newExerciseName}
-                            onChange={(e) => setNewExerciseName(e.target.value)}
-                        />
-                        <select 
-                            value={selectedMuscleGroup} 
-                            onChange={(e) => setSelectedMuscleGroup(e.target.value)}
-                        >
-                            {Object.keys(library).sort().map(group => (
-                                <option key={group} value={group}>{group}</option>
-                            ))}
-                        </select>
-                        <button onClick={handleAddNewExercise} disabled={!newExerciseName.trim()}>
-                            Agregar
-                        </button>
-                    </div>
-                </div>
-                <div className="library-save-action">
-                    <button onClick={handleSave} className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} disabled={!isDirty || saveButtonText === "Guardando..."}>
-                        {saveButtonText}
-                    </button>
-                </div>
-            </div>
-
-             <div className="library-accordion">
-                {Object.entries(library).sort(([groupA], [groupB]) => groupA.localeCompare(groupB)).map(([group, exercises]) => (
+            <div className="library-accordion">
+                {Object.entries(library).map(([group, exercises]) => (
                     <div key={group} className="library-accordion-item">
                         <button 
-                            className={`library-accordion-header ${openGroup === group ? 'active' : ''}`} 
-                            onClick={() => setOpenGroup(openGroup === group ? null : group)}
-                            aria-expanded={openGroup === group}
+                            className={`library-accordion-header ${activeGroup === group ? 'active' : ''}`}
+                            onClick={() => handleToggleGroup(group)}
+                            aria-expanded={activeGroup === group}
                             aria-controls={`content-${group}`}
                         >
-                            <span>{group} ({exercises.length})</span>
+                            {group} ({exercises.length})
                             <span className="icon">+</span>
                         </button>
-                        <div id={`content-${group}`} className={`library-accordion-content ${openGroup === group ? 'open' : ''}`}>
-                             <div className="exercise-entry-list">
-                                 <div className="exercise-entry-header">
+                        <div id={`content-${group}`} className={`library-accordion-content ${activeGroup === group ? 'open' : ''}`} role="region">
+                            <div className="exercise-entry-list">
+                                <div className="exercise-entry-header">
                                     <span>Habilitado</span>
-                                    <span>Nombre del Ejercicio</span>
-                                    <span>Link de YouTube</span>
+                                    <span>Nombre</span>
+                                    <span>URL del Video</span>
                                     <span>Acciones</span>
                                 </div>
-                                {exercises.map((exercise, index) => (
-                                    <div key={`${group}-${index}`} className="exercise-entry-row">
-                                        <label className="switch">
-                                            <input
-                                                type="checkbox"
-                                                checked={exercise.isEnabled}
-                                                onChange={(e) => handleEnabledChange(group, index, e.target.checked)}
-                                            />
-                                            <span className="slider round"></span>
-                                        </label>
-
-                                        {editingExercise?.group === group && editingExercise?.index === index ? (
-                                            <input 
-                                                type="text" 
-                                                value={editingText}
-                                                onChange={(e) => setEditingText(e.target.value)}
-                                                className="editing-input"
-                                                autoFocus
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') handleSaveEdit();
-                                                    if (e.key === 'Escape') handleCancelEdit();
-                                                }}
-                                            />
-                                        ) : (
-                                            <span className="exercise-name-lib">{exercise.name}</span>
-                                        )}
-                                        
-                                        <input
-                                            type="text"
-                                            className="link-input"
-                                            placeholder="Pegá el link de YouTube acá..."
-                                            value={exercise.youtubeLink}
-                                            onChange={(e) => handleLinkChange(group, index, e.target.value)}
-                                        />
-
-                                        <div className="exercise-row-actions">
-                                            {editingExercise?.group === group && editingExercise?.index === index ? (
+                                {exercises.map((ex, index) => {
+                                    const isEditing = editingExercise?.group === group && editingExercise.index === index;
+                                    return (
+                                        <div key={`${group}-${index}`} className="exercise-entry-row">
+                                            {isEditing ? (
                                                 <>
-                                                    <button onClick={handleSaveEdit} className="action-btn save">Guardar</button>
-                                                    <button onClick={handleCancelEdit} className="action-btn cancel">Cancelar</button>
+                                                    <label className="switch">
+                                                        <input type="checkbox" checked={editingExercise.data.isEnabled} disabled />
+                                                        <span className="slider round"></span>
+                                                    </label>
+                                                    <input 
+                                                        type="text"
+                                                        className="editing-input"
+                                                        value={editingExercise.data.name}
+                                                        onChange={e => handleUpdateEditingExercise('name', e.target.value)} 
+                                                    />
+                                                    <input
+                                                        type="url"
+                                                        className="editing-input"
+                                                        value={editingExercise.data.videoUrl}
+                                                        onChange={e => handleUpdateEditingExercise('videoUrl', e.target.value)}
+                                                    />
+                                                    <div className="exercise-row-actions">
+                                                        <button className="action-btn save" onClick={handleSaveEdit} disabled={isSaving}>Guardar</button>
+                                                        <button className="action-btn cancel" onClick={handleCancelEdit} disabled={isSaving}>Cancelar</button>
+                                                    </div>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <button onClick={() => handleStartEdit(group, index)} className="action-btn edit">Editar</button>
-                                                    <button onClick={() => handleDeleteRequest(group, index)} className="action-btn delete">Borrar</button>
+                                                    <label className="switch">
+                                                        <input type="checkbox" checked={ex.isEnabled} onChange={e => handleToggleEnabled(group, index, e.target.checked)} disabled={isSaving} />
+                                                        <span className="slider round"></span>
+                                                    </label>
+                                                    <span className="exercise-name-lib">{ex.name}</span>
+                                                    {ex.videoUrl ? (
+                                                        <a href={ex.videoUrl} target="_blank" rel="noopener noreferrer" className="video-url-display">{ex.videoUrl.substring(0, 30)}...</a>
+                                                    ) : (
+                                                        <span className="video-url-display disabled">Sin video</span>
+                                                    )}
+                                                    <div className="exercise-row-actions">
+                                                        <button className="action-btn edit" onClick={() => handleStartEdit(group, index)} disabled={isSaving}>Editar</button>
+                                                        <button className="action-btn delete" onClick={() => handleDeleteExercise(group, index)} disabled={isSaving}>Eliminar</button>
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -1608,908 +1053,2446 @@ const ExerciseLibraryManager = ({ gymId, onSave, onBack }: { gymId: string; onSa
 };
 
 
-// 7. Portal del Gimnasio / Entrenador
-const GymPortal = ({ gym, ai, onLogout, onBackToSuperAdmin }: { 
+const AdminDashboard: React.FC<{ 
+    onSelectClient: (dni: string) => void; 
+    onLogout: () => void; 
     gym: Gym; 
-    ai: GoogleGenAI | null; 
-    onLogout: () => void;
-    onBackToSuperAdmin?: () => void;
-}) => {
-    // State de la Gestión del Dashboard de Admin
-    const [view, setView] = useState<'dashboard' | 'library' | 'clientManagement'>('dashboard');
-    const [selectedClientDNI, setSelectedClientDNI] = useState<string | null>(null);
+    loggedInGym: Gym;
+    onBackToSuperAdmin: () => void;
+}> = ({ onSelectClient, onLogout, gym, loggedInGym, onBackToSuperAdmin }) => {
     const [clients, setClients] = useState<ClientListItem[]>([]);
-    const [newDni, setNewDni] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [requests, setRequests] = useState<TrainerRequest[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
-    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectionMode, setSelectionMode] = useState(false);
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
-    const [confirmationModal, setConfirmationModal] = useState({ isOpen: false, message: '', onConfirm: () => {} });
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
-    
-    // Estado para la gestión del cliente individual por parte del admin
-    const [profile, setProfile] = useState<Profile | null>(null);
-    const [routine, setRoutine] = useState<Routine | null>(null);
-    const [routineGeneratedDate, setRoutineGeneratedDate] = useState<string | null>(null);
-    const [dietPlan, setDietPlan] = useState<DietPlan | null>(null);
-    const [clientAccessCode, setClientAccessCode] = useState<string>('');
-    const [additionalInstructions, setAdditionalInstructions] = useState('');
-    
-    // Estado de la UI del Admin
-    const [activeTab, setActiveTab] = useState<'training' | 'nutrition'>('training');
-    const [selectedPhaseTabIndex, setSelectedPhaseTabIndex] = useState(0);
-    const [adminSelectedDayIndex, setAdminSelectedDayIndex] = useState(0);
-    const [loadingRoutine, setLoadingRoutine] = useState(false);
-    const [loadingDiet, setLoadingDiet] = useState(false);
-    const [error, setError] = useState("");
-    const [saveButtonText, setSaveButtonText] = useState("Guardar cambios");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests'>('clients');
+    const [showQrModal, setShowQrModal] = useState(false);
 
-    // --- Hooks ---
-    const { bmi, bmiCategory, bmiCategoryClass } = useMemo(() => {
-        if (!profile?.weight || !profile?.height) return { bmi: null, bmiCategory: 'N/A', bmiCategoryClass: '' };
-        const { bmi, category, categoryClass } = getBmiDetails(parseFloat(profile.weight), parseFloat(profile.height));
-        return { bmi, bmiCategory: category, bmiCategoryClass: categoryClass };
-    }, [profile?.weight, profile?.height]);
-
-    const targetWeight = useMemo(() => {
-        if (!profile?.weight || !profile?.goal || !routine?.totalDurationWeeks) return null;
-        const currentWeight = parseFloat(profile.weight);
-        if (isNaN(currentWeight) || currentWeight <= 0) return null;
-        const { goal } = profile;
-        const { totalDurationWeeks } = routine;
-        let target;
-        if (goal === 'Pérdida de grasa') {
-            const weeklyLoss = currentWeight * 0.005;
-            target = currentWeight - (weeklyLoss * totalDurationWeeks);
-        } else if (goal === 'Hipertrofia') {
-            const weeklyGain = 0.2;
-            target = currentWeight + (weeklyGain * totalDurationWeeks);
-        } else {
-            target = currentWeight;
-        }
-        return target > 0 ? target : null;
-    }, [profile, routine]);
-    
-    const loadClientsAndLibrary = async () => {
-        const [clientsData, libraryData] = await Promise.all([
+    const fetchAllData = async () => {
+        setIsLoading(true);
+        const [fetchedClients, fetchedRequests] = await Promise.all([
             apiClient.getClients(gym._id),
-            apiClient.getExerciseLibrary(gym._id)
+            apiClient.getRequests(gym._id)
         ]);
-        setClients(clientsData);
-        setExerciseLibrary(libraryData);
+        setClients(fetchedClients);
+        setRequests(fetchedRequests);
+        setIsLoading(false);
+    };
+    
+    const fetchRequests = async () => {
+        const fetchedRequests = await apiClient.getRequests(gym._id);
+        setRequests(fetchedRequests);
     };
 
     useEffect(() => {
-        loadClientsAndLibrary();
+        fetchAllData();
     }, [gym._id]);
-
-    useEffect(() => {
-        const loadSelectedClient = async () => {
-          if (selectedClientDNI) {
-              const userData = await apiClient.getClientData(selectedClientDNI);
-              if (userData && userData.gymId === gym._id) {
-                  setClientAccessCode(userData.accessCode);
-                  const profileWithDefaults: Profile = {
-                      name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: 'Cuerpo completo', bodyFocusSpecific: '', includeAdaptationPhase: 'Sí', trainingIntensity: 'Moderada', ...userData.profile
-                  };
-                  
-                  setProfile(profileWithDefaults);
-                  setRoutine(userData.routine || null);
-                  setDietPlan(userData.dietPlan || null);
-                  setRoutineGeneratedDate(userData.routineGeneratedDate || null);
-                  setSelectedPhaseTabIndex(0);
-                  setAdminSelectedDayIndex(0);
-                  setActiveTab('training');
-                  if (!ai) setError("La API Key de Google no está configurada. No se pueden generar planes.");
-                  else setError('');
-                  setView('clientManagement');
-              } else if (userData) {
-                  alert("Error: Este cliente no pertenece a tu gimnasio.");
-                  setSelectedClientDNI(null);
-              }
-          }
-        };
-        loadSelectedClient();
-    }, [selectedClientDNI, ai, gym._id]);
     
-    useEffect(() => {
-        setAdminSelectedDayIndex(0);
-    }, [selectedPhaseTabIndex]);
+    const handleClientCreated = () => {
+        fetchAllData();
+    };
 
-    // --- Funciones de Gestión de Clientes ---
-    const handleAddClient = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const trimmedDni = newDni.trim();
-        if (!trimmedDni) return;
-        
-        const result = await apiClient.createClient(trimmedDni, gym._id);
-        if (result.success) {
-            setNewDni('');
-            const updatedClients = await apiClient.getClients(gym._id);
-            setClients(updatedClients);
+    const newRequestCount = useMemo(() => {
+        return requests.filter(r => r.status === 'new').length;
+    }, [requests]);
+
+    const filteredClients = useMemo(() => {
+        return clients
+            .filter(c => c.status === viewMode)
+            .filter(c =>
+                (c.profile?.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                c.dni.includes(searchTerm)
+            );
+    }, [clients, viewMode, searchTerm]);
+    
+    const toggleSelectionMode = () => {
+        setSelectionMode(!selectionMode);
+        setSelectedClients(new Set());
+    };
+    
+    const handleCardClick = (client: ClientListItem) => {
+        if (selectionMode) {
+            const newSelection = new Set(selectedClients);
+            if (newSelection.has(client.dni)) {
+                newSelection.delete(client.dni);
+            } else {
+                newSelection.add(client.dni);
+            }
+            setSelectedClients(newSelection);
         } else {
-            alert(result.message);
+            onSelectClient(client.dni);
         }
     };
-
-    const handleSelectionChange = (dni: string) => {
-        setSelectedClients(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(dni)) newSet.delete(dni);
-            else newSet.add(dni);
-            return newSet;
-        });
+    
+    const handleUpdateStatus = async (newStatus: 'active' | 'archived') => {
+        await apiClient.updateClientStatus(selectedClients, newStatus);
+        setSelectedClients(new Set());
+        setSelectionMode(false);
+        fetchAllData();
     };
     
-    // --- Handlers de acciones ---
-    const closeConfirmationModal = () => setConfirmationModal({ isOpen: false, message: '', onConfirm: () => {} });
-
-    const handleUpdateClientStatus = async (dnis: Set<string>, newStatus: 'active' | 'archived') => {
-        await apiClient.updateClientStatus(dnis, newStatus);
-        const updatedClients = await apiClient.getClients(gym._id);
-        setClients(updatedClients);
-        setIsSelectionMode(false);
+    const handleDeleteSelected = async () => {
+        await apiClient.deleteClients(selectedClients);
+        setShowDeleteConfirm(false);
         setSelectedClients(new Set());
-        closeConfirmationModal();
+        setSelectionMode(false);
+        fetchAllData();
     };
-    
-    const handleDeleteClientsPermanently = async (dnis: Set<string>) => {
-        await apiClient.deleteClients(dnis);
-        const updatedClients = await apiClient.getClients(gym._id);
-        setClients(updatedClients);
-        setIsSelectionMode(false);
-        setSelectedClients(new Set());
-        closeConfirmationModal();
+
+    const renderCurrentView = () => {
+        switch(adminView) {
+            case 'library':
+                return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
+            case 'requests':
+                return <RequestsView requests={requests} onUpdateRequest={fetchRequests} />;
+            case 'clients':
+            default:
+                return (
+                    <>
+                        <div className="client-management-bar">
+                             <AddClientForm onClientCreated={handleClientCreated} gymId={gym._id} />
+                             <div className="search-client-form">
+                                 <input
+                                    type="text"
+                                    placeholder="Buscar por nombre o DNI..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                             </div>
+                        </div>
+                        <div className="view-controls">
+                            <div className="view-toggle">
+                                <button onClick={() => setViewMode('active')} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
+                                <button onClick={() => setViewMode('archived')} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
+                            </div>
+                            <div className="selection-controls">
+                                 <button onClick={toggleSelectionMode} className="selection-toggle-button">
+                                    {selectionMode ? 'Cancelar Selección' : 'Seleccionar Varios'}
+                                </button>
+                                {selectionMode && (
+                                    <>
+                                       {viewMode === 'active' ? (
+                                           <button onClick={() => handleUpdateStatus('archived')} className="archive-selected-button" disabled={selectedClients.size === 0}>Archivar</button>
+                                       ) : (
+                                           <button onClick={() => handleUpdateStatus('active')} className="restore-selected-button" disabled={selectedClients.size === 0}>Restaurar</button>
+                                       )}
+                                       <button onClick={() => setShowDeleteConfirm(true)} className="delete-selected-button" disabled={selectedClients.size === 0}>Eliminar</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        {isLoading ? (
+                             <div className="loading-container"><div className="spinner"></div>Cargando clientes...</div>
+                        ) : (
+                            <div className="client-list">
+                                {filteredClients.map(client => (
+                                    <div 
+                                       key={client.dni} 
+                                       className={`client-card ${selectionMode ? 'selection-mode' : ''} ${selectedClients.has(client.dni) ? 'selected' : ''}`}
+                                       onClick={() => handleCardClick(client)}
+                                    >
+                                        {selectionMode && (
+                                           <input 
+                                              type="checkbox" 
+                                              className="client-selection-checkbox"
+                                              checked={selectedClients.has(client.dni)}
+                                              readOnly
+                                           />
+                                        )}
+                                        <div className="client-card-header">
+                                            <h3>{client.profile?.name || 'Nuevo Cliente'}</h3>
+                                            {client.planStatus === 'pending' && <span className="client-status-badge pending">Pendiente</span>}
+                                        </div>
+                                        <p>DNI: {client.dni}</p>
+                                        <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                );
+        }
     }
 
-    const handleArchiveSelected = () => {
-        if (selectedClients.size === 0) return;
-        setConfirmationModal({
-            isOpen: true,
-            message: `¿Estás seguro de que querés archivar ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => handleUpdateClientStatus(selectedClients, 'archived')
-        });
-    };
+    const isImpersonating = loggedInGym.username === 'superadmin' && gym.username !== 'superadmin';
 
-    const handleRestoreSelected = () => {
-        if (selectedClients.size === 0) return;
-        setConfirmationModal({
-            isOpen: true,
-            message: `¿Estás seguro de que querés restaurar ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => handleUpdateClientStatus(selectedClients, 'active')
-        });
-    };
+    return (
+        <div className="admin-dashboard">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                    {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
+                    <div>
+                        <h1>{gym.name}</h1>
+                        <p>{isImpersonating ? `Gestionando como Superadmin` : 'Panel de Entrenador'}</p>
+                    </div>
+                </div>
+                <div className="admin-header-nav">
+                     <button className="header-nav-button" onClick={() => setAdminView('clients')}>Clientes</button>
+                     <button className="header-nav-button" onClick={() => setAdminView('requests')}>
+                        Bandeja de Entrada
+                        {newRequestCount > 0 && <span className="notification-badge">{newRequestCount}</span>}
+                    </button>
+                    <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca</button>
+                    <button className="header-nav-button share-app-button" onClick={() => setShowQrModal(true)}>Compartir App</button>
+                    {isImpersonating ? (
+                        <button onClick={onBackToSuperAdmin} className="back-button">Volver</button>
+                    ) : (
+                        <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                    )}
+                </div>
+            </div>
 
-    const handleDeletePermanentlySelected = () => {
-        if (selectedClients.size === 0) return;
-        setConfirmationModal({
-            isOpen: true,
-            message: `¡ACCIÓN IRREVERSIBLE! ¿Estás seguro de que querés eliminar permanentemente ${selectedClients.size} cliente(s)?`,
-            onConfirm: () => handleDeleteClientsPermanently(selectedClients)
-        });
-    };
+            {renderCurrentView()}
+            
+            {showDeleteConfirm && (
+                <ConfirmationModal
+                    message={`¿Estás seguro de que quieres eliminar a ${selectedClients.size} cliente(s) permanentemente? Esta acción es irreversible.`}
+                    onConfirm={handleDeleteSelected}
+                    onCancel={() => setShowDeleteConfirm(false)}
+                    confirmText="Eliminar"
+                    confirmClass="delete"
+                />
+            )}
 
-    const handleSelectionModeToggle = () => {
-        setIsSelectionMode(!isSelectionMode);
-        setSelectedClients(new Set());
-    };
+            {showQrModal && <QrCodeModal onClose={() => setShowQrModal(false)} />}
+        </div>
+    );
+};
 
-    const handleSaveLibrary = async (updatedLibrary: ExerciseLibrary, gymId: string): Promise<boolean> => {
-        const success = await apiClient.saveExerciseLibrary(updatedLibrary, gymId);
-        if (success) {
-            setExerciseLibrary(updatedLibrary);
+const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = ({ onClientCreated, gymId }) => {
+    const [dni, setDni] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!/^\d{7,8}$/.test(dni)) {
+            setError('Por favor, ingresa un DNI válido (7 u 8 dígitos).');
+            return;
         }
-        return success;
-    };
-
-
-    const filteredClients = clients
-        .filter(client => (client.status || 'active') === viewMode)
-        .filter(client =>
-            client.profile?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            client.dni.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-
-    // --- Handlers y Funciones de Navegación y Generación ---
-    const handleBackToDashboard = async () => {
-        setSelectedClientDNI(null);
-        setView('dashboard');
-        loadClientsAndLibrary();
-    };
-    
-    const isFormValid = useMemo(() => {
-        if (!profile) return false;
-        const { age, weight, height, name } = profile;
-        return [age, weight, height, name].every((value) => String(value).trim() !== "");
-    }, [profile]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setProfile(prev => {
-            if (!prev) return null;
-            const newProfile = { ...prev, [name]: value };
-            if (name === 'bodyFocusArea' && prev.bodyFocusArea !== value) {
-                newProfile.bodyFocusSpecific = '';
-            }
-            return newProfile;
-        });
-    };
-
-    const handleSaveChanges = async () => {
-        if (!selectedClientDNI) return;
-        setSaveButtonText("Guardando...");
-        const success = await apiClient.saveClientData(selectedClientDNI, { profile: profile!, routine, dietPlan });
-        if (success) {
-            setSaveButtonText("Guardado ✓");
+        setIsSubmitting(true);
+        setError('');
+        const result = await apiClient.createClient(dni, gymId);
+        if (result.success) {
+            setDni('');
+            onClientCreated();
         } else {
-            setSaveButtonText("Error al Guardar");
-            alert("No se pudieron guardar los cambios del cliente. Revisa la consola del navegador y los logs.");
+            setError(result.message || 'Error al crear el cliente.');
         }
-        setTimeout(() => setSaveButtonText("Guardar cambios"), 3000);
+        setIsSubmitting(false);
     };
+
+    return (
+        <div className="add-client-form">
+            <form onSubmit={handleSubmit}>
+                <input
+                    type="text"
+                    placeholder="DNI del nuevo cliente"
+                    value={dni}
+                    onChange={(e) => setDni(e.target.value)}
+                    required
+                />
+                <button type="submit" className="cta-button" disabled={isSubmitting}>
+                    {isSubmitting ? 'Añadiendo...' : 'Añadir Cliente'}
+                </button>
+            </form>
+            {error && <p className="error-text" style={{marginTop: '0.5rem'}}>{error}</p>}
+        </div>
+    );
+};
+
+
+const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
+    const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
+
+     const fetchClientData = async () => {
+        setIsLoading(true);
+        const data = await apiClient.getClientData(dni);
+        setClientData(data);
+        if (data && data.planType === 'nutrition' && activeTab === 'routine') {
+            setActiveTab('diet');
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchClientData();
+    }, [dni]);
     
-    const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
-        if (!routine) return;
-        const newRoutine = JSON.parse(JSON.stringify(routine)) as Routine;
-        (newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios[exerciseIndex] as any)[field] = value;
-        setRoutine(newRoutine);
-    };
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando datos del cliente...</div>;
+    }
 
-    const handleRemoveExercise = (phaseIndex: number, dayIndex: number, exerciseIndex: number) => {
-        if (!routine) return;
-        const newRoutine = JSON.parse(JSON.stringify(routine)) as Routine;
-        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.splice(exerciseIndex, 1);
-        setRoutine(newRoutine);
-    };
-
-    const handleAddExercise = (phaseIndex: number, dayIndex: number) => {
-        if (!routine) return;
-        const newRoutine = JSON.parse(JSON.stringify(routine)) as Routine;
-        const enabledExercises = Object.values(exerciseLibrary).flat().filter(ex => ex.isEnabled);
-        const defaultExerciseName = enabledExercises.length > 0 ? enabledExercises[0].name : 'Press de banca plano con barra';
-
-        const newExercise: Exercise = {
-            nombre: defaultExerciseName,
-            series: '3',
-            repeticiones: '10-12',
-            descanso: '60',
-        };
-        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.push(newExercise);
-        setRoutine(newRoutine);
-    };
-
-    const handleGenerateDiet = async () => {
-        if (!ai) { setError("La API Key de Google no está configurada. No se pueden generar planes."); return; }
-        if (!isFormValid || !profile || !selectedClientDNI) return; 
-        setLoadingDiet(true); 
-        setError("");
-
-        const dietSystemInstruction = `Sos un nutricionista deportivo experto. Tu tarea es crear un plan de alimentación personalizado en JSON, usando un español bien argentino, basado en los datos del cliente.
-        Datos del usuario: ${JSON.stringify(profile)}.
-        Principios Clave:
-        1.  **Cálculo de Requerimientos:** Basá las calorías y macronutrientes en el objetivo del cliente (Hipertrofia = superávit, Pérdida de grasa = déficit). Para el cálculo, considerá la Tasa Metabólica Basal (TMB) del cliente y AJUSTALA usando su 'activityFactor'. Este factor describe su actividad DIARIA, FUERA del gimnasio. El gasto por entrenamiento (basado en 'trainingDays' e 'trainingIntensity') debe sumarse a este cálculo para obtener el gasto calórico total.
-        2.  **Distribución de Macronutrientes:** Priorizá una alta ingesta de proteínas (1.6-2.2g por kg), y adecuá los carbohidratos y las grasas.
-        3.  **Sugerencias de Alimentos (CRÍTICO):** Usá nombres de alimentos comunes en Argentina. Por ejemplo: usá "banana" (NO "plátano"), "palta" (NO "aguacate"), "frutillas" (NO "fresas"), "choclo" (NO "maíz" o "elote"), y "zapallo" (NO "calabaza"). Sé específico y ofrecé opciones saludables y accesibles en un supermercado argentino.
-        4.  **Estructura (REQUISITO INDISPENSABLE):** El plan DEBE tener un mínimo de 5 comidas diarias. Utilizá nombres como: Desayuno, Colación de Mañana, Almuerzo, Merienda, Cena. Si el objetivo es hipertrofia o el cliente tiene una alta demanda calórica, podés agregar una sexta comida como "Colación Nocturna". No generes planes con menos de 5 comidas bajo ninguna circunstancia.
-        5.  **Recomendaciones (IMPORTANTE):** Agregá una lista de 2 a 4 recomendaciones generales clave, usando voseo (ej: "Tomá 2-3 litros de agua por día", "Intentá comer 1-2 horas antes de entrenar.").
-        6.  **Formato:** Devolvé exclusivamente un objeto JSON que siga el schema.`;
-        
-        const finalSystemInstruction = dietSystemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
-
-        const dietSchema = { type: Type.OBJECT, properties: { planTitle: { type: Type.STRING }, summary: { type: Type.OBJECT, properties: { totalCalories: { type: Type.INTEGER }, macronutrients: { type: Type.OBJECT, properties: { proteinGrams: { type: Type.INTEGER }, carbsGrams: { type: Type.INTEGER }, fatGrams: { type: Type.INTEGER } }, required: ["proteinGrams", "carbsGrams", "fatGrams"] } }, required: ["totalCalories", "macronutrients"] }, meals: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { mealName: { type: Type.STRING }, foodItems: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { food: { type: Type.STRING }, amount: { type: Type.STRING } }, required: ["food", "amount"] } } }, required: ["mealName", "foodItems"] } }, recommendations: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Lista de 2-4 recomendaciones nutricionales generales y de hidratación." } }, required: ["planTitle", "summary", "meals", "recommendations"] };
-
-        try {
-            const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: "Creá el plan nutricional.", config: { systemInstruction: finalSystemInstruction, responseMimeType: "application/json", responseSchema: dietSchema } });
-            const parsedDiet = JSON.parse(response.text) as DietPlan;
-            setDietPlan(parsedDiet);
-            await apiClient.saveClientData(selectedClientDNI, { dietPlan: parsedDiet });
-            setAdditionalInstructions('');
-        } catch (err) { setError("No se pudo generar el plan nutricional."); console.error(err); } finally { setLoadingDiet(false); }
-    };
+    if (!clientData) {
+        return <div className="error-container">No se pudieron cargar los datos del cliente.</div>;
+    }
     
-    const handleGenerateRoutine = async () => {
-      if (!ai) { setError("La API Key de Google no está configurada. No se pueden generar planes."); return; }
-      if (!isFormValid || !profile || !selectedClientDNI) return; 
-      setLoadingRoutine(true); 
-      setError("");
-      
-      const focusDescription = profile.bodyFocusArea + (profile.bodyFocusSpecific ? ` con un fuerte énfasis en ${profile.bodyFocusSpecific}` : '');
-      
-      const enabledExercisesByGroup = Object.entries(exerciseLibrary)
-        .reduce((acc, [group, exercises]) => {
-            const enabledNames = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
-            if (enabledNames.length > 0) {
-                acc[group] = enabledNames;
+    const planType = clientData.planType || 'full';
+
+
+    return (
+        <div className="client-management-view">
+             <div className="main-header">
+                <div className="header-title-wrapper">
+                    {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
+                     <div>
+                        <h1>{clientData.profile.name || `Cliente ${clientData.dni}`}</h1>
+                        <p>DNI: {clientData.dni}</p>
+                    </div>
+                </div>
+                 <div className="admin-header-nav">
+                    <button onClick={onBack} className="back-button">Volver al Panel</button>
+                    <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                 </div>
+            </div>
+            <div className="dashboard-grid">
+                <aside className="profile-section">
+                    <ProfileEditor clientData={clientData} setClientData={setClientData} onDataUpdate={fetchClientData}/>
+                </aside>
+                <main className="main-content">
+                    <nav className="main-tabs-nav">
+                        {(planType === 'full' || planType === 'routine') &&
+                            <button 
+                                className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} 
+                                onClick={() => setActiveTab('routine')}>
+                                Rutina
+                            </button>
+                        }
+                        {(planType === 'full' || planType === 'nutrition') &&
+                            <button 
+                                className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} 
+                                onClick={() => setActiveTab('diet')}>
+                                Nutrición
+                            </button>
+                        }
+                         <button 
+                            className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} 
+                            onClick={() => setActiveTab('progress')}>
+                            Progreso
+                        </button>
+                    </nav>
+                    <div className="results-section">
+                       {activeTab === 'routine' && <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={gym._id} />}
+                       {activeTab === 'diet' && <DietPlanGenerator clientData={clientData} setClientData={setClientData} />}
+                       {activeTab === 'progress' && <ProgressView clientData={clientData} onDataUpdate={fetchClientData} />}
+                    </div>
+                </main>
+            </div>
+        </div>
+    );
+};
+
+const ProfileEditor: React.FC<{ 
+    clientData: ClientData; 
+    setClientData: (data: ClientData) => void; 
+    onDataUpdate?: () => void; // Optional callback for parent
+    isClientOnboarding?: boolean;
+}> = ({ clientData, setClientData, onDataUpdate, isClientOnboarding = false }) => {
+    const [profile, setProfile] = useState<Profile>(clientData.profile);
+    const [isModified, setIsModified] = useState(isClientOnboarding);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+
+    const muscleGroups = {
+        superior: ['General', 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'],
+        inferior: ['General', 'Cuádriceps', 'Femorales e Isquiotibiales', 'Glúteos', 'Aductores y Abductores', 'Gemelos y Sóleos']
+    };
+
+    useEffect(() => {
+        setProfile(clientData.profile);
+    }, [clientData.profile]);
+
+    // Reset muscle focus when body focus changes
+    useEffect(() => {
+        if (profile.bodyFocusArea === 'Full Body') {
+             if (profile.muscleFocus !== 'General') {
+                handleChange('muscleFocus', 'General');
+             }
+        } else if (profile.muscleFocus && !getMuscleFocusOptions().includes(profile.muscleFocus)) {
+            handleChange('muscleFocus', 'General');
+        }
+    }, [profile.bodyFocusArea]);
+
+
+    const handleChange = (field: keyof Profile, value: string) => {
+        setProfile(prev => ({ ...prev, [field]: value }));
+        setClientData({ ...clientData, profile: { ...profile, [field]: value } }); // Update parent immediately for generators
+        if (!isClientOnboarding) {
+            setIsModified(true);
+            setSaveStatus('idle');
+        }
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        const success = await apiClient.saveClientData(clientData.dni, { profile });
+        if (success) {
+            setClientData({ ...clientData, profile });
+            setSaveStatus('saved');
+            setIsModified(false);
+            if(onDataUpdate) onDataUpdate();
+            setTimeout(() => setSaveStatus('idle'), 2000);
+        } else {
+            setSaveStatus('error');
+        }
+        setIsSaving(false);
+    };
+
+    const handleEnableGeneration = async () => {
+        if (window.confirm("¿Estás seguro de que quieres habilitar la generación de un nuevo plan para este cliente? Su plan actual será borrado.")) {
+            const success = await apiClient.enablePlanGeneration(clientData.dni);
+            if (success) {
+                alert("¡Listo! El cliente ahora puede generar un nuevo plan.");
+                if(onDataUpdate) onDataUpdate();
+            } else {
+                alert("Error al habilitar la generación del plan.");
             }
-            return acc;
-        }, {} as Record<string, string[]>);
+        }
+    };
 
-      if (Object.keys(enabledExercisesByGroup).length === 0) {
-        setError("No hay ejercicios habilitados en la biblioteca. Habilitá algunos antes de generar una rutina.");
-        setLoadingRoutine(false);
-        return;
-      }
-      
-      const systemInstruction = `
-        Sos un entrenador personal de élite de Argentina. Tu trabajo es crear un plan de entrenamiento periodizado (8-12 semanas) en formato JSON.
-        Datos del cliente: ${JSON.stringify(profile)}.
-        Ejercicios disponibles (organizados por grupo muscular): ${JSON.stringify(enabledExercisesByGroup)}.
+    const bmi = useMemo(() => {
+        return calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
+    }, [profile.weight, profile.height]);
+    
+    const getMuscleFocusOptions = () => {
+        if (profile.bodyFocusArea === 'Tren Superior') return muscleGroups.superior;
+        if (profile.bodyFocusArea === 'Tren Inferior') return muscleGroups.inferior;
+        return [];
+    };
 
-        --- REGLAS INQUEBRANTABLES ---
-        1.  **COHERENCIA MUSCULAR (LA REGLA MÁS IMPORTANTE):** Para cada día, primero definís un 'grupoMuscular' (ej: "Pecho y Tríceps"). Luego, para ESE día, SÓLO podés seleccionar ejercicios de las listas que corresponden a esos grupos musculares en el JSON de ejercicios que te di (en este ejemplo, de las listas "Pecho" y "Brazos (Bíceps y Tríceps)").
-            - **Mapeo de Grupos:**
-                - Si el día es de 'Tren Inferior', usá ejercicios de: 'Cuádriceps', 'Femorales e Isquiotibiales', 'Glúteos', 'Gemelos y Sóleos', 'Aductores y Abductores'.
-                - Si el día es de 'Tren Superior', usá ejercicios de: 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'.
-                - Si el día es 'Full Body', podés combinar de varios grupos.
-            - **PROHIBIDO MEZCLAR:** Es absolutamente inaceptable que un ejercicio de 'Pecho' aparezca en un día de 'Tren Inferior'. Revisa tu trabajo para asegurar que esto NUNCA suceda.
-        2.  **NO REPETIR EJERCICIOS:** Dentro de un mismo día de entrenamiento, cada ejercicio debe ser único. No repitas el mismo ejercicio dos veces.
-        3.  **VARIEDAD:** Utilizá una amplia gama de los ejercicios disponibles en las listas correspondientes. No uses siempre los mismos.
-        4.  **INTENSIDAD:** La intensidad elegida es '${profile.trainingIntensity}'. Ajustá el volumen (cantidad de ejercicios y series) estrictamente según esto:
-            - **Extrema:** 9-12 ejercicios/día, 4-6 series. Entrenamientos largos y brutales.
-            - **Alta:** 7-9 ejercicios/día, 3-5 series. Muy exigente.
-            - **Moderada:** 5-6 ejercicios/día, 3-4 series. Estándar.
-            - **Baja:** 4-5 ejercicios básicos/día, 2-3 series. Corto y conciso.
-        5.  **ENFOQUE:** El enfoque es '${focusDescription}'. Si hay un músculo específico, dale más volumen (más ejercicios o series).
-        6.  **ADAPTACIÓN:** ${profile.includeAdaptationPhase === 'Sí' ? 'DEBES incluir una fase de adaptación anatómica al principio.' : 'NO incluyas fase de adaptación.'}
-        7.  **TÉCNICAS AVANZADAS:** Si 'useAdvancedTechniques' es 'Sí' y el nivel lo permite, incluí UNA técnica avanzada por día en un ejercicio clave. Formato exacto: "Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.". NO uses superseries. Si es 'No', omití el campo 'tecnicaAvanzada'.
-        8.  **FORMATO DE NÚMEROS:** Los campos 'series', 'repeticiones' y 'descanso' DEBEN ser strings. 'descanso' debe contener solo el número de segundos (ej: "60").
-        9.  **CARDIO:** Agregá "15-25 min de cardio moderado" al final de cada día.
-        10. **DESCARGA:** La fase de descarga debe tener una rutina DETALLADA de 4-5 ejercicios, 2-3 series, 12-15 reps, baja intensidad.
-      `;
-      
-      const finalSystemInstruction = systemInstruction + (additionalInstructions ? `\n\nInstrucciones Adicionales del Entrenador: ${additionalInstructions}` : '');
-      const prompt = `Armá un plan de entrenamiento completo para este cliente, basado en tus directivas.`;
-      const schema = { type: Type.OBJECT, properties: { planName: { type: Type.STRING }, totalDurationWeeks: { type: Type.INTEGER }, phases: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { phaseName: { type: Type.STRING }, durationWeeks: { type: Type.INTEGER }, routine: { type: Type.OBJECT, properties: { dias: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { dia: { type: Type.STRING, description: "El nombre o número del día de entrenamiento (ej. 'Día 1', 'Día A'). NO incluyas el grupo muscular en este campo." }, grupoMuscular: { type: Type.STRING, description: "El grupo muscular principal para este día (ej. 'Pecho y Tríceps', 'Piernas y Glúteos')." }, ejercicios: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { nombre: { type: Type.STRING }, series: { type: Type.STRING }, repeticiones: { type: Type.STRING }, descanso: { type: Type.STRING, description: "El tiempo de descanso en segundos, como una cadena de texto que contenga SÓLO el número (ej: '60')." }, tecnicaAvanzada: { type: Type.STRING } }, required: ["nombre", "series", "repeticiones", "descanso"] }}, cardio: { type: Type.STRING } }, required: ["dia", "grupoMuscular", "ejercicios", "cardio"] }}}}}, required: ["phaseName", "durationWeeks", "routine"] }}}, required: ["planName", "totalDurationWeeks", "phases"] };
+    return (
+        <div>
+            <h2>{isClientOnboarding ? "Completa tu Perfil" : "Perfil del Cliente"}</h2>
+            <form className="profile-form">
+                 <div className="form-group">
+                    <label>Nombre</label>
+                    <input type="text" value={profile.name} onChange={e => handleChange('name', e.target.value)} />
+                </div>
+                 <div className="form-group">
+                    <label>Edad</label>
+                    <input type="number" value={profile.age} onChange={e => handleChange('age', e.target.value)} />
+                </div>
+                 <div className="form-group">
+                    <label>Peso (kg)</label>
+                    <input type="number" step="0.1" value={profile.weight} onChange={e => handleChange('weight', e.target.value)} />
+                </div>
+                 <div className="form-group">
+                    <label>Altura (cm)</label>
+                    <input type="number" value={profile.height} onChange={e => handleChange('height', e.target.value)} />
+                </div>
+                 {bmi.value > 0 && (
+                    <div className="bmi-display">
+                        <span>IMC: <strong>{bmi.value}</strong></span>
+                        <span className={`bmi-category ${bmi.categoryClass}`}>{bmi.categoryClass.charAt(0).toUpperCase() + bmi.categoryClass.slice(1)}</span>
+                    </div>
+                 )}
+                 <div className="form-group">
+                    <label>Género</label>
+                    <select value={profile.gender} onChange={e => handleChange('gender', e.target.value)}>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Femenino">Femenino</option>
+                        <option value="Prefiero no decirlo">Prefiero no decirlo</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Nivel de Experiencia</label>
+                    <select value={profile.level} onChange={e => handleChange('level', e.target.value)}>
+                        <option value="Principiante">Principiante</option>
+                        <option value="Intermedio">Intermedio</option>
+                        <option value="Avanzado">Avanzado</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Objetivo Principal</label>
+                    <select value={profile.goal} onChange={e => handleChange('goal', e.target.value)}>
+                        <option value="Hipertrofia">Hipertrofia</option>
+                        <option value="Pérdida de grasa">Pérdida de grasa</option>
+                        <option value="Mantenimiento">Mantenimiento</option>
+                        <option value="Resistencia">Resistencia</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Días de Entrenamiento por Semana</label>
+                    <input type="number" min="1" max="7" value={profile.trainingDays} onChange={e => handleChange('trainingDays', e.target.value)} />
+                </div>
+                 <div className="form-group">
+                    <label>Índice de Actividad (fuera del gym)</label>
+                     <select value={profile.activityFactor} onChange={e => handleChange('activityFactor', e.target.value)}>
+                        <option value="Sedentario">Sedentario (poco o nada de ejercicio)</option>
+                        <option value="Ligero">Ligero (ejercicio/deporte 1-3 días/sem)</option>
+                        <option value="Activo">Activo (ejercicio/deporte 3-5 días/sem)</option>
+                        <option value="Muy Activo">Muy Activo (ejercicio/deporte 6-7 días/sem)</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Intensidad del Entrenamiento</label>
+                     <select value={profile.trainingIntensity} onChange={e => handleChange('trainingIntensity', e.target.value)}>
+                        <option value="Baja">Baja</option>
+                        <option value="Moderada">Moderada</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Extrema">Extrema</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Enfoque Corporal</label>
+                     <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
+                        <option value="Full Body">Full Body</option>
+                        <option value="Tren Superior">Tren Superior</option>
+                        <option value="Tren Inferior">Tren Inferior</option>
+                    </select>
+                </div>
+                {['Tren Superior', 'Tren Inferior'].includes(profile.bodyFocusArea) && (
+                    <div className="form-group animated-fade-in">
+                        <label>Músculo a Enfocar</label>
+                        <select value={profile.muscleFocus} onChange={e => handleChange('muscleFocus', e.target.value)}>
+                            {getMuscleFocusOptions().map(group => (
+                                <option key={group} value={group}>{group}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                 <div className="form-group">
+                    <label>Técnicas Avanzadas</label>
+                     <select value={profile.useAdvancedTechniques} onChange={e => handleChange('useAdvancedTechniques', e.target.value)}>
+                        <option value="No">No</option>
+                        <option value="Sí">Sí</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Incluir Fase de Adaptación</label>
+                    <select value={profile.includeAdaptationPhase} onChange={e => handleChange('includeAdaptationPhase', e.target.value)}>
+                        <option value="Sí">Sí</option>
+                        <option value="No">No</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Incluir Fase de Descarga</label>
+                    <select value={profile.includeDeloadPhase} onChange={e => handleChange('includeDeloadPhase', e.target.value)}>
+                        <option value="No">No</option>
+                        <option value="Sí">Sí</option>
+                    </select>
+                </div>
+                {!isClientOnboarding && isModified && (
+                     <button type="button" onClick={handleSave} disabled={isSaving} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
+                         {isSaving ? <><span className="spinner small"></span> Guardando...</> : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
+                    </button>
+                )}
+            </form>
+             {!isClientOnboarding && (
+                 <>
+                    <div className="access-code-display">
+                        <span>Código de Acceso del Cliente</span>
+                        <strong>{clientData.accessCode}</strong>
+                    </div>
+                     <button onClick={handleEnableGeneration} className="cta-button secondary enable-generation-button">
+                        Habilitar Nueva Generación
+                    </button>
+                 </>
+            )}
+        </div>
+    );
+};
 
-      try {
-        const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt, config: { systemInstruction: finalSystemInstruction, responseMimeType: "application/json", responseSchema: schema } });
-        const parsedPlan = JSON.parse(response.text) as Routine;
-        
-        parsedPlan.phases.forEach(phase => phase.routine.dias.forEach(dia => dia.ejercicios.forEach(ex => {
-            ex.descanso = String(ex.descanso || '60').replace(/[^0-9]/g, '') || '60';
-        })));
 
-        const generatedDate = new Date().toISOString();
-        
-        setRoutine(parsedPlan);
-        setRoutineGeneratedDate(generatedDate);
-        setDietPlan(null);
-        setActiveTab('training');
-        await apiClient.saveClientData(selectedClientDNI, { routine: parsedPlan, routineGeneratedDate: generatedDate, dietPlan: null, progressLog: {}, bodyWeightLog: [], termsAccepted: false });
-        setAdditionalInstructions('');
-      } catch (err) { setError("No se pudo generar el plan."); console.error(err); } finally { setLoadingRoutine(false); }
+// --- Plan Generators ---
+
+const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; isClientOnboarding?: boolean }> = ({ clientData, setClientData, gymId, isClientOnboarding = false }) => {
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [error, setError] = useState('');
+    const [currentRoutine, setCurrentRoutine] = useState<Routine | null>(clientData.routine);
+    const [isEditing, setIsEditing] = useState(false);
+    const [adminInstructions, setAdminInstructions] = useState('');
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
+
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            const library = await apiClient.getExerciseLibrary(gymId);
+            setExerciseLibrary(library);
+        };
+        fetchLibrary();
+    }, [gymId]);
+
+
+    const handleGenerate = async (isRegeneration = false) => {
+        setIsGenerating(true);
+        setError('');
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
+                const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+                if (enabled.length > 0) {
+                    acc[group] = enabled;
+                }
+                return acc;
+            }, {} as Record<string, string[]>);
+
+
+            const prompt = `
+                Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
+                - Perfil: ${JSON.stringify(clientData.profile)}
+                - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
+                
+                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
+
+                REGLAS ESTRICTAS PARA TU RESPUESTA:
+                1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+                2.  El JSON debe seguir esta estructura exacta:
+                    {
+                      "planName": "Nombre del Plan (ej: Hipertrofia Intensa)",
+                      "totalDurationWeeks": 12, // Duración total en semanas
+                      "phases": [
+                        {
+                          "phaseName": "Nombre de la Fase (ej: Adaptación y Fuerza)",
+                          "durationWeeks": 4,
+                          "routine": {
+                            "dias": [
+                              {
+                                "dia": "Día 1",
+                                "grupoMuscular": "Músculos Principales del Día",
+                                "ejercicios": [
+                                  {
+                                    "nombre": "Nombre del Ejercicio",
+                                    "series": "Número de series (ej: '4')",
+                                    "repeticiones": "Rango de reps (ej: '8-12')",
+                                    "descanso": "Tiempo en segundos (ej: '60s')",
+                                    "tecnicaAvanzada": "Nombre de la técnica si aplica (ej: 'Drop Set') o '' si no aplica",
+                                  }
+                                ],
+                                "cardio": "Descripción del cardio (ej: '30 min en cinta a 120-140ppm') o '' si no aplica"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                3.  Selecciona ejercicios EXCLUSIVAMENTE de la lista de ejercicios disponibles proporcionada. No inventes ni incluyas ejercicios que no estén en esa lista.
+                4.  Asigna los días de entrenamiento según el número de 'trainingDays' del perfil. Por ejemplo, si son 4 días, crea 4 planes de día.
+                5.  La suma de 'durationWeeks' de todas las fases debe ser igual a 'totalDurationWeeks'.
+                6.  Aplica 'tecnicaAvanzada' solo si el perfil del cliente lo permite ('useAdvancedTechniques: "Sí"'). Las opciones válidas son: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, el valor debe ser un string vacío "".
+                7.  Si el perfil incluye 'includeAdaptationPhase: "Sí"', la primera fase debe ser de adaptación.
+                8.  Si el perfil incluye 'includeDeloadPhase: "Sí"', una de las fases (preferiblemente intermedia o la última) debe ser una "Fase de Descarga" con una notable reducción de volumen e intensidad (ej. reducir series, usar pesos más ligeros) para facilitar la recuperación.
+                9.  Ajusta el número de ejercicios por día según la 'trainingIntensity' del perfil: 'Baja' (5-6 ejercicios), 'Moderada' (6-7), 'Alta' (8-10), y 'Extrema' (11-13, mezclando fuerza, hipertrofia y resistencia).
+                10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
+            `;
+            
+            const response: GenerateContentResponse = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            const text = response.text;
+            
+            const jsonString = extractJson(text);
+            if (!jsonString) {
+                throw new Error("La IA no devolvió un JSON válido.");
+            }
+            const generatedPlan: Routine = JSON.parse(jsonString);
+
+            setCurrentRoutine(generatedPlan);
+            setClientData({ ...clientData, routine: generatedPlan, routineGeneratedDate: new Date().toISOString() });
+            setIsEditing(false); // Salir del modo edición al generar un nuevo plan
+        } catch (err) {
+            console.error(err);
+            setError(err instanceof Error ? err.message : "Ocurrió un error al generar la rutina.");
+        } finally {
+            setIsGenerating(false);
+        }
     };
     
-    const selectedPhase = routine?.phases?.[selectedPhaseTabIndex];
-    const selectedDay = selectedPhase?.routine?.dias?.[adminSelectedDayIndex];
+    const handleSaveChanges = async () => {
+        setIsGenerating(true); // Re-use loading state for saving
+        const success = await apiClient.saveClientData(clientData.dni, { 
+            routine: currentRoutine,
+            routineGeneratedDate: clientData.routineGeneratedDate 
+        });
+        if (success) {
+            setIsEditing(false);
+        } else {
+            setError("No se pudieron guardar los cambios.");
+        }
+        setIsGenerating(false);
+    };
 
-    if (view === 'dashboard') {
+    if (isGenerating) {
+        return <div className="loading-container"><div className="spinner"></div><p>Generando rutina personalizada...</p></div>;
+    }
+    if (error) {
+        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate()}>Intentar de Nuevo</button></div>;
+    }
+
+    if (!currentRoutine) {
         return (
-            <div className="admin-dashboard">
-                <header className="main-header">
-                    <div className="header-title-wrapper">
-                         {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} className="gym-logo" /> : <Logo />}
-                         <div>
-                            <h1>Panel de {gym.name}</h1>
-                            <p>Gestioná a tus clientes.</p>
-                         </div>
+            <div className="placeholder-action generation-container">
+                {!isClientOnboarding && (
+                    <div className="admin-instructions-box">
+                        <label htmlFor="admin-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
+                        <textarea
+                            id="admin-instructions-gen"
+                            rows={3}
+                            value={adminInstructions}
+                            onChange={(e) => setAdminInstructions(e.target.value)}
+                            placeholder="Ej: Evitar sentadillas por lesión de rodilla. Enfocar en espalda alta."
+                        ></textarea>
                     </div>
-                    <div className="admin-header-nav">
-                         <button onClick={() => setView('library')} className="header-nav-button">Gestionar Ejercicios</button>
-                         {onBackToSuperAdmin 
-                             ? <button onClick={onBackToSuperAdmin} className="logout-button admin-logout">Volver a Super Admin</button>
-                             : <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
-                         }
-                    </div>
-                </header>
-
-                <div className="client-management-bar">
-                    <div className="add-client-form">
-                        <form onSubmit={handleAddClient}>
-                            <input type="text" value={newDni} onChange={(e) => setNewDni(e.target.value)} placeholder="DNI del nuevo cliente/a" />
-                            <button type="submit" className="cta-button" disabled={!newDni.trim()}>Agregar Cliente/a</button>
-                        </form>
-                    </div>
-                    <div className="search-client-form">
-                        <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por Nombre o DNI..." />
-                    </div>
-                </div>
-                
-                <div className="view-controls">
-                    <div className="view-toggle">
-                        <button onClick={() => { setViewMode('active'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'active' ? 'active' : ''}`}>Activos</button>
-                        <button onClick={() => { setViewMode('archived'); setSelectedClients(new Set()); setIsSelectionMode(false); }} className={`view-toggle-button ${viewMode === 'archived' ? 'active' : ''}`}>Archivados</button>
-                    </div>
-
-                    <div className="selection-controls">
-                        <button className="selection-toggle-button" onClick={handleSelectionModeToggle}>{isSelectionMode ? 'Cancelar Selección' : 'Seleccionar...'}</button>
-                        {isSelectionMode && viewMode === 'active' && (
-                            <button className="archive-selected-button" onClick={handleArchiveSelected} disabled={selectedClients.size === 0}>Archivar ({selectedClients.size})</button>
-                        )}
-                        {isSelectionMode && viewMode === 'archived' && (
-                            <>
-                                <button className="restore-selected-button" onClick={handleRestoreSelected} disabled={selectedClients.size === 0}>Restaurar ({selectedClients.size})</button>
-                                <button className="delete-selected-button" onClick={handleDeletePermanentlySelected} disabled={selectedClients.size === 0}>Eliminar ({selectedClients.size})</button>
-                            </>
-                        )}
-                    </div>
-                </div>
-                
-                <ClientDashboard
-                    clients={filteredClients}
-                    isSelectionMode={isSelectionMode}
-                    selectedClients={selectedClients}
-                    onClientSelect={setSelectedClientDNI}
-                    onSelectionChange={handleSelectionChange}
+                )}
+                <button className="cta-button" onClick={() => handleGenerate(false)}>
+                    Generar Rutina con IA
+                </button>
+                <p className="text-secondary">Se creará una rutina de entrenamiento basada en el perfil.</p>
+            </div>
+        );
+    }
+    
+    // Don't show editing UI for client onboarding
+     if (isClientOnboarding) {
+        return (
+             <div className="plan-container">
+                <RoutinePlan 
+                    routine={currentRoutine} 
+                    isEditing={false}
+                    onRoutineChange={setCurrentRoutine}
+                    exerciseLibrary={exerciseLibrary}
                 />
             </div>
         );
     }
     
-    if (view === 'library') {
-        return <ExerciseLibraryManager gymId={gym._id} onSave={handleSaveLibrary} onBack={() => setView('dashboard')} />;
-    }
-
-    if (view === 'clientManagement' && profile) {
-        const isLoading = loadingRoutine || loadingDiet;
-        const enabledExercisesByGroup = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
-            const enabled = exercises.filter(ex => ex.isEnabled);
-            if (enabled.length > 0) acc[group] = enabled;
-            return acc;
-        }, {} as ExerciseLibrary);
-            
-        return (
-            <>
-              <header className="main-header">
-                <button onClick={handleBackToDashboard} className="back-button">← Volver al panel de {gym.name}</button>
-                <div className="header-title-wrapper">
-                  {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} className="gym-logo" /> : <Logo />}
-                  <div>
-                    <h1>Panel de Cliente: {profile.name || selectedClientDNI}</h1>
-                    <p>Gestioná el perfil y los planes de tu cliente.</p>
-                  </div>
-                </div>
-                {onBackToSuperAdmin 
-                     ? <button onClick={onBackToSuperAdmin} className="logout-button admin-logout">Volver a Super Admin</button>
-                     : <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-                 }
-              </header>
-        
-              <div className="dashboard-grid">
-                <aside className="profile-section">
-                    <h2>Perfil del cliente/a</h2>
-                    <form className="profile-form" onSubmit={(e) => e.preventDefault()}>
-                      <div className="form-group"><label>Nombre</label><input type="text" name="name" value={profile.name} onChange={handleInputChange}/></div>
-                      <div className="form-group"><label>Edad</label><input type="number" name="age" value={profile.age} onChange={handleInputChange}/></div>
-                      <div className="form-group"><label>Peso (kg)</label><input type="number" name="weight" value={profile.weight} onChange={handleInputChange}/></div>
-                      <div className="form-group"><label>Altura (cm)</label><input type="number" name="height" value={profile.height} onChange={handleInputChange}/></div>
-                      <div className="form-group"><label>Género</label><select name="gender" value={profile.gender} onChange={handleInputChange}><option>Prefiero no decirlo</option><option>Masculino</option><option>Femenino</option></select></div>
-                      <div className="form-group"><label>Nivel</label><select name="level" value={profile.level} onChange={handleInputChange}><option>Principiante</option><option>Intermedio</option><option>Avanzado</option></select></div>
-                      <div className="form-group"><label>Objetivo</label><select name="goal" value={profile.goal} onChange={handleInputChange}><option>Hipertrofia</option><option>Pérdida de grasa</option><option>Mantenimiento</option><option>Resistencia</option></select></div>
-                      <div className="form-group"><label>Días por semana</label><input type="number" name="trainingDays" value={profile.trainingDays} min="1" max="7" onChange={handleInputChange}/></div>
-                      <div className="form-group"><label>Factor de Actividad (fuera del gym)</label><select name="activityFactor" value={profile.activityFactor || 'Sedentario'} onChange={handleInputChange}><option value="Sedentario">Sedentario (trabajo de oficina)</option><option value="Ligero">Ligero (trabajo de pie, caminatas)</option><option value="Activo">Activo (trabajo físico moderado)</option><option value="Muy Activo">Muy Activo (trabajo físico intenso)</option></select></div>
-                      <div className="form-group"><label>Área de Enfoque</label><select name="bodyFocusArea" value={profile.bodyFocusArea || 'Cuerpo completo'} onChange={handleInputChange}><option value="Cuerpo completo">Cuerpo completo</option><option value="Tren Superior">Tren Superior</option><option value="Tren Inferior">Tren Inferior</option></select></div>
-                      {profile.bodyFocusArea === 'Tren Inferior' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General en Piernas/Glúteos</option><option value="Cuádriceps">Cuádriceps</option><option value="Femorales e Isquiotibiales">Femorales e Isquiotibiales</option><option value="Glúteos">Glúteos</option><option value="Gemelos y Sóleos">Gemelos y Sóleos</option></select></div>)}
-                      {profile.bodyFocusArea === 'Tren Superior' && (<div className="form-group"><label>Músculo Específico (Opcional)</label><select name="bodyFocusSpecific" value={profile.bodyFocusSpecific || ''} onChange={handleInputChange}><option value="">Enfoque General en Tren Superior</option><option value="Pecho">Pecho</option><option value="Espalda">Espalda</option><option value="Hombros">Hombros</option><option value="Brazos (Bíceps y Tríceps)">Brazos</option></select></div>)}
-                      <div className="form-group"><label>Intensidad del entrenamiento</label><select name="trainingIntensity" value={profile.trainingIntensity || 'Moderada'} onChange={handleInputChange}><option value="Baja">Baja</option><option value="Moderada">Moderada</option><option value="Alta">Alta</option><option value="Extrema">Extrema</option></select></div>
-                      <div className="form-group"><label>Fase de adaptación</label><select name="includeAdaptationPhase" value={profile.includeAdaptationPhase || 'Sí'} onChange={handleInputChange}><option value="Sí">Incluir fase de adaptación</option><option value="No">Empezar directo sin adaptación</option></select></div>
-                      <div className="form-group"><label>Complejidad de la rutina</label><select name="useAdvancedTechniques" value={profile.useAdvancedTechniques} onChange={handleInputChange}><option value="No">Ejercicios simples</option><option value="Sí">Incluir técnicas avançadas</option></select></div>
-                    </form>
-                     {clientAccessCode && (<div className="access-code-display"><span>Código de Acceso del Cliente</span><strong>{clientAccessCode}</strong></div>)}
-                     {bmi !== null && (<div className="bmi-display"><span>IMC: <strong>{bmi.toFixed(1)}</strong></span><span className={`bmi-category ${bmiCategoryClass}`}>{bmiCategory}</span></div>)}
-                </aside>
-        
-                <main className="main-content">
-                    <div className="admin-instructions-box">
-                        <label htmlFor="additional-instructions">Instrucciones Adicionales para la IA</label>
-                        <textarea
-                            id="additional-instructions"
-                            name="additional-instructions"
-                            rows={3}
-                            placeholder="Ej: El cliente es intolerante a la lactosa, evitar productos lácteos y reemplazar proteína en polvo. Tiene una lesión en la rodilla, evitar sentadillas y zancadas."
-                            value={additionalInstructions}
-                            onChange={(e) => setAdditionalInstructions(e.target.value)}
-                        ></textarea>
-                    </div>
-                  <div className="actions-bar">
-                    <button className="cta-button" onClick={handleGenerateRoutine} disabled={!isFormValid || isLoading}>{loadingRoutine ? <><span className="spinner small"></span>Armando rutina...</> : (routine ? "Volver a generar rutina" : "Generar rutina")}</button>
-                    <button className={`save-changes-button ${saveButtonText.includes('✓') ? 'saved' : ''}`} onClick={handleSaveChanges} disabled={isLoading || saveButtonText === "Guardando..."}>{saveButtonText}</button>
-                  </div>
-                  
-                    <div className="main-tabs-nav">
-                        <button onClick={() => setActiveTab('training')} className={`main-tab-button ${activeTab === 'training' ? 'active' : ''}`}>Entrenamiento</button>
-                        <button onClick={() => setActiveTab('nutrition')} className={`main-tab-button ${activeTab === 'nutrition' ? 'active' : ''}`}>Nutrición</button>
-                    </div>
-        
-                    <section className="results-section">
-                        {activeTab === 'training' && (<>
-                          {loadingRoutine && <div className="loading-container"><div className="spinner"></div><p>Armando el plan de entrenamiento...</p></div>}
-                          {!isLoading && !routine && !error && <p className="placeholder">Completá el perfil del cliente/a y generá un plan de entrenamiento.</p>}
-                          {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
-                          {routine && (<div className="plan-container">
-                                <header className="plan-header"><h2>{routine.planName}</h2><p>Duración total: {routine.totalDurationWeeks} semanas</p>{targetWeight !== null && (<p className="target-weight-info">Objetivo de peso al final del plan: ~{targetWeight.toFixed(1)} kg</p>)}</header>
-                                <div className="phases-container">
-                                    <div className="accordion-phases">
-                                        {routine.phases.map((phase, index) => (
-                                            <div key={index} className="accordion-item">
-                                                <button
-                                                    className={`accordion-header ${index === selectedPhaseTabIndex ? 'active' : ''}`}
-                                                    onClick={() => setSelectedPhaseTabIndex(prev => prev === index ? -1 : index)}
-                                                    aria-expanded={index === selectedPhaseTabIndex}
-                                                >
-                                                    <span>{phase.phaseName} ({phase.durationWeeks} sem)</span>
-                                                    <span className="accordion-header-icon">+</span>
-                                                </button>
-                                                <div className={`accordion-content ${index === selectedPhaseTabIndex ? 'open' : ''}`}>
-                                                    {index === selectedPhaseTabIndex && (
-                                                        <div className="phase-tab-content">
-                                                            <div className="day-tabs-nav">{phase.routine.dias.map((day, dayIndex) => (<button key={dayIndex} className={`day-tab-button ${dayIndex === adminSelectedDayIndex ? 'active' : ''}`} onClick={() => setAdminSelectedDayIndex(dayIndex)}>{day.dia}</button>))}</div>
-                                                            {selectedDay && (<div className="routine-plan editable">
-                                                                <div className="day-card animated-fade-in">
-                                                                    <h3>{selectedDay.dia} - <span className="muscle-group">{selectedDay.grupoMuscular}</span></h3>
-                                                                    <ul className="exercise-list">{selectedDay.ejercicios.map((ex, exIndex) => (
-                                                                        <li key={exIndex} className="exercise-item editable">
-                                                                            <div className="exercise-item-header"><h4>Ejercicio {exIndex + 1}</h4><button className="action-btn delete" onClick={() => handleRemoveExercise(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex)} aria-label={`Borrar ejercicio ${exIndex + 1}`}>Borrar</button></div>
-                                                                            <div className="form-group"><label>Ejercicio</label><select className="exercise-input name-select" value={ex.nombre} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'nombre', e.target.value)}>{Object.entries(enabledExercisesByGroup).map(([group, exercises]) => (<optgroup key={group} label={group}>{exercises.map(exDef => (<option key={exDef.name} value={exDef.name}>{exDef.name}</option>))}</optgroup>))}</select></div>
-                                                                            <div className="exercise-details editable"><span>Series: <input type="text" value={ex.series} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'series', e.target.value)} /></span><span>Reps: <input type="text" value={ex.repeticiones} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'repeticiones', e.target.value)} /></span><span>Descanso: <input type="number" value={ex.descanso} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'descanso', e.target.value)} />s</span></div>
-                                                                            <div className="form-group"><label>Técnica Avanzada</label><select name="tecnicaAvanzada" value={ex.tecnicaAvanzada || ''} onChange={(e) => handleExerciseChange(selectedPhaseTabIndex, adminSelectedDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>{advancedTechniqueOptions.map(opt => <option key={opt.label} value={opt.value}>{opt.label}</option>)}</select></div>
-                                                                        </li>))}
-                                                                    </ul>
-                                                                    <div className="add-exercise-action"><button className="add-exercise-button" onClick={() => handleAddExercise(selectedPhaseTabIndex, adminSelectedDayIndex)}>+ Agregar Ejercicio</button></div>
-                                                                    <p className="cardio-note">{selectedDay.cardio}</p>
-                                                                </div>
-                                                            </div>)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>)}
-                          </>)}
-                        {activeTab === 'nutrition' && (
-                            <div className="diet-plan-container">
-                                {loadingDiet && (<div className="loading-container"><div className="spinner"></div><p>Armando el plan de nutrición...</p></div>)}
-                                {!loadingDiet && !dietPlan && !error && (<div className="placeholder-action"><p>Todavía no hay un plan de nutrición para este cliente/a.</p><button className="cta-button" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>Generar plan de nutrición</button></div>)}
-                                {error && !isLoading && <div className="error-container"><p>{error}</p></div>}
-                                {!loadingDiet && dietPlan && (
-                                    <>
-                                        <header className="plan-header"><h2>{dietPlan.planTitle}</h2></header>
-                                        <div className="diet-summary"><div><strong>Calorías:</strong> {dietPlan.summary?.totalCalories || 'N/A'} kcal</div><div><strong>Proteínas:</strong> {dietPlan.summary?.macronutrients?.proteinGrams || 'N/A'}g</div><div><strong>Carbs:</strong> {dietPlan.summary?.macronutrients?.carbsGrams || 'N/A'}g</div><div><strong>Grasas:</strong> {dietPlan.summary?.macronutrients?.fatGrams || 'N/A'}g</div></div>
-                                        <div className="meals-grid">{dietPlan.meals?.map((meal, index) => (<div key={index} className="meal-card"><h3>{meal.mealName}</h3><ul>{meal.foodItems?.map((item, i) => (<li key={i}>{item.food} <span>({item.amount})</span></li>))}</ul></div>))}</div>
-                                        {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (<div className="recommendations-section"><h4>💡 Recomendaciones clave</h4><ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul></div>)}
-                                        <button className="cta-button regenerate" onClick={handleGenerateDiet} disabled={!isFormValid || isLoading}>{loadingDiet ? <><span className="spinner small"></span>Regenerando...</> : "Volver a generar plan"}</button>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </section>
-                </main>
-              </div>
-            </>
-        );
-    }
-
-    return <div className="login-container"><div className="spinner"></div></div>;
-};
-
-// 8. Super Admin Portal
-const SuperAdminPortal = ({ onManageGym, onLogout }: { onManageGym: (gym: Gym) => void; onLogout: () => void; }) => {
-    const [gyms, setGyms] = useState<Gym[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [newGymName, setNewGymName] = useState('');
-    const [newGymUsername, setNewGymUsername] = useState('');
-    const [newGymPassword, setNewGymPassword] = useState('');
-    const [newGymLogo, setNewGymLogo] = useState<string | null>(null);
-    const [newGymDailyQuestionLimit, setNewGymDailyQuestionLimit] = useState(10);
-    const [deleteConfirmation, setDeleteConfirmation] = useState<Gym | null>(null);
-    const [editGym, setEditGym] = useState<Gym | null>(null);
-
-    useEffect(() => {
-        fetchGyms();
-    }, []);
-
-    const fetchGyms = async () => {
-        setIsLoading(true);
-        const fetchedGyms = await apiClient.getGyms();
-        setGyms(fetchedGyms);
-        setIsLoading(false);
-    };
-
-    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string | null>>) => {
-        const file = e.target.files?.[0];
-        if (file && file.type === 'image/svg+xml') {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setter(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        } else {
-            alert('Por favor, seleccioná un archivo SVG válido.');
-            setter(null);
-            e.target.value = '';
-        }
-    };
-
-    const handleCreateGym = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newGymName || !newGymUsername || !newGymPassword) {
-            alert("Todos los campos son obligatorios.");
-            return;
-        }
-        const success = await apiClient.createGym(newGymName, newGymUsername, newGymPassword, newGymLogo, newGymDailyQuestionLimit);
-        if (success) {
-            setNewGymName('');
-            setNewGymUsername('');
-            setNewGymPassword('');
-            setNewGymLogo(null);
-            setNewGymDailyQuestionLimit(10);
-            fetchGyms();
-        } else {
-            alert("Error al crear el gimnasio. Es posible que el nombre de usuario ya exista.");
-        }
-    };
-    
-    const handleUpdateGym = async (gymId: string, name: string, logoSvg: string | null, password: string, dailyQuestionLimit: number) => {
-        const updatePayload: { name: string; logoSvg?: string | null; password?: string; dailyQuestionLimit?: number; } = { name, dailyQuestionLimit };
-        
-        if (logoSvg !== undefined) {
-             updatePayload.logoSvg = logoSvg;
-        }
-
-        const trimmedPassword = password.trim();
-        if (trimmedPassword) {
-            updatePayload.password = trimmedPassword;
-        }
-    
-        const success = await apiClient.updateGym(gymId, updatePayload);
-        if (success) {
-            setEditGym(null);
-            fetchGyms();
-        } else {
-            alert("Error al actualizar el gimnasio.");
-        }
-    };
-
-    const handleDeleteRequest = (gym: Gym) => {
-        setDeleteConfirmation(gym);
-    };
-
-    const confirmDelete = async () => {
-        if (!deleteConfirmation) return;
-        const success = await apiClient.deleteGym(deleteConfirmation._id);
-        if (success) {
-            setDeleteConfirmation(null);
-            fetchGyms();
-        } else {
-            alert("Error al eliminar el gimnasio.");
-        }
-    };
-
-    if (isLoading) {
-        return <div className="loading-container"><div className="spinner"></div><p>Cargando gimnasios...</p></div>;
-    }
-    
-    const EditGymModal = ({ gym, onClose, onSave }: { gym: Gym, onClose: () => void, onSave: (id: string, name: string, logo: string | null, password: string, limit: number) => void }) => {
-        const [name, setName] = useState(gym.name);
-        const [logo, setLogo] = useState<string | null>(gym.logoSvg || null);
-        const [password, setPassword] = useState('');
-        const [limit, setLimit] = useState(gym.dailyQuestionLimit || 10);
-
-
-        const handleSave = () => {
-            onSave(gym._id, name, logo, password, limit);
-        };
-        
-        return (
-            <div className="modal-overlay" onClick={onClose}>
-                <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
-                    <h3>Editar Gimnasio</h3>
-                    <div className="form-group">
-                        <label htmlFor="edit-gym-name">Nombre del Gimnasio</label>
-                        <input id="edit-gym-name" type="text" value={name} onChange={e => setName(e.target.value)} />
-                    </div>
-                     <div className="form-group">
-                         <label>Logo (SVG)</label>
-                         <div className="logo-upload-wrapper" style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <label htmlFor="edit-logo-upload" className="file-input-label">Cambiar Logo</label>
-                            <input id="edit-logo-upload" type="file" accept="image/svg+xml" onChange={(e) => handleLogoUpload(e, setLogo)} />
-                            <div className="logo-preview">
-                                {logo ? <img src={logo} alt="Previsualización del logo" /> : 'SVG'}
-                            </div>
-                        </div>
-                     </div>
-                     <div className="form-group">
-                        <label htmlFor="edit-gym-password">Nueva Contraseña (opcional)</label>
-                        <input id="edit-gym-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Dejar en blanco para no cambiar" />
-                    </div>
-                     <div className="form-group">
-                        <label htmlFor="edit-gym-limit">Límite de preguntas diarias por cliente</label>
-                        <input id="edit-gym-limit" type="number" value={limit} onChange={e => setLimit(Number(e.target.value))} min="0" />
-                    </div>
-                    <div className="modal-actions">
-                        <button className="cta-button secondary" onClick={onClose}>Cancelar</button>
-                        <button className="cta-button" onClick={handleSave}>Guardar Cambios</button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     return (
-        <div className="admin-dashboard">
-             <ConfirmationModal
-                isOpen={!!deleteConfirmation}
-                message={`¿Estás seguro de que querés eliminar el gimnasio "${deleteConfirmation?.name}"? Esta acción no se puede deshacer y borrará a todos sus clientes.`}
-                onConfirm={confirmDelete}
-                onCancel={() => setDeleteConfirmation(null)}
-                confirmText="Sí, Eliminar"
-            />
-            {editGym && <EditGymModal gym={editGym} onClose={() => setEditGym(null)} onSave={handleUpdateGym} />}
-            <header className="main-header">
-                <div className="header-title-wrapper">
-                    <Logo />
-                    <div>
-                        <h1>Panel de Súper Administrador</h1>
-                        <p>Gestioná las cuentas de los gimnasios y entrenadores.</p>
-                    </div>
+        <div className="plan-container">
+            <div className="actions-bar">
+                <h2>Plan de Entrenamiento</h2>
+                <div>
+                     {isEditing ? (
+                        <button onClick={handleSaveChanges} className="save-changes-button" disabled={isGenerating}>
+                            {isGenerating ? 'Guardando...' : 'Guardar Cambios'}
+                        </button>
+                    ) : (
+                        <button onClick={() => setIsEditing(true)} className="cta-button secondary">
+                            Editar Plan
+                        </button>
+                    )}
                 </div>
-                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
-            </header>
-
-            <div className="add-gym-container">
-                <h3>Crear Nuevo Gimnasio / Entrenador</h3>
-                <form onSubmit={handleCreateGym} className="add-gym-form">
-                    <input type="text" value={newGymName} onChange={e => setNewGymName(e.target.value)} placeholder="Nombre del Gimnasio" required />
-                    <input type="text" value={newGymUsername} onChange={e => setNewGymUsername(e.target.value)} placeholder="Usuario (para login)" required />
-                    <input type="password" value={newGymPassword} onChange={e => setNewGymPassword(e.target.value)} placeholder="Contraseña" required />
-                    <input type="number" value={newGymDailyQuestionLimit} onChange={e => setNewGymDailyQuestionLimit(Number(e.target.value))} placeholder="Límite preguntas IA" title="Límite de preguntas diarias a la IA por cliente" required min="0" />
-                     <div className="logo-upload-wrapper">
-                         <label htmlFor="logo-upload" className="file-input-label">Subir Logo</label>
-                         <input id="logo-upload" type="file" accept="image/svg+xml" onChange={(e) => handleLogoUpload(e, setNewGymLogo)} />
-                         <div className="logo-preview">
-                            {newGymLogo ? <img src={newGymLogo} alt="Previsualización del logo" /> : 'SVG'}
-                         </div>
-                     </div>
-                    <button type="submit" className="cta-button">Crear Cuenta</button>
-                </form>
             </div>
-
-            <div className="gym-list">
-                {gyms.length > 0 ? gyms.map(gym => (
-                    <div key={gym._id} className="gym-card">
-                        <div className="gym-card-header">
-                             <div className="gym-card-logo">
-                                {gym.logoSvg ? <img src={gym.logoSvg} alt={`${gym.name} logo`} /> : <Logo />}
-                             </div>
-                             <div className="gym-card-info">
-                                <h3>{gym.name}</h3>
-                                <p>Usuario: {gym.username}</p>
-                                <p>Límite IA: {gym.dailyQuestionLimit ?? 'N/A'} por día</p>
-                             </div>
-                        </div>
-                        <div className="gym-card-actions">
-                            <button className="action-btn delete" onClick={() => handleDeleteRequest(gym)}>Eliminar</button>
-                            <button className="action-btn edit" onClick={() => setEditGym(gym)}>Editar</button>
-                            <button className="cta-button" onClick={() => onManageGym(gym)}>Gestionar</button>
-                        </div>
-                    </div>
-                )) : <p>No hay gimnasios registrados. ¡Creá el primero!</p>}
+            
+            <RoutinePlan 
+                routine={currentRoutine} 
+                isEditing={isEditing}
+                onRoutineChange={setCurrentRoutine}
+                exerciseLibrary={exerciseLibrary}
+            />
+            
+            <div className="regeneration-container">
+                 <div className="admin-instructions-box">
+                    <label htmlFor="admin-instructions-regen">Instrucciones para Regenerar (Opcional)</label>
+                    <textarea
+                        id="admin-instructions-regen"
+                        rows={3}
+                        value={adminInstructions}
+                        onChange={(e) => setAdminInstructions(e.target.value)}
+                        placeholder="Ej: Hacer la rutina más intensa. Cambiar ejercicios de pecho."
+                    ></textarea>
+                </div>
+                <button className="cta-button regenerate" onClick={() => handleGenerate(true)} disabled={isGenerating}>
+                    Regenerar Rutina con IA
+                </button>
             </div>
         </div>
     );
 };
 
 
-// --- Componente Principal ---
-const App = () => {
-    const [view, setView] = useState<'landing' | 'superAdminLogin' | 'gymLogin' | 'clientLogin' | 'superAdminPortal' | 'gymPortal' | 'clientPortal'>('landing');
-    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-    const [loggedInGym, setLoggedInGym] = useState<Gym | null>(null);
-    const [loggedInClientDNI, setLoggedInClientDNI] = useState<string | null>(null);
-    const [gymToManage, setGymToManage] = useState<Gym | null>(null);
+const RoutinePlan: React.FC<{
+    routine: Routine;
+    isEditing: boolean;
+    onRoutineChange: (routine: Routine) => void;
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ routine, isEditing, onRoutineChange, exerciseLibrary }) => {
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
 
-    const ai = useMemo(() => {
-        try {
-            const apiKey = process.env.API_KEY;
-            if (!apiKey) {
-                console.error("API Key de Google no encontrada. Revisa tu archivo .env y reinicia el servidor.");
-                return null;
-            }
-            return new GoogleGenAI({ apiKey });
-        } catch (e) {
-            console.error("Error al inicializar GoogleGenAI:", e);
-            return null;
-        }
-    }, []);
-
-    const handleLogout = () => {
-        setView('landing');
-        setIsSuperAdmin(false);
-        setLoggedInGym(null);
-        setLoggedInClientDNI(null);
-        setGymToManage(null);
-    };
-
-    const handleRoleSelect = (role: 'superadmin' | 'gym' | 'client') => {
-        if (role === 'superadmin') setView('superAdminLogin');
-        if (role === 'gym') setView('gymLogin');
-        if (role === 'client') setView('clientLogin');
-    };
-
-    const handleSuperAdminLogin = () => {
-        setIsSuperAdmin(true);
-        setView('superAdminPortal');
-    };
-
-    const handleGymLogin = (gym: Gym) => {
-        setLoggedInGym(gym);
-        setView('gymPortal');
-    };
-
-    const handleClientLogin = (dni: string) => {
-        setLoggedInClientDNI(dni);
-        setView('clientPortal');
-    };
-    
-    const handleManageGym = (gym: Gym) => {
-        setGymToManage(gym);
-        setView('gymPortal');
-    };
-    
-    const handleBackToSuperAdmin = () => {
-        setGymToManage(null);
-        setView('superAdminPortal');
+    if (!routine || !routine.phases || routine.phases.length === 0) {
+        return <p>El plan de rutina no es válido o está vacío.</p>;
     }
+    
+    const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
+        const newRoutine = { ...routine };
+        // @ts-ignore
+        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios[exerciseIndex][field] = value;
+        onRoutineChange(newRoutine);
+    };
 
-    const renderContent = () => {
-        switch (view) {
-            case 'landing':
-                return <LandingPage onSelectRole={handleRoleSelect} />;
-            case 'superAdminLogin':
-                return <SuperAdminLogin onLogin={handleSuperAdminLogin} onBack={handleLogout} />;
-            case 'gymLogin':
-                return <GymLogin onLogin={handleGymLogin} onBack={handleLogout} />;
-            case 'clientLogin':
-                return <ClientLogin onLogin={handleClientLogin} onBack={handleLogout} />;
-            case 'superAdminPortal':
-                if (isSuperAdmin) {
-                    return <SuperAdminPortal onManageGym={handleManageGym} onLogout={handleLogout} />;
-                }
-                break;
-            case 'gymPortal':
-                const gymForPortal = gymToManage || loggedInGym;
-                if (gymForPortal) {
-                     return <GymPortal 
-                                gym={gymForPortal} 
-                                ai={ai} 
-                                onLogout={handleLogout} 
-                                onBackToSuperAdmin={isSuperAdmin ? handleBackToSuperAdmin : undefined} 
-                            />;
-                }
-                break;
-            case 'clientPortal':
-                if (loggedInClientDNI) {
-                    return <ClientPortal clientDni={loggedInClientDNI} onLogout={handleLogout} ai={ai} />;
-                }
-                break;
-            default:
-                return <LandingPage onSelectRole={handleRoleSelect} />;
-        }
-        // Fallback or loading state
-        return <div className="loading-container"><div className="spinner"></div></div>;
+    const handleDayChange = (phaseIndex: number, dayIndex: number, field: 'grupoMuscular' | 'cardio', value: string) => {
+        const newRoutine = { ...routine };
+        newRoutine.phases[phaseIndex].routine.dias[dayIndex][field] = value;
+        onRoutineChange(newRoutine);
     };
     
-    return <>{renderContent()}</>;
+    const handleAddExercise = (phaseIndex: number, dayIndex: number) => {
+        const newRoutine = { ...routine };
+        const newExercise: Exercise = {
+            nombre: Object.values(exerciseLibrary).flat()[0]?.name || '',
+            series: '4',
+            repeticiones: '10',
+            descanso: '60s',
+            tecnicaAvanzada: '',
+        };
+        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.push(newExercise);
+        onRoutineChange(newRoutine);
+    };
+
+    const handleDeleteExercise = (phaseIndex: number, dayIndex: number, exerciseIndex: number) => {
+        const newRoutine = { ...routine };
+        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.splice(exerciseIndex, 1);
+        onRoutineChange(newRoutine);
+    };
+
+    return (
+        <div className={`routine-plan ${isEditing ? 'editable' : ''}`}>
+             <AccordionPhases
+                phases={routine.phases}
+                activePhaseIndex={activePhaseIndex}
+                setActivePhaseIndex={setActivePhaseIndex}
+                isEditing={isEditing}
+                onDayChange={handleDayChange}
+                onExerciseChange={handleExerciseChange}
+                onAddExercise={handleAddExercise}
+                onDeleteExercise={handleDeleteExercise}
+                exerciseLibrary={exerciseLibrary}
+            />
+        </div>
+    );
 };
 
-const container = document.getElementById('root');
-if (container) {
-    const root = createRoot(container);
-    root.render(
-        <React.StrictMode>
-            <App />
-        </React.StrictMode>
+const AccordionPhases: React.FC<{
+    phases: Phase[];
+    activePhaseIndex: number;
+    setActivePhaseIndex: (index: number) => void;
+    isEditing: boolean;
+    onDayChange: (phaseIndex: number, dayIndex: number, field: 'grupoMuscular' | 'cardio', value: string) => void;
+    onExerciseChange: (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => void;
+    onAddExercise: (phaseIndex: number, dayIndex: number) => void;
+    onDeleteExercise: (phaseIndex: number, dayIndex: number, exerciseIndex: number) => void;
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ phases, activePhaseIndex, setActivePhaseIndex, isEditing, ...rest }) => {
+    
+    const togglePhase = (index: number) => {
+        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
+    };
+
+    return (
+        <div className="accordion-phases">
+            {phases.map((phase, phaseIndex) => (
+                <div key={phaseIndex} className="accordion-item">
+                    <button 
+                        className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
+                        onClick={() => togglePhase(phaseIndex)}
+                        aria-expanded={activePhaseIndex === phaseIndex}
+                    >
+                        <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
+                        <span className="accordion-header-icon">+</span>
+                    </button>
+                    <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
+                        <PhaseContent 
+                            phase={phase} 
+                            phaseIndex={phaseIndex} 
+                            isEditing={isEditing}
+                            {...rest} 
+                        />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const PhaseContent: React.FC<{
+    phase: Phase;
+    phaseIndex: number;
+    isEditing: boolean;
+    onDayChange: (phaseIndex: number, dayIndex: number, field: 'grupoMuscular' | 'cardio', value: string) => void;
+    onExerciseChange: (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => void;
+    onAddExercise: (phaseIndex: number, dayIndex: number) => void;
+    onDeleteExercise: (phaseIndex: number, dayIndex: number, exerciseIndex: number) => void;
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ phase, phaseIndex, isEditing, onDayChange, onExerciseChange, onAddExercise, onDeleteExercise, exerciseLibrary }) => {
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
+
+    const dayPlan = phase.routine.dias[activeDayIndex];
+
+    if (!dayPlan) {
+        return <p>No hay días de entrenamiento definidos para esta fase.</p>;
+    }
+
+    return (
+        <div>
+            <nav className="day-tabs-nav">
+                {phase.routine.dias.map((dia, index) => (
+                    <button
+                        key={index}
+                        className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`}
+                        onClick={() => setActiveDayIndex(index)}
+                    >
+                        {dia.dia}
+                    </button>
+                ))}
+            </nav>
+            <DayCard
+                dayPlan={dayPlan}
+                isEditing={isEditing}
+                dayIndex={activeDayIndex}
+                phaseIndex={phaseIndex}
+                onDayChange={onDayChange}
+                onExerciseChange={onExerciseChange}
+                onAddExercise={onAddExercise}
+                onDeleteExercise={onDeleteExercise}
+                exerciseLibrary={exerciseLibrary}
+            />
+        </div>
+    );
+};
+
+
+const DayCard: React.FC<{
+    dayPlan: DayPlan;
+    isEditing: boolean;
+    dayIndex: number;
+    phaseIndex: number;
+    onDayChange: (phaseIndex: number, dayIndex: number, field: 'grupoMuscular' | 'cardio', value: string) => void;
+    onExerciseChange: (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => void;
+    onAddExercise: (phaseIndex: number, dayIndex: number) => void;
+    onDeleteExercise: (phaseIndex: number, dayIndex: number, exerciseIndex: number) => void;
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ dayPlan, isEditing, dayIndex, phaseIndex, onDayChange, onExerciseChange, onAddExercise, onDeleteExercise, exerciseLibrary }) => {
+    
+    const handleExerciseChangeCurried = (exerciseIndex: number, field: keyof Exercise, value: string) => {
+        onExerciseChange(phaseIndex, dayIndex, exerciseIndex, field, value);
+    };
+
+    const handleDayChangeCurried = (field: 'grupoMuscular' | 'cardio', value: string) => {
+        onDayChange(phaseIndex, dayIndex, field, value);
+    };
+
+    return (
+        <div className="day-card">
+            {isEditing ? (
+                 <div className="form-group" style={{marginBottom: '1.5rem'}}>
+                    <label>Grupo Muscular Principal</label>
+                    <input type="text" value={dayPlan.grupoMuscular} onChange={(e) => handleDayChangeCurried('grupoMuscular', e.target.value)} />
+                </div>
+            ) : (
+                <h3>
+                    {dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span>
+                </h3>
+            )}
+            <ul className="exercise-list">
+                {dayPlan.ejercicios.map((exercise, exerciseIndex) => (
+                    <li key={exerciseIndex} className={`exercise-item ${isEditing ? 'editable' : ''}`}>
+                         {isEditing ? (
+                            <ExerciseItemEditor
+                                exercise={exercise}
+                                exerciseIndex={exerciseIndex}
+                                dayIndex={dayIndex}
+                                handleExerciseChange={handleExerciseChangeCurried}
+                                handleDeleteExercise={() => onDeleteExercise(phaseIndex, dayIndex, exerciseIndex)}
+                                exerciseLibrary={exerciseLibrary}
+                            />
+                        ) : (
+                           <ExerciseView exercise={exercise} onPlayVideo={() => {}} />
+                        )}
+                    </li>
+                ))}
+            </ul>
+            {isEditing && (
+                 <div className="add-exercise-action">
+                    <button onClick={() => onAddExercise(phaseIndex, dayIndex)} className="add-exercise-button">+ Añadir Ejercicio</button>
+                </div>
+            )}
+             <div style={{marginTop: '1.5rem'}}>
+                {isEditing ? (
+                    <div className="form-group">
+                        <label htmlFor={`cardio-${dayIndex}`}>Cardio (Opcional)</label>
+                        <input
+                            type="text"
+                            id={`cardio-${dayIndex}`}
+                            value={dayPlan.cardio || ''}
+                            onChange={(e) => handleDayChangeCurried('cardio', e.target.value)}
+                            placeholder="Ej: 30 min en cinta"
+                        />
+                    </div>
+                ) : (
+                    dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ExerciseItemEditor: React.FC<{
+    exercise: Exercise;
+    exerciseIndex: number;
+    dayIndex: number;
+    handleExerciseChange: (exerciseIndex: number, field: keyof Exercise, value: string) => void;
+    handleDeleteExercise: () => void;
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ exercise, exerciseIndex, dayIndex, handleExerciseChange, handleDeleteExercise, exerciseLibrary }) => {
+    
+    const handleLocalChange = (field: keyof Exercise, value: string) => {
+        handleExerciseChange(exerciseIndex, field, value);
+    };
+    
+    return (
+        <div className="exercise-item-editor animated-fade-in">
+            <div className="editor-row editor-row-main">
+                 <select
+                    id={`exercise-name-${dayIndex}-${exerciseIndex}`}
+                    className="exercise-select"
+                    value={exercise.nombre}
+                    onChange={(e) => handleLocalChange('nombre', e.target.value)}
+                >
+                    {Object.entries(exerciseLibrary).map(([group, exercises]) => (
+                        <optgroup label={group} key={group}>
+                            {exercises.map(ex => (
+                                <option key={ex.name} value={ex.name}>{ex.name}</option>
+                            ))}
+                        </optgroup>
+                    ))}
+                </select>
+                <button onClick={handleDeleteExercise} className="delete-exercise-btn" aria-label="Eliminar ejercicio">&times;</button>
+            </div>
+            <div className="editor-row">
+                <div className="form-group-inline">
+                    <label htmlFor={`series-${dayIndex}-${exerciseIndex}`}>Series</label>
+                    <input type="text" id={`series-${dayIndex}-${exerciseIndex}`} value={exercise.series} onChange={(e) => handleLocalChange('series', e.target.value)} />
+                </div>
+                 <div className="form-group-inline">
+                    <label htmlFor={`reps-${dayIndex}-${exerciseIndex}`}>Reps</label>
+                    <input type="text" id={`reps-${dayIndex}-${exerciseIndex}`} value={exercise.repeticiones} onChange={(e) => handleLocalChange('repeticiones', e.target.value)} />
+                </div>
+                 <div className="form-group-inline">
+                    <label htmlFor={`rest-${dayIndex}-${exerciseIndex}`}>Descanso</label>
+                    <input type="text" id={`rest-${dayIndex}-${exerciseIndex}`} value={exercise.descanso} onChange={(e) => handleLocalChange('descanso', e.target.value)} />
+                </div>
+            </div>
+             <div className="editor-row">
+                <div className="form-group-inline full-width">
+                    <label htmlFor={`technique-${dayIndex}-${exerciseIndex}`}>Técnica Avanzada (Opcional)</label>
+                    <select
+                        id={`technique-${dayIndex}-${exerciseIndex}`}
+                        value={exercise.tecnicaAvanzada || ''}
+                        onChange={(e) => handleLocalChange('tecnicaAvanzada', e.target.value)}
+                    >
+                        {advancedTechniqueOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.value || opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) => void; videoUrl?: string; }> = ({ exercise, onPlayVideo, videoUrl }) => {
+     const techOption = advancedTechniqueOptions.find(opt => opt.value === exercise.tecnicaAvanzada);
+    return (
+         <>
+            <div className="exercise-name-wrapper">
+                <span className="exercise-name">{exercise.nombre}</span>
+                 {videoUrl && (
+                    <button onClick={() => onPlayVideo(videoUrl)} className="video-play-button" aria-label="Reproducir video del ejercicio">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M10,16.5L16,12L10,7.5V16.5Z"></path></svg>
+                    </button>
+                 )}
+            </div>
+            <div className="exercise-details">
+                <span><strong>Series:</strong> {exercise.series}</span>
+                <span><strong>Reps:</strong> {exercise.repeticiones}</span>
+                <span><strong>Descanso:</strong> {exercise.descanso}</span>
+            </div>
+             {techOption && techOption.value && (
+                <div className="advanced-technique">
+                    <span>💪</span>
+                    <strong>{techOption.label}:</strong> {techOption.description}
+                </div>
+            )}
+         </>
+    );
+};
+
+
+const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [error, setError] = useState('');
+    const [adminInstructions, setAdminInstructions] = useState('');
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+    
+    const currentPlan = clientData.dietPlans ? clientData.dietPlans[activePlanIndex] : null;
+
+    const handleGenerate = async (planIndex: number) => {
+        setIsGenerating(true);
+        setError('');
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `
+                Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
+                - Perfil: ${JSON.stringify(clientData.profile)}
+                
+                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
+
+                REGLAS ESTRICTAS PARA TU RESPUESTA:
+                1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
+                2.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+                3.  Calcula las calorías y macronutrientes basándote en el perfil completo del cliente (peso, altura, edad, género, nivel de experiencia, objetivo y MUY IMPORTANTE, su 'activityFactor'). Sé preciso.
+                4.  El JSON debe seguir esta estructura exacta:
+                    {
+                        "planTitle": "Título del Plan (ej: Dieta para Hipertrofia)",
+                        "summary": {
+                            "totalCalories": 2500,
+                            "macronutrients": {
+                                "proteinGrams": 180,
+                                "carbsGrams": 300,
+                                "fatGrams": 60
+                            }
+                        },
+                        "meals": [
+                            {
+                                "mealName": "Desayuno",
+                                "foodItems": [
+                                    { "food": "Avena", "amount": "80g" },
+                                    { "food": "Huevos enteros", "amount": "3 unidades" }
+                                ]
+                            }
+                        ],
+                        "recommendations": [
+                            "Beber 2-3 litros de agua al día.",
+                            "Evitar bebidas azucaradas."
+                        ]
+                    }
+                5.  Distribuye las calorías y macros en 4-6 comidas a lo largo del día (Desayuno, Media Mañana, Almuerzo, Merienda, Cena, Pre-entreno si es relevante).
+                6.  Utiliza alimentos comunes y saludables, considerando la disponibilidad en Argentina.
+                7.  Las cantidades deben estar en gramos o unidades claras.
+                8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
+            `;
+            
+            const response: GenerateContentResponse = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            const text = response.text;
+            
+            const jsonString = extractJson(text);
+            if (!jsonString) {
+                throw new Error("La IA no devolvió un JSON válido para el plan de nutrición.");
+            }
+            const generatedPlan: DietPlan = JSON.parse(jsonString);
+
+            const newDietPlans = [...(clientData.dietPlans || [null, null])];
+            newDietPlans[planIndex] = generatedPlan;
+            
+            const dataToUpdate = { ...clientData, dietPlans: newDietPlans };
+            setClientData(dataToUpdate);
+
+            if (!isClientOnboarding) {
+                 await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
+            }
+        } catch (err) {
+            console.error(err);
+            setError(err instanceof Error ? err.message : "Ocurrió un error al generar el plan de nutrición.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+    
+    if (isGenerating) {
+        return <div className="loading-container"><div className="spinner"></div><p>Generando plan de nutrición...</p></div>;
+    }
+     if (error) {
+        return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>Intentar de Nuevo</button></div>;
+    }
+    
+    const renderPlanContent = (plan: DietPlan | null) => {
+        if (!plan) {
+            return (
+                 <div className="placeholder-action generation-container">
+                    {!isClientOnboarding && (
+                        <div className="admin-instructions-box">
+                            <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
+                            <textarea
+                                id="admin-instructions-diet"
+                                rows={3}
+                                value={adminInstructions}
+                                onChange={(e) => setAdminInstructions(e.target.value)}
+                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                            ></textarea>
+                        </div>
+                    )}
+                    <button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>
+                        Generar Plan de Nutrición con IA
+                    </button>
+                    <p className="text-secondary">Se creará un plan de nutrición basado en el perfil y objetivo del cliente.</p>
+                </div>
+            );
+        }
+
+        return (
+             <div className="diet-plan-container">
+                <ClientDietView dietPlan={plan} />
+
+                {!isClientOnboarding && (
+                    <div className="regeneration-container">
+                        <div className="admin-instructions-box">
+                            <label htmlFor="admin-instructions-diet-regen">Instrucciones Adicionales (Opcional)</label>
+                            <textarea
+                                id="admin-instructions-diet-regen"
+                                rows={3}
+                                value={adminInstructions}
+                                onChange={(e) => setAdminInstructions(e.target.value)}
+                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                            ></textarea>
+                        </div>
+                        <button className="cta-button regenerate" onClick={() => handleGenerate(activePlanIndex)} disabled={isGenerating}>
+                            Regenerar Plan
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="multi-plan-container">
+             {!isClientOnboarding && (
+                <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                    <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                    <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+                </div>
+            )}
+            <div className="animated-fade-in">
+                 {renderPlanContent(currentPlan)}
+            </div>
+        </div>
+    );
+};
+
+const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
+    const [activeTab, setActiveTab] = useState<'bodyWeight' | 'exercises'>('bodyWeight');
+    const [weight, setWeight] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [selectedExercise, setSelectedExercise] = useState('');
+
+    const exercisesWithLogs = useMemo(() => {
+        return Object.keys(clientData.progressLog || {}).filter(name => clientData.progressLog[name]?.length > 0);
+    }, [clientData.progressLog]);
+
+    useEffect(() => {
+        if (exercisesWithLogs.length > 0 && !selectedExercise) {
+            setSelectedExercise(exercisesWithLogs[0]);
+        }
+    }, [exercisesWithLogs, selectedExercise]);
+    
+    const handleAddBodyWeight = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!weight) return;
+        setIsSaving(true);
+        const { value: imc, categoryClass } = calculateBMI(parseFloat(weight), parseFloat(clientData.profile.height));
+        const newEntry: BodyWeightEntry = {
+            date: new Date().toISOString(),
+            weight: parseFloat(weight),
+            imc,
+            imcCategoryClass: categoryClass,
+        };
+        const newLog = [...(clientData.bodyWeightLog || []), newEntry];
+        const success = await apiClient.saveClientData(clientData.dni, { bodyWeightLog: newLog });
+        if (success) {
+            setWeight('');
+            onDataUpdate();
+        } else {
+            alert('No se pudo guardar el peso corporal.');
+        }
+        setIsSaving(false);
+    };
+
+    const sortedBodyWeightLog = useMemo(() => {
+        return [...(clientData.bodyWeightLog || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [clientData.bodyWeightLog]);
+
+    const sortedExerciseLog = useMemo(() => {
+        if (!selectedExercise || !clientData.progressLog?.[selectedExercise]) return [];
+        return [...clientData.progressLog[selectedExercise]].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [clientData.progressLog, selectedExercise]);
+
+
+    return (
+        <div className="progress-view animated-fade-in">
+            <nav className="progress-tabs-nav">
+                <button 
+                    className={`progress-tab-button ${activeTab === 'bodyWeight' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('bodyWeight')}>
+                    Peso Corporal
+                </button>
+                <button 
+                    className={`progress-tab-button ${activeTab === 'exercises' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('exercises')}>
+                    Ejercicios
+                </button>
+            </nav>
+
+            <div className="animated-fade-in">
+                {activeTab === 'bodyWeight' && (
+                    <div className="progress-section">
+                        <form onSubmit={handleAddBodyWeight} className="add-weight-form">
+                            <input
+                                type="number"
+                                step="0.1"
+                                placeholder="Peso actual en kg"
+                                value={weight}
+                                onChange={(e) => setWeight(e.target.value)}
+                                required
+                            />
+                            <button type="submit" className="cta-button register-button" disabled={isSaving}>
+                                {isSaving ? 'Guardando...' : 'Registrar'}
+                            </button>
+                        </form>
+                        <h4>Historial de Peso</h4>
+                        {sortedBodyWeightLog.length === 0 ? (
+                            <p>Aún no hay registros de peso.</p>
+                        ) : (
+                            <ul className="log-list">
+                                {sortedBodyWeightLog.map(entry => (
+                                    <li key={entry.date} className="weight-log">
+                                        <span>{new Date(entry.date).toLocaleDateString()}</span>
+                                        <span><strong>{entry.weight} kg</strong></span>
+                                        {entry.imc && <span className={`bmi-category ${entry.imcCategoryClass}`}>IMC: {entry.imc}</span>}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'exercises' && (
+                    <div className="progress-section">
+                        {exercisesWithLogs.length === 0 ? (
+                            <p>Aún no has registrado progreso en ningún ejercicio.</p>
+                        ) : (
+                            <>
+                                <select 
+                                    className="exercise-select-dropdown" 
+                                    value={selectedExercise} 
+                                    onChange={e => setSelectedExercise(e.target.value)}
+                                >
+                                    {exercisesWithLogs.map(name => <option key={name} value={name}>{name}</option>)}
+                                </select>
+                                
+                                <h4>Historial de {selectedExercise}</h4>
+                                <ul className="log-list">
+                                    {sortedExerciseLog.map(log => (
+                                        <li key={log.date}>
+                                            <span>{new Date(log.date).toLocaleDateString()}</span>
+                                            <span><strong>{log.weight} kg</strong></span>
+                                            <span><strong>{log.repetitions} reps</strong></span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+
+// --- Client View ---
+
+const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
+    const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showChat, setShowChat] = useState(false);
+
+    const fetchClientData = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
+        const data = await apiClient.getClientData(dni);
+        setClientData(data);
+        if (showLoading) setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchClientData();
+    }, [dni]);
+
+    const isPlanExpired = () => {
+        if (!clientData?.routineGeneratedDate || !clientData?.routine?.totalDurationWeeks) {
+            return false; // No hay plan o fecha, no se puede determinar la expiración
+        }
+        const generatedDate = new Date(clientData.routineGeneratedDate);
+        const expirationDate = new Date(generatedDate.setDate(generatedDate.getDate() + clientData.routine.totalDurationWeeks * 7));
+        return new Date() > expirationDate;
+    };
+    
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    }
+    if (!clientData) {
+        return <div className="error-container">No se encontraron datos para este cliente.</div>;
+    }
+
+    // --- View Routing based on client status ---
+    if (clientData.planStatus === 'pending') {
+        return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
+    }
+    
+    // Using a portal-like approach for the chat to break out of the main layout constraints
+    if (showChat) {
+        return (
+            <ChatAssistant 
+                clientData={clientData} 
+                setClientData={setClientData} 
+                onClose={() => setShowChat(false)} 
+            />
+        );
+    }
+
+
+    return (
+        <div className="client-view-container">
+            <header>
+                <h1>Bienvenido, {clientData.profile.name}!</h1>
+                <div className="client-header-actions">
+                    <button onClick={() => setShowChat(true)} className="header-nav-button ai-assistant-button">Asistente IA</button>
+                    <button onClick={onLogout} className="logout-button">Salir</button>
+                </div>
+            </header>
+
+            {isPlanExpired() ? (
+                <div className="expired-view">
+                     <h2>Tu plan ha expirado</h2>
+                     <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
+                </div>
+            ) : (
+                <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
+            )}
+        </div>
+    );
+};
+
+const ChatAssistant: React.FC<{
+    clientData: ClientData;
+    setClientData: (data: ClientData) => void;
+    onClose: () => void;
+}> = ({ clientData, setClientData, onClose }) => {
+    const [chat, setChat] = useState<Chat | null>(null);
+    const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; image?: string }[]>([
+        { role: 'model', text: '¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy con tu entrenamiento, nutrición o analizando una foto de tu comida?' }
+    ]);
+    const [userInput, setUserInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [image, setImage] = useState<{ b64: string; mimeType: string } | null>(null);
+
+    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const ai = useMemo(() => new GoogleGenAI({ apiKey: process.env.API_KEY }), []);
+    
+    const today = new Date().toISOString().split('T')[0];
+    const usage = clientData.aiUsage?.date === today ? clientData.aiUsage.count : 0;
+    const limit = clientData.dailyQuestionLimit ?? 5;
+    const canAsk = usage < limit;
+
+    useEffect(() => {
+        const profileSummary = JSON.stringify(clientData.profile);
+        const routineSummary = clientData.routine ? `El cliente está en un plan llamado '${clientData.routine.planName}' con una duración de ${clientData.routine.totalDurationWeeks} semanas.` : "El cliente no tiene una rutina asignada.";
+        const dietSummary = clientData.dietPlans?.[0] ? `El cliente tiene un plan de nutrición con un objetivo de ${clientData.dietPlans[0].summary.totalCalories} calorías.` : "El cliente no tiene un plan de nutrición asignado.";
+
+        const systemInstruction = `
+            Eres "Scorpion AI", un asistente de fitness virtual experto y motivador. Tu objetivo es ayudar al cliente a alcanzar sus metas de fitness.
+            - **Personalidad:** Sé amigable, alentador y profesional.
+            - **Contexto del Cliente:** Estás hablando con un cliente cuyo perfil es: ${profileSummary}.
+            - **Plan Actual:** ${routineSummary} ${dietSummary}.
+            - **Tus Capacidades:** Puedes responder preguntas sobre ejercicios, nutrición, técnicas de entrenamiento, y dar consejos generales de fitness.
+            - **Limitaciones:** NO eres un médico. Si te preguntan sobre lesiones, dolor o condiciones médicas, DEBES aconsejarles que consulten a un profesional de la salud y que hablen con su entrenador. No des diagnósticos ni tratamientos médicos.
+            - **Respuestas:** Sé conciso y claro. Usa formato markdown para listas o para enfatizar puntos importantes.
+        `;
+        
+        try {
+            const newChat = ai.chats.create({
+                model: 'gemini-2.5-flash',
+                config: { systemInstruction },
+            });
+            setChat(newChat);
+        } catch (e) {
+            console.error("Error creating chat session:", e);
+            setError("No se pudo iniciar el asistente de IA. Verifica la configuración.");
+        }
+    }, [ai, clientData]);
+    
+     useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = (reader.result as string).split(',')[1];
+            setImage({ b64: base64String, mimeType: file.type });
+        };
+        reader.readAsDataURL(file);
+        if(fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
+    };
+    
+    const handleSendMessage = async () => {
+        if ((!userInput.trim() && !image) || isLoading || !canAsk) return;
+
+        const userMessageText = userInput;
+        const attachedImage = image; // Capture before clearing state
+        
+        const userMessageForDisplay: { role: 'user'; text: string; image?: string } = {
+            role: 'user',
+            text: userMessageText,
+            image: attachedImage ? `data:${attachedImage.mimeType};base64,${attachedImage.b64}` : undefined
+        };
+        
+        setMessages(prev => [...prev, userMessageForDisplay]);
+        setUserInput('');
+        setImage(null);
+        setIsLoading(true);
+        setError('');
+
+        try {
+            let responseText = '';
+
+            if (attachedImage) {
+                const calorieSystemInstruction = `Eres "Scorpion AI", un asistente de nutrición. Tu única tarea es analizar la imagen de la comida proporcionada y estimar las calorías y macronutrientes (proteínas, carbohidratos, grasas).
+                - **Respuesta:** Proporciona una respuesta clara y concisa. Primero, identifica la comida. Luego, da una estimación de las calorías y los macros en gramos.
+                - **Formato:** Usa una lista o un párrafo corto. Ejemplo: "Esto parece ser [Comida]. Estimación: Calorías: X, Proteínas: Yg, Carbs: Zg, Grasas: Ag."
+                - **Limitación:** No des consejos de salud ni de dieta. Solo analiza la imagen. Si no puedes identificar la comida, dilo claramente.`;
+
+                const parts = [
+                    { inlineData: { mimeType: attachedImage.mimeType, data: attachedImage.b64 } },
+                    { text: `Analiza esta comida. ${userMessageText}` }
+                ];
+
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: { parts },
+                    config: { systemInstruction: calorieSystemInstruction }
+                });
+                responseText = response.text;
+                // Note: This special request does not get added to the main 'chat' history object
+                // to keep that conversation's context clean (as a fitness coach).
+            } else if (chat) {
+                const result: GenerateContentResponse = await chat.sendMessage({ message: userMessageText });
+                responseText = result.text;
+            } else {
+                 throw new Error("Chat not initialized.");
+            }
+
+            setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+
+            const newUsage = { date: today, count: usage + 1 };
+            const updatedClientData = { ...clientData, aiUsage: newUsage };
+            setClientData(updatedClientData);
+            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
+
+        } catch (err) {
+            console.error(err);
+            const errorMessage = "Lo siento, ocurrió un error al procesar tu pregunta. Por favor, inténtalo de nuevo.";
+            setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
+            setError(err instanceof Error ? err.message : "Error desconocido.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="chat-fullscreen-container">
+             <div className="main-header" style={{ padding: '1rem', margin: 0, borderBottom: `1px solid var(--border-color)`, flexShrink: 0 }}>
+                <div className="header-title-wrapper">
+                    <h1>Asistente IA</h1>
+                    <p>Preguntas hoy: {usage}/{limit}</p>
+                </div>
+                <div className="admin-header-nav">
+                    <button onClick={onClose} className="back-button">Cerrar</button>
+                </div>
+            </div>
+
+            <div className="chat-messages">
+                {messages.map((msg, index) => (
+                    <div key={index} className={`chat-message ${msg.role}`}>
+                        <div className="avatar">{msg.role === 'user' ? 'TÚ' : 'AI'}</div>
+                        <div className="message-content">
+                            {msg.image && <img src={msg.image} alt="Adjunto" />}
+                            {msg.text && <p>{msg.text}</p>}
+                        </div>
+                    </div>
+                ))}
+                 {isLoading && (
+                    <div className="chat-message model">
+                        <div className="avatar">AI</div>
+                        <div className="message-content">
+                            <div className="chat-typing-indicator">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            <div className="chat-input-area">
+                 {image && (
+                    <div className="chat-image-preview">
+                        <img src={`data:${image.mimeType};base64,${image.b64}`} alt="Preview" />
+                        <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+                    </div>
+                )}
+                {!canAsk ? (
+                    <div className="limit-reached-message">
+                        Has alcanzado tu límite de preguntas diarias.
+                    </div>
+                ) : (
+                     <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+                         <input type="file" id="image-upload" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} ref={fileInputRef} />
+                         <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
+                         </button>
+                        <input
+                            type="text"
+                            value={userInput}
+                            onChange={(e) => setUserInput(e.target.value)}
+                            placeholder="Escribe tu pregunta..."
+                            disabled={isLoading}
+                        />
+                        <button type="submit" disabled={isLoading || (!userInput.trim() && !image)}>
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
+                        </button>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+// --- AI Generation Logic (for Onboarding) ---
+const generateRoutineForClient = async (clientData: ClientData, gymId: string): Promise<Routine> => {
+    const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
+        const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+        if (enabled.length > 0) acc[group] = enabled;
+        return acc;
+    }, {} as Record<string, string[]>);
+
+    const prompt = `
+        Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
+        REGLAS ESTRICTAS PARA TU RESPUESTA:
+        1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+        2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
+        3. Selecciona ejercicios EXCLUSIVAMENTE de la lista de ejercicios disponibles.
+        4. Asigna los días de entrenamiento según 'trainingDays'.
+        5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
+        6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
+        7. Incluye fases de adaptación y descarga si el perfil lo indica.
+        8. Ajusta el número de ejercicios según la 'trainingIntensity'.
+        9. Prioriza 'bodyFocusArea' y 'muscleFocus'.
+    `;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
+    return JSON.parse(jsonString);
+};
+
+const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `
+        Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        REGLAS ESTRICTAS PARA TU RESPUESTA:
+        1. **Idioma:** Tu respuesta DEBE estar en español de Argentina.
+        2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin texto adicional, markdown o explicaciones.
+        3. Calcula calorías y macros basándote en el perfil completo del cliente.
+        4. El JSON debe seguir esta estructura exacta: {"planTitle": "Título", "summary": {"totalCalories": 2500, "macronutrients": {"proteinGrams": 180, "carbsGrams": 300, "fatGrams": 60}}, "meals": [{"mealName": "Desayuno", "foodItems": [{"food": "Avena", "amount": "80g"}]}], "recommendations": ["Beber 2-3 litros de agua."]}
+        5. Distribuye las calorías en 4-6 comidas.
+        6. Usa alimentos comunes en Argentina.
+    `;
+    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
+    return JSON.parse(jsonString);
+};
+
+
+type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
+
+const ClientOnboardingView: React.FC<{
+    initialClientData: ClientData;
+    onOnboardingComplete: () => void;
+    onLogout: () => void;
+}> = ({ initialClientData, onOnboardingComplete, onLogout }) => {
+    const [step, setStep] = useState(initialClientData.termsAccepted ? 'profile' : 'terms');
+    const [clientData, setClientData] = useState<ClientData>(initialClientData);
+    const [isSaving, setIsSaving] = useState(false);
+    
+    const [generationState, setGenerationState] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+    const [generationProgress, setGenerationProgress] = useState({
+        routine: 'pending' as GenerationStatus,
+        diet1: 'pending' as GenerationStatus,
+        diet2: 'pending' as GenerationStatus,
+    });
+    const [generationError, setGenerationError] = useState('');
+    const planType = clientData.planType || 'full';
+
+    const handleAcceptTerms = async () => {
+        const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
+        if (success) {
+            setClientData({ ...clientData, termsAccepted: true });
+            setStep('profile');
+        } else {
+            alert("No se pudieron guardar los términos. Por favor, intente de nuevo.");
+        }
+    };
+    
+    const handleGenerateFullPlan = async () => {
+        setGenerationState('generating');
+        setGenerationError('');
+        setGenerationProgress({ routine: 'pending', diet1: 'pending', diet2: 'pending' });
+
+        try {
+            if (planType === 'full' || planType === 'routine') {
+                setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
+                const routine = await generateRoutineForClient(clientData, clientData.gymId);
+                setClientData(prev => ({ ...prev, routine }));
+                setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
+            }
+
+            if (planType === 'full' || planType === 'nutrition') {
+                // Set both diet statuses to 'loading' to show spinners simultaneously.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
+
+                // Generate both diet plans in parallel.
+                const [diet1, diet2] = await Promise.all([
+                    generateDietForClient(clientData),
+                    generateDietForClient(clientData)
+                ]);
+                
+                // Once both are complete, update the client data with the new plans.
+                setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
+                
+                // Set both diet statuses to 'done' to show success indicators.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
+            }
+
+            setGenerationState('success');
+
+        } catch (error) {
+            console.error("Plan generation failed:", error);
+            setGenerationError(error instanceof Error ? error.message : "Ocurrió un error desconocido.");
+            setGenerationState('error');
+            setGenerationProgress(prev => {
+                const newProgress = {...prev};
+                if (newProgress.routine === 'loading') newProgress.routine = 'error';
+                if (newProgress.diet1 === 'loading') newProgress.diet1 = 'error';
+                if (newProgress.diet2 === 'loading') newProgress.diet2 = 'error';
+                return newProgress;
+            });
+        }
+    };
+
+    const handleSaveAndStart = async () => {
+        if (generationState !== 'success') {
+            alert("Por favor, genera tu plan completo antes de comenzar.");
+            return;
+        }
+        setIsSaving(true);
+        const finalData: Partial<ClientData> = {
+            profile: clientData.profile,
+            routine: clientData.routine,
+            dietPlans: clientData.dietPlans,
+            routineGeneratedDate: new Date().toISOString(),
+            planStatus: 'active',
+        };
+
+        const success = await apiClient.saveClientData(clientData.dni, finalData);
+        if (success) {
+            onOnboardingComplete();
+        } else {
+            alert("Ocurrió un error al guardar tu plan. Por favor, intenta de nuevo.");
+        }
+        setIsSaving(false);
+    };
+
+    if (step === 'terms') {
+        return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
+    }
+
+    return (
+        <div className="onboarding-container">
+            <header className="onboarding-header">
+                <h1>¡Bienvenido a ScorpionGYM AI!</h1>
+                <p>Vamos a configurar tu primer plan.</p>
+            </header>
+            
+            <div className="onboarding-section">
+                <h2>Paso 1: Completa tu Perfil</h2>
+                <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
+            </div>
+            
+            <div className="onboarding-section">
+                <h2>Paso 2: Crea tu Plan Integral</h2>
+                 {generationState === 'idle' && (
+                     <div className="placeholder-action">
+                        <p>Cuando tu perfil esté listo, haz clic abajo para que la IA cree tu rutina y planes de nutrición personalizados.</p>
+                        <button className="cta-button" onClick={handleGenerateFullPlan}>
+                            Generar Mi Plan Completo
+                        </button>
+                    </div>
+                )}
+                
+                {(generationState === 'generating' || generationState === 'error' || generationState === 'success') && (
+                     <GenerationProgressIndicator 
+                        progress={generationProgress} 
+                        error={generationError}
+                        onRetry={handleGenerateFullPlan}
+                        planType={planType}
+                    />
+                )}
+            </div>
+            
+             <div className="onboarding-actions">
+                <button 
+                    className="cta-button" 
+                    onClick={handleSaveAndStart} 
+                    disabled={isSaving || generationState !== 'success'}
+                >
+                    {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const GenerationProgressIndicator: React.FC<{
+    progress: { routine: GenerationStatus; diet1: GenerationStatus; diet2: GenerationStatus; };
+    error: string;
+    onRetry: () => void;
+    planType: PlanType;
+}> = ({ progress, error, onRetry, planType }) => {
+    
+    const renderStatusIcon = (status: GenerationStatus) => {
+        switch (status) {
+            case 'loading': return <div className="spinner small"></div>;
+            case 'done': return <span className="status-icon success">✓</span>;
+            case 'error': return <span className="status-icon error">✗</span>;
+            case 'pending': return <span className="status-icon pending">●</span>;
+        }
+    };
+
+    return (
+        <div className="generation-progress-container">
+            <ul className="generation-progress-list">
+                {(planType === 'full' || planType === 'routine') && (
+                    <li className={`progress-item ${progress.routine}`}>
+                        {renderStatusIcon(progress.routine)}
+                        <span>Plan de Entrenamiento</span>
+                    </li>
+                )}
+                {(planType === 'full' || planType === 'nutrition') && (
+                    <>
+                        <li className={`progress-item ${progress.diet1}`}>
+                            {renderStatusIcon(progress.diet1)}
+                            <span>Plan de Nutrición 1</span>
+                        </li>
+                        <li className={`progress-item ${progress.diet2}`}>
+                            {renderStatusIcon(progress.diet2)}
+                            <span>Plan de Nutrición 2</span>
+                        </li>
+                    </>
+                )}
+            </ul>
+            {error && (
+                <div className="error-container" style={{padding: '1rem', marginTop: '1.5rem', minHeight: 'auto'}}>
+                    <p style={{margin: '0 0 1rem 0'}}>{error}</p>
+                    <button className="cta-button secondary" onClick={onRetry}>Intentar de Nuevo</button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Fix: Add missing RequestModal component definition.
+const RequestModal: React.FC<{
+    client: ClientData;
+    onClose: () => void;
+}> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setStatus('idle');
+        
+        const requestData = {
+            clientId: client.dni,
+            clientName: client.profile.name,
+            gymId: client.gymId,
+            subject,
+            message
+        };
+
+        const success = await apiClient.createRequest(requestData);
+        if (success) {
+            setStatus('success');
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } else {
+            setStatus('error');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Contactar al Entrenador</h3>
+
+                {status === 'success' ? (
+                    <div className="success-message" style={{textAlign: 'center', padding: '2rem'}}>
+                        <p>¡Tu solicitud ha sido enviada con éxito!</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label htmlFor="subject">Asunto</label>
+                            <input
+                                type="text"
+                                id="subject"
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                placeholder="Ej: Duda sobre ejercicio, cambiar rutina..."
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="message">Mensaje</label>
+                            <textarea
+                                id="message"
+                                rows={5}
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Describe tu solicitud o pregunta en detalle."
+                                required
+                            ></textarea>
+                        </div>
+                        {status === 'error' && <p className="error-text">No se pudo enviar la solicitud. Inténtalo de nuevo.</p>}
+                        <div className="modal-actions" style={{marginTop: '1.5rem'}}>
+                            <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                            <button type="submit" className="cta-button" disabled={isSubmitting}>
+                                {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
+    const planType = clientData.planType || 'full';
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>(planType === 'nutrition' ? 'diet' : 'routine');
+    const [showRequestModal, setShowRequestModal] = useState(false);
+    const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
+
+    const renderContent = () => {
+        switch(activeTab) {
+            case 'routine':
+                return clientData.routine 
+                    ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} onPlayVideo={setPlayingVideoUrl} /> 
+                    : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
+            case 'diet':
+                return clientData.dietPlans && (clientData.dietPlans[0] || clientData.dietPlans[1])
+                    ? <ClientDietTabsView dietPlans={clientData.dietPlans} /> 
+                    : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
+            case 'progress':
+                return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
+            case 'profile':
+                 return <ClientProfileView clientData={clientData} />;
+            default: return null;
+        }
+    }
+
+    return (
+        <div className="main-content" style={{width: '100%', maxWidth: '800px'}}>
+             <nav className="main-tabs-nav">
+                {(planType === 'full' || planType === 'routine') &&
+                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
+                }
+                {(planType === 'full' || planType === 'nutrition') &&
+                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
+                }
+                <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
+                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
+            </nav>
+            <div className="animated-fade-in">
+                {renderContent()}
+            </div>
+             {showRequestModal && (
+                <RequestModal 
+                    client={clientData} 
+                    onClose={() => setShowRequestModal(false)}
+                />
+            )}
+            {playingVideoUrl && <VideoPlayerModal videoUrl={playingVideoUrl} onClose={() => setPlayingVideoUrl(null)} />}
+        </div>
     );
 }
+
+const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+    const activePlan = dietPlans[activePlanIndex];
+
+    return (
+        <div>
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+            </div>
+            {activePlan ? (
+                <ClientDietView dietPlan={activePlan} />
+            ) : (
+                <div className="placeholder" style={{ marginTop: '2rem' }}>
+                    <p>Este plan de nutrición aún no ha sido generado por tu entrenador.</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
+     <div className="diet-plan-container animated-fade-in">
+        <div className="plan-header">
+            <h3>{dietPlan.planTitle}</h3>
+        </div>
+        <div className="diet-summary">
+            <div><strong>Calorías</strong><span>{dietPlan.summary.totalCalories} kcal</span></div>
+            <div><strong>Proteínas</strong><span>{dietPlan.summary.macronutrients.proteinGrams} g</span></div>
+            <div><strong>Carbohidratos</strong><span>{dietPlan.summary.macronutrients.carbsGrams} g</span></div>
+            <div><strong>Grasas</strong><span>{dietPlan.summary.macronutrients.fatGrams} g</span></div>
+        </div>
+        <div className="meals-grid">
+            {dietPlan.meals.map(meal => (
+                <div key={meal.mealName} className="meal-card">
+                    <h4>{meal.mealName}</h4>
+                    <ul>{meal.foodItems.map(item => (<li key={item.food}>{item.food} <span>{item.amount}</span></li>))}</ul>
+                </div>
+            ))}
+        </div>
+        <div className="recommendations-section">
+            <h4>Recomendaciones</h4>
+            <ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul>
+        </div>
+    </div>
+);
+
+const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+    const { profile, routine } = clientData;
+    const bmi = useMemo(() => calculateBMI(parseFloat(profile.weight), parseFloat(profile.height)), [profile.weight, profile.height]);
+    const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(profile.height)), [profile.height]);
+
+    const estimatedFinalWeight = useMemo(() => {
+        if (!routine?.totalDurationWeeks || !profile.weight || !profile.goal) {
+            return null;
+        }
+
+        const currentWeight = parseFloat(profile.weight);
+        const durationWeeks = routine.totalDurationWeeks;
+        let weightChangePerWeek = 0;
+
+        switch (profile.goal) {
+            case 'Pérdida de grasa':
+                weightChangePerWeek = -0.5; // kg/week
+                break;
+            case 'Hipertrofia':
+                weightChangePerWeek = 0.25; // kg/week
+                break;
+            default:
+                return null;
+        }
+
+        const finalWeight = currentWeight + (weightChangePerWeek * durationWeeks);
+        return finalWeight.toFixed(1);
+
+    }, [profile.weight, profile.goal, routine?.totalDurationWeeks]);
+
+
+    return (
+        <div className="client-profile-view animated-fade-in">
+            <h2>Mi Perfil</h2>
+            <div className="profile-info-grid">
+                <div className="info-card">
+                    <h3>Información Personal</h3>
+                    <ul>
+                        <li><strong>Nombre:</strong> <span>{profile.name}</span></li>
+                        <li><strong>Edad:</strong> <span>{profile.age} años</span></li>
+                        <li><strong>Género:</strong> <span>{profile.gender}</span></li>
+                    </ul>
+                </div>
+                <div className="info-card">
+                    <h3>Métricas de Salud</h3>
+                    <div className="health-metrics">
+                        <div className="metric-item">
+                            <span className="metric-label">Peso Actual</span>
+                            <span className="metric-value">{profile.weight} kg</span>
+                        </div>
+                        <div className="metric-item">
+                            <span className="metric-label">Altura</span>
+                            <span className="metric-value">{profile.height} cm</span>
+                        </div>
+                         <div className="metric-item">
+                            <span className="metric-label">IMC</span>
+                            <span className={`metric-value ${bmi.categoryClass}`}>{bmi.value}</span>
+                        </div>
+                    </div>
+                     {targetWeight !== 'N/A' && (
+                        <div className="target-weight-info">
+                            Peso saludable estimado: <strong>{targetWeight}</strong>
+                        </div>
+                    )}
+                </div>
+                <div className="info-card full-width">
+                    <h3>Objetivos y Preferencias</h3>
+                    <ul>
+                         <li><strong>Nivel:</strong> <span>{profile.level}</span></li>
+                         <li><strong>Objetivo:</strong> <span>{profile.goal}</span></li>
+                         <li><strong>Días de Entrenamiento:</strong> <span>{profile.trainingDays} por semana</span></li>
+                         <li><strong>Enfoque Corporal:</strong> <span>{profile.bodyFocusArea}</span></li>
+                         {profile.muscleFocus && profile.muscleFocus.toLowerCase() !== 'general' && (
+                            <li><strong>Músculo Prioritario:</strong> <span>{profile.muscleFocus}</span></li>
+                         )}
+                    </ul>
+                </div>
+            </div>
+             {estimatedFinalWeight && (
+                <div className="target-weight-info" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                    Peso estimado al finalizar el plan: <strong>{estimatedFinalWeight} kg</strong>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+
+const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
+    const [isChecked, setIsChecked] = useState(false);
+    
+    const termsText = `
+Bienvenido a ScorpionGYM AI.
+
+Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
+
+1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
+
+2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
+
+3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
+
+4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
+
+5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
+
+Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
+    `;
+
+    return (
+        <div className="agreement-container">
+            <header>
+                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+                 <h1>Términos y Condiciones</h1>
+            </header>
+            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
+            <div className="terms-box">
+                <p>{termsText}</p>
+            </div>
+            <div className="agreement-actions">
+                <div className="agreement-checkbox">
+                    <input 
+                        type="checkbox" 
+                        id="terms" 
+                        checked={isChecked} 
+                        onChange={() => setIsChecked(!isChecked)} 
+                    />
+                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
+                </div>
+                <div className="agreement-buttons">
+                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
+                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- Client Portal: Routine Tracker ---
+
+const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void, onPlayVideo: (url: string) => void }> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
+    const { routine, routineGeneratedDate, gymId } = clientData;
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
+
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            const library = await apiClient.getExerciseLibrary(gymId);
+            setExerciseLibrary(library);
+        };
+        fetchLibrary();
+    }, [gymId]);
+
+    const expirationDateString = useMemo(() => {
+        if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
+        const generated = new Date(routineGeneratedDate);
+        const expiration = new Date(generated);
+        expiration.setDate(expiration.getDate() + routine.totalDurationWeeks * 7);
+        return expiration.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    }, [routineGeneratedDate, routine?.totalDurationWeeks]);
+
+
+    if (!routine) return null;
+
+    return (
+        <div className="plan-container animated-fade-in">
+             <div className="plan-header">
+                <h2>Mi Rutina: {routine.planName}</h2>
+                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+                {expirationDateString && <p className="expiration-date">Tu plan finaliza el: <strong>{expirationDateString}</strong></p>}
+            </div>
+
+            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
+                Solicitar Cambio al Entrenador
+            </button>
+            
+            <AccordionPhasesClient
+                phases={routine.phases}
+                activePhaseIndex={activePhaseIndex}
+                setActivePhaseIndex={setActivePhaseIndex}
+                clientData={clientData}
+                onProgressLogged={onProgressLogged}
+                exerciseLibrary={exerciseLibrary}
+                onPlayVideo={onPlayVideo}
+            />
+        </div>
+    );
+};
+
+const AccordionPhasesClient: React.FC<{
+    phases: Phase[];
+    activePhaseIndex: number;
+    setActivePhaseIndex: (index: number) => void;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+    exerciseLibrary: ExerciseLibrary | null;
+    onPlayVideo: (url: string) => void;
+}> = ({ phases, activePhaseIndex, setActivePhaseIndex, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
+    
+    const togglePhase = (index: number) => {
+        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
+    };
+
+    return (
+        <div className="accordion-phases">
+            {phases.map((phase, phaseIndex) => (
+                <div key={phaseIndex} className="accordion-item">
+                    <button 
+                        className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
+                        onClick={() => togglePhase(phaseIndex)}
+                        aria-expanded={activePhaseIndex === phaseIndex}
+                    >
+                        <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
+                         <span className="accordion-header-icon">+</span>
+                    </button>
+                    <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
+                        <PhaseContentClient 
+                            phase={phase}
+                            clientData={clientData}
+                            onProgressLogged={onProgressLogged}
+                            exerciseLibrary={exerciseLibrary}
+                            onPlayVideo={onPlayVideo}
+                        />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const PhaseContentClient: React.FC<{
+    phase: Phase;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+    exerciseLibrary: ExerciseLibrary | null;
+    onPlayVideo: (url: string) => void;
+}> = ({ phase, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
+
+    const dayPlan = phase.routine.dias[activeDayIndex];
+    if (!dayPlan) return <p>No hay días definidos.</p>;
+
+    // Helper to find video URL from library
+    const findVideoUrl = (exerciseName: string): string | undefined => {
+        if (!exerciseLibrary) return undefined;
+        for (const group in exerciseLibrary) {
+            const found = exerciseLibrary[group].find(ex => ex.name === exerciseName);
+            if (found) return found.videoUrl;
+        }
+        return undefined;
+    };
+
+    return (
+        <div>
+            <nav className="day-tabs-nav">
+                {phase.routine.dias.map((dia, index) => (
+                    <button
+                        key={index}
+                        className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`}
+                        onClick={() => setActiveDayIndex(index)}
+                    >
+                        {dia.dia}
+                    </button>
+                ))}
+            </nav>
+            <div className="day-card">
+                 <h3>
+                    {dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span>
+                </h3>
+                <ul className="exercise-list">
+                     {dayPlan.ejercicios.map((exercise, index) => (
+                        <li key={index} className="exercise-item">
+                            <ExerciseView 
+                                exercise={exercise} 
+                                videoUrl={findVideoUrl(exercise.nombre)}
+                                onPlayVideo={onPlayVideo}
+                             />
+                            <ProgressTracker 
+                                exerciseName={exercise.nombre} 
+                                clientData={clientData} 
+                                onProgressLogged={onProgressLogged}
+                            />
+                        </li>
+                    ))}
+                </ul>
+                {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
+            </div>
+        </div>
+    );
+};
+
+
+const ProgressTracker: React.FC<{
+    exerciseName: string;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+}> = ({ exerciseName, clientData, onProgressLogged }) => {
+    const [weight, setWeight] = useState('');
+    const [repetitions, setRepetitions] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+
+    const lastLog = useMemo(() => {
+        const logs = clientData.progressLog?.[exerciseName];
+        if (logs && logs.length > 0) {
+            return logs[logs.length - 1];
+        }
+        return null;
+    }, [clientData.progressLog, exerciseName]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!weight || !repetitions) return;
+
+        setIsSaving(true);
+        
+        const newLogEntry: ProgressLogEntry = {
+            date: new Date().toISOString(),
+            weight: parseFloat(weight),
+            repetitions: parseInt(repetitions, 10),
+        };
+        
+        const updatedProgressLog = { ...clientData.progressLog };
+        if (!updatedProgressLog[exerciseName]) {
+            updatedProgressLog[exerciseName] = [];
+        }
+        updatedProgressLog[exerciseName].push(newLogEntry);
+        
+        const success = await apiClient.saveClientData(clientData.dni, { progressLog: updatedProgressLog });
+
+        if (success) {
+            setIsSaved(true);
+            setWeight('');
+            setRepetitions('');
+            onProgressLogged();
+            setTimeout(() => setIsSaved(false), 2000);
+        } else {
+            alert("Error al guardar el progreso.");
+        }
+        
+        setIsSaving(false);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="exercise-tracking">
+            <div>
+                <label htmlFor={`weight-${exerciseName}`}>Peso (kg)</label>
+                <input
+                    id={`weight-${exerciseName}`}
+                    type="number"
+                    step="0.5"
+                    placeholder={lastLog ? `Últ: ${lastLog.weight}` : "e.g., 20.5"}
+                    value={weight}
+                    onChange={e => setWeight(e.target.value)}
+                    className="form-group input"
+                />
+            </div>
+            <div>
+                <label htmlFor={`reps-${exerciseName}`}>Repeticiones</label>
+                <input
+                    id={`reps-${exerciseName}`}
+                    type="number"
+                    placeholder={lastLog ? `Últ: ${lastLog.repetitions}` : "e.g., 10"}
+                    value={repetitions}
+                    onChange={e => setRepetitions(e.target.value)}
+                    className="form-group input"
+                />
+            </div>
+            <button type="submit" disabled={isSaving || !weight || !repetitions} className={`cta-button secondary ${isSaved ? 'saved' : ''}`}>
+                {isSaving ? <span className="spinner small"></span> : (isSaved ? 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41-1.41L9,16.17z"></path></svg>
+                    : 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
+                )}
+            </button>
+        </form>
+    );
+};
+
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);

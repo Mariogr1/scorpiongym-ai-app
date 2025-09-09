@@ -19,11 +19,9 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'PUT':
       try {
-        const { name, logoSvg, password, dailyQuestionLimit } = req.body;
+        const { name, password, dailyQuestionLimit, logoSvg, planType } = req.body;
         const updateData = {};
         if (name) updateData.name = name;
-        // Allows setting the logo to null/undefined or a new string
-        if (logoSvg !== undefined) updateData.logoSvg = logoSvg;
         
         // In a real production app, password should be hashed.
         // Following project's current convention of storing plaintext.
@@ -33,6 +31,14 @@ export default async function handler(req, res) {
 
         if (dailyQuestionLimit !== undefined) {
             updateData.dailyQuestionLimit = Number(dailyQuestionLimit);
+        }
+        
+        if (logoSvg !== undefined) {
+            updateData.logoSvg = logoSvg;
+        }
+
+        if (planType) {
+            updateData.planType = planType;
         }
 
         if (Object.keys(updateData).length === 0) {

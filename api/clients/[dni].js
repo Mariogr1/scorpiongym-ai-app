@@ -15,6 +15,16 @@ export default async function handler(req, res) {
           return res.status(404).json({ message: 'Client not found' });
         }
 
+        // --- Backward compatibility for diet plans ---
+        if (clientData && clientData.dietPlan && !clientData.dietPlans) {
+            clientData.dietPlans = [clientData.dietPlan, null];
+            delete clientData.dietPlan; // Clean up old field
+        } else if (clientData && !clientData.dietPlans) {
+            // Ensure new clients or clients without any plan have the correct structure
+            clientData.dietPlans = [null, null];
+        }
+
+
         // Fetch gym's dailyQuestionLimit and attach it to the client data
         if (clientData.gymId) {
             try {
@@ -23,6 +33,7 @@ export default async function handler(req, res) {
                 const gym = await gymsCollection.findOne({ _id: gymObjectId });
                 if (gym) {
                     clientData.dailyQuestionLimit = gym.dailyQuestionLimit;
+                    clientData.planType = gym.planType;
                 }
             } catch (e) {
                  console.error(`Could not fetch gym details for client ${dni}:`, e);
@@ -39,6 +50,20 @@ export default async function handler(req, res) {
     case 'PUT':
       try {
         const dataToUpdate = req.body;
+
+        // Special action to reset plan generation for a client
+        if (dataToUpdate.action === 'reset_plan') {
+            const result = await collection.updateOne(
+              { dni: dni },
+              { $set: { planStatus: 'pending', routine: null, dietPlans: [null, null], routineGeneratedDate: null } }
+            );
+            if (result.matchedCount === 0) {
+              return res.status(404).json({ message: 'Client not found' });
+            }
+            return res.status(200).json({ success: true, message: 'Client plan reset successfully.' });
+        }
+
+
         delete dataToUpdate._id;
         // Prevent client-side from overwriting the limit
         delete dataToUpdate.dailyQuestionLimit;

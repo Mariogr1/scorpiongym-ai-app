@@ -1,4 +1,5 @@
 
+
 import clientPromise from './util/mongodb.js';
 
 export default async function handler(req, res) {
@@ -20,6 +21,8 @@ export default async function handler(req, res) {
             profile: c.profile || {},
             planName: c.routine?.planName || 'Sin plan',
             status: c.status || 'active',
+            accessCode: c.accessCode,
+            planStatus: c.planStatus || 'pending',
         }));
         res.status(200).json(clientList);
       } catch (e) {
@@ -46,9 +49,10 @@ export default async function handler(req, res) {
             gymId,
             accessCode: newAccessCode,
             status: 'active',
-            profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Cuerpo completo", bodyFocusSpecific: "", includeAdaptationPhase: "Sí", trainingIntensity: "Moderada" },
+            planStatus: 'pending',
+            profile: { name: "", age: "", weight: "", height: "", gender: "Prefiero no decirlo", level: "Principiante", goal: "Hipertrofia", trainingDays: "4", activityFactor: "Sedentario", useAdvancedTechniques: "No", bodyFocusArea: "Full Body", muscleFocus: "General", includeAdaptationPhase: "Sí", includeDeloadPhase: "No", trainingIntensity: "Moderada" },
             routine: null,
-            dietPlan: null,
+            dietPlans: [null, null],
             progressLog: {},
             bodyWeightLog: [],
             termsAccepted: false,

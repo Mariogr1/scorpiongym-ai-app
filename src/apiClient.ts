@@ -1,4 +1,5 @@
 // --- Type Definitions ---
+export type PlanType = 'full' | 'routine' | 'nutrition';
 export interface Profile {
     name: string;
     age: string;
@@ -10,9 +11,10 @@ export interface Profile {
     trainingDays: string;
     activityFactor: 'Sedentario' | 'Ligero' | 'Activo' | 'Muy Activo';
     useAdvancedTechniques: 'Sí' | 'No';
-    bodyFocusArea: 'Cuerpo completo' | 'Tren Superior' | 'Tren Inferior';
-    bodyFocusSpecific: string;
+    bodyFocusArea: 'Full Body' | 'Tren Superior' | 'Tren Inferior';
+    muscleFocus: string; // e.g., 'General', 'Cuádriceps', 'Pecho'
     includeAdaptationPhase: 'Sí' | 'No';
+    includeDeloadPhase: 'Sí' | 'No';
     trainingIntensity: 'Baja' | 'Moderada' | 'Alta' | 'Extrema';
 }
 
@@ -22,6 +24,7 @@ export interface Exercise {
     repeticiones: string;
     descanso: string;
     tecnicaAvanzada?: string;
+    videoUrl?: string;
 }
 
 export interface DayPlan {
@@ -87,7 +90,7 @@ export interface BodyWeightEntry {
 export interface ExerciseDefinition {
     name: string;
     isEnabled: boolean;
-    youtubeLink: string;
+    videoUrl: string;
 }
 
 export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
@@ -99,13 +102,15 @@ export interface ClientData {
     profile: Profile;
     routine: Routine | null;
     routineGeneratedDate?: string;
-    dietPlan: DietPlan | null;
+    dietPlans: (DietPlan | null)[];
     progressLog: ProgressLog;
     bodyWeightLog?: BodyWeightEntry[];
     termsAccepted?: boolean;
     accessCode: string;
     status?: 'active' | 'archived';
+    planStatus: 'pending' | 'active' | 'expired';
     dailyQuestionLimit?: number; // Added from Gym
+    planType?: PlanType;
     aiUsage?: { date: string; count: number }; // Added to track usage
 }
 
@@ -114,26 +119,39 @@ export interface ClientListItem {
     profile: Partial<Profile>;
     planName: string;
     status: 'active' | 'archived';
+    accessCode: string;
+    planStatus: 'pending' | 'active' | 'expired';
 }
 
 export interface Gym {
     _id: string;
     name: string;
     username: string;
-    logoSvg?: string;
     dailyQuestionLimit?: number; // Added
+    logoSvg?: string;
+    planType?: PlanType;
+}
+
+export interface Request {
+    _id: string;
+    clientId: string;
+    clientName: string;
+    gymId: string;
+    subject: string;
+    message: string;
+    status: 'new' | 'read' | 'resolved';
+    createdAt: string;
 }
 
 
 // --- Constants ---
-export const SUPER_ADMIN_PASSWORD = "admin986101";
 
-export const advancedTechniqueOptions = [
-      { value: '', label: 'Ninguna' },
-      { value: 'Drop Set (2 descensos) - Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.', label: 'Drop Set (2 descensos)' },
-      { value: 'Rest-Pause (3 pausas) - Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.', label: 'Rest-Pause (3 pausas)' },
-      { value: 'Myo-reps (3 pasadas) - Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.', label: 'Myo-reps (3 pasadas)' },
-      { value: 'Excéntricas (fase de 4-6s) - Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.', label: 'Excéntricas (Negativas)' }
+export const advancedTechniqueOptions: { value: string; label: string; description: string; }[] = [
+      { value: '', label: 'Ninguna', description: 'Sin técnica avanzada.' },
+      { value: 'Drop Set', label: 'Drop Set (2 descensos)', description: 'Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.' },
+      { value: 'Rest-Pause', label: 'Rest-Pause (3 pausas)', description: 'Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.' },
+      { value: 'Myo-reps', label: 'Myo-reps (3 pasadas)', description: 'Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.' },
+      { value: 'Excéntricas', label: 'Excéntricas (Negativas)', description: 'Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.' }
 ];
 
 export const apiClient = {
@@ -149,12 +167,12 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string, logoSvg: string | null, dailyQuestionLimit: number): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, logoSvg, dailyQuestionLimit }),
+            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
         });
         return response.ok;
     } catch (error) {
@@ -163,7 +181,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: { name?: string; logoSvg?: string | null; password?: string, dailyQuestionLimit?: number }): Promise<boolean> {
+  async updateGym(gymId: string, data: { name?: string; password?: string, dailyQuestionLimit?: number, logoSvg?: string | null, planType?: PlanType }): Promise<boolean> {
      try {
         const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',
@@ -303,6 +321,20 @@ export const apiClient = {
     }
   },
 
+  async enablePlanGeneration(dni: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reset_plan' }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to enable plan generation for client ${dni}:`, error);
+        return false;
+    }
+  },
+
   // Exercise Library Management (Scoped by Gym)
   async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {
     try {
@@ -331,6 +363,56 @@ export const apiClient = {
     } catch (error) {
         console.error(`Failed to save exercise library:`, error);
         return false;
+    }
+  },
+
+  // --- Trainer Request System ---
+  async getRequests(gymId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?gymId=${gymId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch requests:", error);
+      return [];
+    }
+  },
+
+  async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
+    try {
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to create request:", error);
+      return false;
+    }
+  },
+
+  async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to update request ${requestId}:`, error);
+      return false;
+    }
+  },
+
+  async deleteRequest(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to delete request ${requestId}:`, error);
+      return false;
     }
   },
 };
