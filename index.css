@@ -34,7 +34,34 @@ body {
   padding: 1rem;
 }
 
-/* --- Modal de Confirmación --- */
+/* --- Logo --- */
+.app-logo {
+  object-fit: contain;
+}
+.login-container header .app-logo,
+.agreement-container header .app-logo {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 1rem;
+}
+.main-header .app-logo {
+    width: 40px;
+    height: 40px;
+    margin-right: 1rem;
+    flex-shrink: 0;
+    overflow: hidden; /* PREVENTS SVG FROM EXPANDING */
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #cccccc; /* Light gray for contrast */
+    border-radius: 6px;
+    padding: 5px;
+    border: 1px solid var(--border-color);
+}
+
+
+/* --- Modal de Confirmación y Edición --- */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -50,6 +77,7 @@ body {
 }
 
 .modal-content {
+  position: relative; /* Anchor for the close button */
   background-color: var(--surface-color);
   padding: 2.5rem;
   border-radius: 12px;
@@ -59,6 +87,39 @@ body {
   border: 1px solid var(--border-color);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
+
+.close-button {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    z-index: 10;
+}
+.close-button:hover {
+    color: var(--text-color);
+}
+
+.modal-content.edit-modal {
+    text-align: left;
+}
+.modal-content.edit-modal h3 {
+    margin-bottom: 2rem;
+    font-size: 1.5rem;
+    padding-right: 2rem; /* Make space for the close button on the right */
+}
+
+.success-message p {
+    color: var(--success-color);
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
 
 .modal-content p {
   font-size: 1.2rem;
@@ -77,6 +138,40 @@ body {
     flex-grow: 1;
 }
 
+/* --- QR Modal --- */
+.qr-modal {
+    padding: 2rem;
+}
+.qr-modal h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    margin-top: 1rem; /* Add space for close button */
+}
+.qr-modal p {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+}
+.qr-code-container {
+    background-color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    line-height: 0; /* To remove extra space under svg */
+}
+.app-url-display {
+    font-size: 0.9rem;
+    color: var(--text-secondary-color);
+    word-break: break-all;
+}
+.app-url-display a {
+    color: var(--archive-color);
+    text-decoration: none;
+}
+.app-url-display a:hover {
+    text-decoration: underline;
+}
+
+
 /* --- Vistas de Login y Landing --- */
 .login-container, .client-view-container {
   display: flex;
@@ -88,17 +183,50 @@ body {
   padding: 1rem;
 }
 
-.login-container header, .client-view-container header {
+.login-container header, .client-view-container > header, .agreement-container header {
     margin-bottom: 2rem;
     width: 100%;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-.login-container h1, .client-view-container h1 {
+.client-view-container > header {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+}
+
+.client-header-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+
+/* Titles for App Landing */
+.login-container > header h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+.login-container > header p {
+    font-size: 1.2rem;
+}
+
+/* Titles inside login/client boxes */
+.login-box h1, .client-view-container h1, .agreement-container h1 {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--primary-color);
+    color: var(--text-color);
 }
+
+.client-view-container h1 {
+    font-size: 1.8rem;
+    margin: 0;
+}
+
 
 .login-box, .landing-box {
   background-color: var(--surface-color);
@@ -148,13 +276,229 @@ body {
     margin: -0.5rem 0 0.5rem 0;
 }
 
+.success-text {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
 .role-selection {
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
 
-/* --- Panel de Administrador --- */
+/* --- Estilos para la nueva Landing View --- */
+.landing-view {
+    justify-content: center; /* Centra verticalmente */
+}
+
+.landing-view header {
+    margin-bottom: 3rem;
+}
+
+.landing-view header .app-logo {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 1.5rem;
+}
+
+.landing-view header h1 {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.landing-subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 0;
+}
+
+.landing-actions {
+    width: 100%;
+    max-width: 400px;
+}
+
+
+/* --- Panel de Administrador General --- */
+.password-management {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin: 2rem 0;
+    border: 1px solid var(--border-color);
+}
+.password-management h2 {
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    color: var(--text-color);
+}
+.password-management form {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+}
+.password-management .form-group {
+    flex-grow: 1;
+}
+.password-management input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 1rem;
+}
+.password-management .cta-button {
+    width: auto;
+    flex-shrink: 0;
+}
+
+.add-gym-container {
+    background-color: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-color);
+}
+.add-gym-container h3 {
+    margin-bottom: 1.5rem;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+.add-gym-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+.add-gym-form input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 1rem;
+}
+.add-gym-actions {
+    display: flex;
+    gap: 1rem;
+    grid-column: 1 / -1; /* Span all columns */
+}
+
+/* Custom File Input */
+.file-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.file-input-label {
+  background-color: var(--secondary-button-color);
+  color: var(--text-color);
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color: 0.2s ease;
+}
+.file-input-label:hover {
+  background-color: var(--secondary-button-hover);
+}
+.file-input-wrapper input[type="file"] {
+  display: none;
+}
+.file-input-preview {
+  width: 50px;
+  height: 50px;
+  background-color: #cccccc; /* Light gray for contrast */
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #111; /* Dark text for light background */
+  font-weight: 600;
+  font-size: 0.8rem;
+  overflow: hidden;
+  padding: 5px; /* Add padding for the inner image */
+}
+
+.gym-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+.gym-card {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border-left: 4px solid var(--archive-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.gym-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    border-color: var(--primary-color);
+}
+.gym-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+.gym-card-logo {
+    width: 50px;
+    height: 50px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background-color: #cccccc; /* Light gray for contrast */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    padding: 5px;
+    border: 1px solid var(--border-color);
+}
+
+.gym-card-info {
+    flex-grow: 1;
+}
+.gym-card h3 {
+    margin: 0 0 0.25rem 0;
+    color: var(--text-color);
+}
+.gym-card p {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+.gym-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    align-items: center;
+}
+.gym-card-actions .cta-button {
+    width: auto;
+    flex-grow: 1;
+}
+.gym-card-actions .action-btn {
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+
+/* --- Panel de Gimnasio/Entrenador --- */
 .admin-dashboard, .library-container {
     padding: 1rem;
     margin-top: 2rem;
@@ -162,6 +506,7 @@ body {
 
 .admin-header-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     align-items: center;
 }
@@ -175,9 +520,36 @@ body {
     cursor: pointer;
     transition: background-color 0.2s;
     font-weight: 500;
+    position: relative;
 }
 .header-nav-button:hover {
     background-color: var(--secondary-button-hover);
+}
+
+.share-app-button {
+    background-color: var(--archive-color);
+    border-color: var(--archive-color);
+}
+.share-app-button:hover {
+    background-color: #2b8cce;
+    border-color: #2b8cce;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 2px solid var(--surface-color);
 }
 
 
@@ -195,7 +567,7 @@ body {
     flex-wrap: wrap;
     gap: 1.5rem;
     max-width: 100%;
-    margin-bottom: 1.5rem;
+    margin: 2rem 0;
 }
 
 .add-client-form, .search-client-form {
@@ -263,14 +635,48 @@ body {
     background-color: rgba(229, 9, 20, 0.1);
 }
 
+.client-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
 .client-card h3 {
     margin-bottom: 0.5rem;
     color: var(--text-color);
+    word-break: break-word;
 }
 .client-card p {
     color: var(--text-secondary-color);
     font-size: 0.9rem;
     margin-bottom: 0.25rem;
+}
+
+.client-card-access-code {
+    background-color: var(--background-color);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    display: inline-block;
+}
+
+.client-card-access-code strong {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+.client-status-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.client-status-badge.pending {
+    background-color: var(--warning-border-color);
+    color: var(--background-color);
 }
 
 .client-selection-checkbox {
@@ -363,6 +769,10 @@ body {
 
 
 /* --- Vista de gestión de cliente --- */
+.client-management-view {
+    position: relative;
+}
+
 .main-header {
     display: flex;
     justify-content: space-between;
@@ -384,6 +794,8 @@ body {
 .main-header .header-title-wrapper {
     flex-grow: 1;
     text-align: left;
+    display: flex;
+    align-items: center;
 }
 
 .back-button, .logout-button {
@@ -451,7 +863,7 @@ body {
     color: var(--text-secondary-color);
     margin-bottom: 0.4rem;
 }
-.form-group input, .form-group select {
+.form-group input, .form-group select, .form-group textarea {
     width: 100%;
     padding: 0.7rem;
     background-color: var(--background-color);
@@ -459,8 +871,9 @@ body {
     border-radius: 6px;
     color: var(--text-color);
     font-size: 1rem;
+    font-family: inherit;
 }
-.form-group input:focus, .form-group select:focus {
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
     outline: none;
     border-color: var(--primary-color);
 }
@@ -483,6 +896,11 @@ body {
     color: var(--primary-color);
     letter-spacing: 4px;
     margin-top: 0.5rem;
+}
+
+.enable-generation-button {
+    margin-top: 1.5rem;
+    width: 100%;
 }
 
 
@@ -552,7 +970,7 @@ body {
 }
 .cta-button.regenerate {
     display: block;
-    margin: 2rem auto 0 auto;
+    margin: 1.5rem auto 0 auto;
     width: fit-content;
 }
 
@@ -565,1047 +983,10 @@ body {
     background: none;
     border: none;
     color: var(--text-secondary-color);
-    padding: 1rem 1.5rem;
-    cursor: pointer;
-    font-size: 1.1rem;
-    position: relative;
-    transition: color 0.2s;
-}
-.main-tab-button:hover {
-    color: var(--text-color);
-}
-.main-tab-button.active {
-    color: var(--text-color);
-    font-weight: 600;
-}
-.main-tab-button.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background-color: var(--primary-color);
-}
-
-.results-section .placeholder {
-    text-align: center;
-    color: var(--text-secondary-color);
-    padding: 4rem 2rem;
-    border: 2px dashed var(--border-color);
-    border-radius: 10px;
-    margin-top: 2rem;
-}
-.placeholder-action {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 4rem 2rem;
-}
-
-.loading-container, .error-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    min-height: 400px;
-}
-.error-container {
-    color: var(--error-color);
-    background-color: rgba(255, 77, 77, 0.1);
-    padding: 2rem;
-    border-radius: 10px;
-}
-
-.spinner {
-    border: 4px solid var(--border-color);
-    border-top: 4px solid var(--primary-color);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-}
-.spinner.small {
-    width: 20px;
-    height: 20px;
-    border-width: 3px;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 0.5rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.plan-container, .diet-plan-container {
-    animation: fadeIn 0.5s ease-in-out;
-}
-
-.plan-header {
-    margin-bottom: 1.5rem;
-}
-
-.plan-header h2 {
-    font-size: 1.8rem;
-}
-
-.phases-container {
-    background-color: var(--background-color);
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin-top: 1rem;
-}
-
-.phase-tabs-nav, .day-tabs-nav {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-}
-.phase-tab-button, .day-tab-button {
-    background-color: var(--surface-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    padding: 0.6rem 1.2rem;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.phase-tab-button:hover, .day-tab-button:hover {
-    background-color: var(--secondary-button-hover);
-    color: var(--text-color);
-}
-.phase-tab-button.active, .day-tab-button.active {
-    background-color: var(--primary-color);
-    color: var(--text-color);
-    border-color: var(--primary-color);
-    font-weight: 600;
-}
-
-.routine-plan.editable .day-card {
-    background-color: transparent;
-    padding: 0;
-}
-
-.day-card {
-    background-color: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: 10px;
-}
-.day-card h3, .day-card h4 {
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-}
-.muscle-group {
-    color: var(--primary-color);
-}
-.exercise-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-.exercise-item {
-    background-color: var(--background-color);
-    padding: 1.25rem;
-    border-radius: 8px;
-    border-left: 4px solid var(--primary-color);
-}
-.exercise-item.editable {
-    padding: 1.5rem;
-    border: 1px solid var(--border-color);
-}
-
-.exercise-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-}
-.exercise-item-header h4 {
-    font-size: 1.1rem;
-    color: var(--text-color);
-    margin: 0;
-}
-
-.exercise-item.editable .form-group {
-    margin-bottom: 1rem;
-}
-.exercise-item.editable .form-group:last-child {
-    margin-bottom: 0;
-}
-
-.exercise-input.name-select {
-    width: 100%;
-    margin-bottom: 0.5rem;
-}
-.exercise-name-wrapper {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-.exercise-name {
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-.video-link {
-    color: var(--text-secondary-color);
-    transition: color 0.2s;
-    flex-shrink: 0;
-    margin-left: 1rem;
-}
-.video-link svg {
-    width: 24px;
-    height: 24px;
-}
-.video-link:hover {
-    color: var(--primary-color);
-}
-
-
-.exercise-details {
-    display: flex;
-    gap: 1.5rem;
-    color: var(--text-secondary-color);
-    flex-wrap: wrap;
-}
-.exercise-details.editable {
-    gap: 1rem;
-    align-items: center;
-}
-.exercise-details.editable input {
-    width: 60px;
-    padding: 0.4rem;
-}
-.exercise-details span {
-    font-size: 0.9rem;
-}
-.cardio-note {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    font-style: italic;
-}
-
-.add-exercise-action {
-    margin-top: 1.5rem;
-    text-align: center;
-}
-
-.add-exercise-button {
-    background-color: var(--surface-color);
-    border: 2px dashed var(--border-color);
-    color: var(--text-secondary-color);
-    width: 100%;
     padding: 1rem;
-    border-radius: 8px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.add-exercise-button:hover {
-    background-color: var(--background-color);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-/* --- Nutrición --- */
-.diet-summary {
-    display: flex;
-    justify-content: space-around;
-    background-color: var(--background-color);
-    padding: 1rem;
-    border-radius: 8px;
-    margin: 1.5rem 0;
-    text-align: center;
-}
-.diet-summary div {
-    flex: 1;
-}
-.diet-summary strong {
-    display: block;
-    color: var(--text-secondary-color);
-    font-size: 0.9rem;
-}
-.meals-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-}
-.meal-card {
-    background-color: var(--background-color);
-    padding: 1.5rem;
-    border-radius: 10px;
-}
-.meal-card h3, .meal-card h4 {
-    color: var(--primary-color);
-    margin-bottom: 1rem;
-}
-.meal-card ul {
-    list-style: none;
-}
-.meal-card li {
-    margin-bottom: 0.5rem;
-    display: flex;
-    justify-content: space-between;
-}
-.meal-card li span {
-    color: var(--text-secondary-color);
-}
-
-.recommendations-section {
-    margin-top: 2rem;
-    padding: 1.5rem;
-    background-color: var(--background-color);
-    border-radius: 10px;
-    border-left: 4px solid var(--archive-color);
-}
-.recommendations-section h4 {
-    margin-bottom: 1rem;
-}
-.recommendations-section ul {
-    padding-left: 1rem;
-}
-.recommendations-section li {
-    margin-bottom: 0.5rem;
-}
-
-/* --- BMI Display --- */
-.bmi-display {
-    margin-top: 1.5rem;
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    background-color: var(--surface-color);
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    width: fit-content;
-}
-.bmi-category {
-    font-weight: 600;
-    padding: 0.1rem 0.5rem;
-    border-radius: 5px;
-}
-.bmi-category.underweight { background-color: var(--primary-color); }
-.bmi-category.normal { background-color: var(--success-color); }
-.bmi-category.overweight { background-color: #f1c40f; color: #000; }
-.bmi-category.obesity { background-color: var(--primary-color); }
-.bmi-display.client-bmi {
-    margin: -1rem auto 1.5rem auto;
-}
-
-/* --- Target Weight --- */
-.target-weight-info {
-    padding: 0.75rem 1rem;
-    background-color: var(--warning-bg-color);
-    border: 1px solid var(--warning-border-color);
-    color: var(--warning-border-color);
-    border-radius: 8px;
-    margin: 1rem 0;
-}
-
-/* --- Client Portal --- */
-.client-view-container .plan-header {
-    text-align: center;
-}
-.advanced-technique {
-    margin-top: 1rem;
-    padding: 0.75rem;
-    background-color: var(--warning-bg-color);
-    border: 1px solid var(--warning-border-color);
-    border-radius: 8px;
-    color: var(--warning-border-color);
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-.advanced-technique span {
-    margin-right: 0.5rem;
-}
-
-.exercise-tracking {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
-    align-items: flex-end;
-}
-.exercise-tracking > div {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-.exercise-tracking label {
-    font-size: 0.8rem;
-    color: var(--text-secondary-color);
-    margin-bottom: 0.25rem;
-}
-.exercise-tracking input {
-    width: 100%;
-    padding: 0.6rem;
-    font-size: 1rem;
-}
-.save-progress-button {
-    margin-top: 1.5rem;
-    padding: 0.8rem 1.5rem;
-    width: auto;
-    background-color: var(--success-color);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.save-progress-button.saved {
-    background-color: var(--success-color);
-    opacity: 0.7;
-}
-.save-progress-button:hover {
-    background-color: #5cb85c;
-}
-
-.body-weight-logger {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
-    background-color: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: 12px;
-    max-width: 400px;
-    width: 100%;
-}
-.body-weight-logger .input-group {
-    display: flex;
-    gap: 0.5rem;
-    width: 100%;
-}
-.body-weight-logger input {
-    flex-grow: 1;
-    font-size: 1rem;
-    padding: 0.6rem;
-}
-.body-weight-logger .log-button {
-    background-color: var(--archive-color);
-    border: none;
-    color: white;
-    padding: 0 1rem;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.log-button.saved {
-    background-color: var(--success-color);
-}
-
-.expired-view {
-    padding: 4rem 2rem;
-    background-color: var(--surface-color);
-    border-radius: 12px;
-}
-.expired-view h2 {
-    color: var(--primary-color);
-    font-size: 2rem;
-    margin-bottom: 1rem;
-}
-
-
-/* --- Agreement View --- */
-.agreement-container {
-    max-width: 800px;
-    margin: 2rem auto;
-    background-color: var(--surface-color);
-    padding: 2rem;
-    border-radius: 12px;
-}
-.terms-box {
-    height: 250px;
-    overflow-y: auto;
-    border: 1px solid var(--border-color);
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    border-radius: 8px;
-    background-color: var(--background-color);
-}
-.terms-box p {
-    white-space: pre-wrap;
-    font-size: 0.9rem;
-    color: var(--text-secondary-color);
-}
-.agreement-actions {
-    margin-top: 2rem;
-    border-top: 1px solid var(--border-color);
-    padding-top: 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    align-items: center;
-}
-.agreement-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-.agreement-checkbox input {
-    width: 18px;
-    height: 18px;
-}
-.agreement-buttons {
-    display: flex;
-    gap: 1rem;
-    width: 100%;
-    justify-content: center;
-}
-
-/* --- Progress View --- */
-.progress-view-container {
-    padding: 1rem;
-    background-color: var(--surface-color);
-    border-radius: 12px;
-    min-height: 400px;
-}
-.progress-tabs-nav {
-    display: flex;
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: 2rem;
-}
-.progress-tab-button {
-    background: none;
-    border: none;
-    color: var(--text-secondary-color);
-    padding: 0.8rem 1.2rem;
     cursor: pointer;
     font-size: 1rem;
     position: relative;
     transition: color 0.2s;
-}
-.progress-tab-button:hover { color: var(--text-color); }
-.progress-tab-button.active {
-    color: var(--text-color);
-    font-weight: 600;
-}
-.progress-tab-button.active::after {
-    content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background-color: var(--primary-color);
-}
-
-.exercise-select-dropdown {
-    width: 100%;
-    padding: 0.8rem;
-    background-color: var(--background-color);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    margin-bottom: 2rem;
-    font-size: 1rem;
-}
-.progress-list-container { margin-top: 2rem; }
-.progress-list-container h3 { margin-bottom: 1rem; }
-.progress-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.progress-list-header, .progress-list-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background-color: var(--background-color);
-    border-radius: 6px;
-    align-items: center;
-}
-.progress-list-header { color: var(--text-secondary-color); font-weight: 600; }
-.progress-list-row span:nth-child(2) { color: var(--success-color); font-weight: 600; }
-/* Styles for IMC value in list */
-.progress-list-row.weight span:nth-child(3).underweight,
-.progress-list-row.weight span:nth-child(3).obesity {
-    color: var(--primary-color);
-    font-weight: 700;
-}
-.progress-list-row.weight span:nth-child(3).normal {
-    color: var(--success-color);
-    font-weight: 700;
-}
-.progress-list-row.weight span:nth-child(3).overweight {
-    color: #f1c40f;
-    font-weight: 700;
-}
-.progress-list-header.weight, .progress-list-row.weight { grid-template-columns: 2fr 1fr 1fr; }
-.progress-list-row.weight span:nth-child(2) { color: var(--archive-color); }
-
-
-.animated-fade-in {
-    animation: fadeIn 0.4s ease-in-out;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Chart Styles */
-.chart-container {
-    background-color: var(--background-color);
-    padding: 1.5rem;
-    border-radius: 10px;
-}
-.chart-container h4 { margin-bottom: 1rem; text-align: center; }
-.body-weight-chart .bar-body-weight { fill: var(--archive-color); transition: fill 0.2s; }
-.body-weight-chart .bar-body-weight:hover { fill: #2b8cce; }
-.body-weight-chart .tooltip-bg.weight { fill: var(--archive-color); }
-.body-weight-chart .tooltip-bg.imc { fill: #e74c3c; }
-
-.body-weight-chart .bar-imc { transition: fill 0.2s; }
-.body-weight-chart .bar-imc:hover { opacity: 0.8; }
-.body-weight-chart .bar-imc.underweight { fill: var(--primary-color); }
-.body-weight-chart .bar-imc.normal { fill: var(--success-color); }
-.body-weight-chart .bar-imc.overweight { fill: #f1c40f; }
-.body-weight-chart .bar-imc.obesity { fill: var(--primary-color); }
-
-
-.exercise-progress-chart .bar-weight { fill: var(--success-color); transition: fill 0.2s; }
-.exercise-progress-chart .bar-weight:hover { fill: #3e8e41; }
-.exercise-progress-chart .bar-reps { fill: #3498db; transition: fill 0.2s; }
-.exercise-progress-chart .bar-reps:hover { fill: #2980b9; }
-.exercise-progress-chart .tooltip-bg.weight { fill: var(--success-color); }
-.exercise-progress-chart .tooltip-bg.reps { fill: #3498db; }
-
-.axis line, .axis path { stroke: var(--border-color); }
-.axis text { fill: var(--text-secondary-color); font-size: 0.75rem; }
-.axis-label { fill: var(--text-secondary-color); font-size: 0.9rem; font-weight: 600; }
-.y-axis-left line { stroke: var(--border-color); }
-
-.chart-tooltip rect {
-  opacity: 0.9;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-.chart-tooltip text {
-  fill: var(--background-color);
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-.chart-legend {
-    display: flex;
-    justify-content: center;
-    gap: 1.5rem;
-    margin-top: 1rem;
-    font-size: 0.9rem;
-}
-.legend-item { display: flex; align-items: center; gap: 0.5rem; }
-.legend-color-box {
-    width: 15px; height: 15px; border-radius: 3px;
-}
-.legend-color-box.weight { background-color: var(--success-color); }
-.legend-color-box.reps { background-color: #3498db; }
-.legend-color-box.body-weight { background-color: var(--archive-color); }
-.legend-color-box.imc { background-color: #e74c3c; }
-
-
-/* --- Exercise Library Manager --- */
-.library-instructions {
-    background-color: var(--surface-color);
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 2rem;
-    border-left: 4px solid var(--archive-color);
-}
-
-.add-exercise-container {
-    background-color: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-}
-
-.add-exercise-container h3 {
-    margin-bottom: 1rem;
-    color: var(--primary-color);
-}
-
-.add-exercise-form {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-}
-
-.add-exercise-form input, .add-exercise-form select {
     flex-grow: 1;
-    padding: 0.7rem;
-    background-color: var(--background-color);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    color: var(--text-color);
-    font-size: 1rem;
-}
-
-.add-exercise-form button {
-    background-color: var(--success-color);
-    color: white;
-    border: none;
-    padding: 0.7rem 1.5rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.2s;
-    flex-shrink: 0;
-}
-
-.add-exercise-form button:hover:not(:disabled) {
-    background-color: #5cb85c;
-}
-
-.add-exercise-form button:disabled {
-    background-color: #555;
-    cursor: not-allowed;
-}
-
-
-.muscle-group-section {
-    margin-bottom: 2.5rem;
-}
-.muscle-group-section h2 {
-    border-bottom: 2px solid var(--primary-color);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
-}
-.exercise-entry-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-.exercise-entry-header, .exercise-entry-row {
-    display: grid;
-    grid-template-columns: 100px 1fr 1fr auto;
-    gap: 1.5rem;
-    align-items: center;
-}
-.exercise-entry-header {
-    color: var(--text-secondary-color);
-    font-weight: 600;
-    padding: 0 1rem;
-}
-.exercise-entry-row {
-    background-color: var(--surface-color);
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-}
-.exercise-name-lib {
-    font-weight: 500;
-}
-.link-input {
-    width: 100%;
-    padding: 0.6rem;
-    font-size: 0.9rem;
-    background-color: var(--background-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    border-radius: 6px;
-}
-
-/* --- Nuevos estilos para Editar/Borrar Ejercicios --- */
-.editing-input {
-    width: 100%;
-    padding: 0.6rem;
-    font-size: 1rem;
-    background-color: #0e0e0e;
-    border: 1px solid var(--primary-color);
-    color: var(--text-color);
-    border-radius: 6px;
-    font-weight: 500;
-}
-.editing-input:focus {
-    outline: none;
-}
-
-.exercise-row-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
-}
-
-.action-btn {
-    background: none;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.action-btn:hover {
-    color: var(--text-color);
-    border-color: var(--text-color);
-}
-
-.action-btn.edit:hover { border-color: var(--archive-color); color: var(--archive-color); }
-.action-btn.delete {
-    background-color: transparent;
-    border-color: var(--error-color);
-    color: var(--error-color);
-}
-.action-btn.delete:hover {
-    background-color: var(--error-color);
-    color: var(--text-color);
-}
-.action-btn.save { background-color: var(--success-color); color: white; border-color: var(--success-color); }
-.action-btn.cancel { background-color: var(--secondary-button-color); color: white; border-color: var(--secondary-button-color); }
-
-
-/* The switch - the box around the slider */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 50px;
-  height: 28px;
-}
-
-/* Hide default HTML checkbox */
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-/* The slider */
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  -webkit-transition: .4s;
-  transition: .4s;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  -webkit-transition: .4s;
-  transition: .4s;
-}
-
-input:checked + .slider {
-  background-color: var(--primary-color);
-}
-
-input:focus + .slider {
-  box-shadow: 0 0 1px var(--primary-color);
-}
-
-input:checked + .slider:before {
-  -webkit-transform: translateX(22px);
-  -ms-transform: translateX(22px);
-  transform: translateX(22px);
-}
-
-/* Rounded sliders */
-.slider.round {
-  border-radius: 34px;
-}
-
-.slider.round:before {
-  border-radius: 50%;
-}
-
-
-/* --- Responsive Design --- */
-
-@media (max-width: 900px) {
-    .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
-    .profile-section {
-        position: static;
-        top: 0;
-    }
-    .exercise-entry-header {
-        display: none;
-    }
-    .exercise-entry-row {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-        padding-bottom: 1rem;
-        position: relative;
-    }
-    .exercise-entry-row .switch {
-        position: absolute;
-        top: 0.75rem;
-        right: 0.75rem;
-    }
-     .exercise-entry-row .exercise-name-lib, .exercise-entry-row .editing-input {
-        margin-top: 2rem;
-    }
-    .exercise-row-actions {
-        margin-top: 0.5rem;
-        justify-content: flex-start;
-    }
-}
-
-@media (max-width: 600px) {
-    #root {
-        margin: 0;
-        padding: 0;
-    }
-    .admin-dashboard, .client-view-container, .library-container {
-        padding: 0.5rem;
-    }
-    .login-box, .landing-box {
-        padding: 1.5rem;
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
-    }
-    
-    .client-management-bar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .add-client-form, .search-client-form {
-        flex: initial; /* Prevents vertical stretching that creates gaps */
-    }
-
-    .view-controls {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-        padding: 0.75rem;
-    }
-
-    .client-list {
-        margin-top: 1rem;
-    }
-    
-    .main-header {
-        flex-direction: column;
-        align-items: stretch;
-        text-align: left;
-        gap: 1rem;
-        padding: 1rem;
-        margin-bottom: 1rem; /* Reduce vertical margin */
-    }
-    
-    .main-header h1 {
-        font-size: 1.8rem;
-    }
-    
-    .main-header .header-title-wrapper {
-        order: -1;
-        width: 100%;
-        text-align: center;
-    }
-
-    .admin-header-nav {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .logout-button.admin-logout {
-        position: static;
-    }
-
-    .main-content {
-        padding: 1rem;
-    }
-    .actions-bar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.5rem;
-    }
-    .actions-bar .cta-button, .actions-bar .save-changes-button {
-        width: 100%;
-    }
-    
-    .main-tabs-nav, .phase-tabs-nav, .day-tabs-nav, .progress-tabs-nav {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 10px; /* for scrollbar */
-        scrollbar-width: thin;
-        scrollbar-color: var(--primary-color) var(--surface-color);
-        border-bottom: none;
-        margin-left: -1rem;
-        margin-right: -1rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    .main-tabs-nav {
-        border-bottom: 1px solid var(--border-color);
-    }
-    
-    .add-exercise-form {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .diet-summary {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
-        padding: 1rem;
-    }
-    .diet-summary div {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-    }
-
-    .exercise-tracking {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.75rem;
-    }
-    .progress-list-header {
-        display: none;
-    }
-    .progress-list-row {
-        display: block;
-        padding: 1rem;
-        border-left: 4px solid var(--primary-color);
-    }
-    .progress-list-row span {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 1rem;
-        padding: 0.25rem 0;
-    }
-    .progress-list-row span::before {
-        font-weight: 600;
-        color: var(--text-secondary-color);
-    }
-    .progress-list-row span:nth-child(1)::before {
-        content: 'Fecha:';
-    }
-    .progress-list-row span:nth-child(2)::before {
-        content: 'Peso (kg):';
-    }
-    .progress-list-row span:nth-child(3)::before {
-        content: 'Reps:';
-    }
-    .progress-list-row.weight span:nth-child(2)::before {
-        content: 'Peso (kg):';
-    }
-    .progress-list-row.weight span:nth-child(3)::before {
-        content: 'IMC:';
-    }
-
-    .agreement-buttons {
-        flex-direction: column;
-    }
-}
+    text-align: center;

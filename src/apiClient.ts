@@ -46,6 +46,7 @@ export interface Routine {
     planName: string;
     totalDurationWeeks: number;
     phases: Phase[];
+    routineGeneratedDate?: string;
 }
 
 export interface FoodItem {
