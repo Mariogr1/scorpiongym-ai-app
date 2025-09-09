@@ -21,11 +21,13 @@ export default async function handler(req, res) {
     // Use a case-insensitive regex for all username lookups
     const userQuery = { username: { $regex: new RegExp(`^${username}$`, 'i') } };
 
-    // Ensure superadmin user exists for the first time
+    // Special handling for superadmin to ensure it exists and is correct
     if (username.toLowerCase() === 'superadmin') {
         const superAdminQuery = { username: { $regex: /^superadmin$/i } };
         let superAdminUser = await gymsCollection.findOne(superAdminQuery);
+
         if (!superAdminUser) {
+            // If user doesn't exist, create it with a hashed password.
             console.log("Superadmin user not found, creating one with default password.");
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash('admin', salt);
@@ -38,6 +40,15 @@ export default async function handler(req, res) {
                 logoSvg: null,
             };
             await gymsCollection.insertOne(defaultSuperAdmin);
+        } else if (!superAdminUser.password.startsWith('$2')) {
+            // If user exists but password is NOT hashed, update it.
+            console.log("Superadmin password is not hashed. Updating to a hashed password.");
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash('admin', salt);
+            await gymsCollection.updateOne(
+                { _id: superAdminUser._id },
+                { $set: { password: hashedPassword } }
+            );
         }
     }
 
