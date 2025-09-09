@@ -18,26 +18,33 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Username and password are required' });
     }
     
+    // Use a case-insensitive regex for all username lookups
+    const userQuery = { username: { $regex: new RegExp(`^${username}$`, 'i') } };
+
     // Ensure superadmin user exists for the first time
     if (username.toLowerCase() === 'superadmin') {
-        let superAdminUser = await gymsCollection.findOne({ username: 'superadmin' });
+        const superAdminQuery = { username: { $regex: /^superadmin$/i } };
+        let superAdminUser = await gymsCollection.findOne(superAdminQuery);
         if (!superAdminUser) {
             console.log("Superadmin user not found, creating one with default password.");
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash('admin', salt);
             const defaultSuperAdmin = {
                 name: 'Super Administrador',
-                username: 'superadmin',
-                password: hashedPassword, // Default password, can be changed from the dashboard
-                dailyQuestionLimit: 999
+                username: 'superadmin', // Store in a canonical lowercase form
+                password: hashedPassword,
+                dailyQuestionLimit: 999,
+                planType: 'full',
+                logoSvg: null,
             };
             await gymsCollection.insertOne(defaultSuperAdmin);
         }
     }
 
-    const gym = await gymsCollection.findOne({ username });
+    const gym = await gymsCollection.findOne(userQuery);
 
     if (!gym) {
+      // Keep the error message generic for security reasons
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
