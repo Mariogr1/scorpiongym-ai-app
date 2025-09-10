@@ -37,6 +37,45 @@ import {
 // --- Utility Functions ---
 
 /**
+ * A utility function to pause execution for a given number of milliseconds.
+ * @param ms The number of milliseconds to sleep.
+ */
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Wraps an async function with an exponential backoff retry mechanism.
+ * @param fn The async function to execute.
+ * @param maxRetries The maximum number of retries.
+ * @param baseDelay The initial delay in milliseconds.
+ * @returns The result of the wrapped function.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            const errorMessage = err.toString().toLowerCase();
+            const isRetryable = errorMessage.includes('503') || errorMessage.includes('overloaded');
+
+            if (isRetryable && attempt < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                console.warn(`API call failed with retryable error. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries})`);
+                await sleep(delay);
+                attempt++;
+            } else {
+                // Not a retryable error or max retries reached, re-throw.
+                throw err;
+            }
+        }
+    }
+    // This part is technically unreachable due to the throw in the catch block,
+    // but it's good practice for type safety and clarity.
+    throw new Error('Function failed after maximum retries.');
+}
+
+
+/**
  * Extracts a JSON object or array from a string that might contain extraneous text.
  * @param text The string to search within.
  * @returns The extracted JSON string, or null if not found.
@@ -1681,10 +1720,12 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
             `;
             
-            const response: GenerateContentResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
+            const response: GenerateContentResponse = await withRetry(() => 
+                ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                })
+            );
             const text = response.text;
             
             const jsonString = extractJson(text);
@@ -2177,10 +2218,12 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
             
-            const response: GenerateContentResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
+            const response: GenerateContentResponse = await withRetry(() => 
+                ai.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                })
+            );
             const text = response.text;
             
             const jsonString = extractJson(text);
@@ -2581,16 +2624,20 @@ const ChatAssistant: React.FC<{
                     { text: `Analiza esta comida. ${userMessageText}` }
                 ];
 
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: { parts },
-                    config: { systemInstruction: calorieSystemInstruction }
-                });
+                const response = await withRetry(() => 
+                    ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: { parts },
+                        config: { systemInstruction: calorieSystemInstruction }
+                    })
+                );
                 responseText = response.text;
                 // Note: This special request does not get added to the main 'chat' history object
                 // to keep that conversation's context clean (as a fitness coach).
             } else if (chat) {
-                const result: GenerateContentResponse = await chat.sendMessage({ message: userMessageText });
+                const result: GenerateContentResponse = await withRetry(() => 
+                    chat.sendMessage({ message: userMessageText })
+                );
                 responseText = result.text;
             } else {
                  throw new Error("Chat not initialized.");
@@ -2708,7 +2755,9 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string): 
         8. Ajusta el número de ejercicios según la 'trainingIntensity'.
         9. Prioriza 'bodyFocusArea' y 'muscleFocus'.
     `;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await withRetry(() => 
+        ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
+    );
     const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
     return JSON.parse(jsonString);
@@ -2727,7 +2776,9 @@ const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> 
         5. Distribuye las calorías en 4-6 comidas.
         6. Usa alimentos comunes en Argentina.
     `;
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+    const response = await withRetry(() => 
+        ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
+    );
     const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
     return JSON.parse(jsonString);
