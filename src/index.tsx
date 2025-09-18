@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -651,6 +652,11 @@ const NewPasswordResetPage: React.FC<{
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (!password || !confirmPassword) {
+            setError('Ambos campos de contraseña son obligatorios.');
+            return;
+        }
         if (password !== confirmPassword) {
             setError('Las contraseñas no coinciden.');
             return;
