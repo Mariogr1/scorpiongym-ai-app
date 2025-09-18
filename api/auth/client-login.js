@@ -24,6 +24,11 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Invalid credentials or inactive user.' });
     }
 
+    // If a password reset is required, bypass password check and notify the frontend.
+    if (clientData.passwordResetRequired) {
+        return res.status(200).json({ success: true, resetRequired: true });
+    }
+
     let isValid = false;
     // Check if user has a password (self-registered)
     if (clientData.password) {

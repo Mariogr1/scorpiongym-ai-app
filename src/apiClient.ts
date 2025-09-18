@@ -107,7 +107,9 @@ export interface ClientData {
     progressLog: ProgressLog;
     bodyWeightLog?: BodyWeightEntry[];
     termsAccepted?: boolean;
-    accessCode: string;
+    accessCode: string | null;
+    password?: string;
+    passwordResetRequired?: boolean;
     status?: 'active' | 'archived';
     planStatus: 'pending' | 'active' | 'expired';
     dailyQuestionLimit?: number; // Added from Gym
@@ -120,7 +122,7 @@ export interface ClientListItem {
     profile: Partial<Profile>;
     planName: string;
     status: 'active' | 'archived';
-    accessCode: string;
+    accessCode: string | null;
     planStatus: 'pending' | 'active' | 'expired';
 }
 
@@ -329,18 +331,18 @@ export const apiClient = {
     }
   },
 
-  async loginClient(dni: string, accessCode: string): Promise<boolean> {
+  async loginClient(dni: string, accessCode: string): Promise<{ success: boolean; resetRequired?: boolean; }> {
      try {
         const response = await fetch(`/api/auth/client-login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dni, code: accessCode }),
         });
-        if (!response.ok) return false;
+        if (!response.ok) return { success: false };
         const data = await response.json();
-        return data.success;
+        return data; // e.g., { success: true } or { success: true, resetRequired: true }
     } catch (error) {
-        return false;
+        return { success: false };
     }
   },
 
@@ -357,6 +359,35 @@ export const apiClient = {
         return false;
     }
   },
+  
+   async requestPasswordReset(dni: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'request_password_reset' }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to request password reset for client ${dni}:`, error);
+        return false;
+    }
+  },
+
+  async setNewPassword(dni: string, password: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_new_password', password: password }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to set new password for client ${dni}:`, error);
+        return false;
+    }
+  },
+
 
   // Exercise Library Management (Scoped by Gym)
   async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {

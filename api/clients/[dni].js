@@ -1,5 +1,7 @@
+
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
+import bcrypt from 'bcryptjs';
 
 export default async function handler(req, res) {
   const { dni } = req.query;
@@ -50,33 +52,46 @@ export default async function handler(req, res) {
     case 'PUT':
       try {
         const dataToUpdate = req.body;
-
-        // Special action to reset plan generation for a client
-        if (dataToUpdate.action === 'reset_plan') {
-            const result = await collection.updateOne(
-              { dni: dni },
-              { $set: { planStatus: 'pending', routine: null, dietPlans: [null, null], routineGeneratedDate: null } }
-            );
-            if (result.matchedCount === 0) {
-              return res.status(404).json({ message: 'Client not found' });
-            }
-            return res.status(200).json({ success: true, message: 'Client plan reset successfully.' });
+        const clientExists = await collection.findOne({ dni: dni });
+        if (!clientExists) {
+            return res.status(404).json({ message: 'Client not found' });
         }
 
+        // Handle specific actions first
+        if (dataToUpdate.action) {
+            switch (dataToUpdate.action) {
+                case 'reset_plan':
+                    await collection.updateOne({ dni: dni }, { $set: { planStatus: 'pending', routine: null, dietPlans: [null, null], routineGeneratedDate: null } });
+                    return res.status(200).json({ success: true, message: 'Client plan reset successfully.' });
+                
+                case 'request_password_reset':
+                    await collection.updateOne({ dni: dni }, { $set: { passwordResetRequired: true } });
+                    return res.status(200).json({ success: true, message: 'Password reset initiated.' });
 
+                case 'set_new_password':
+                    if (!dataToUpdate.password || dataToUpdate.password.length < 4) {
+                        return res.status(400).json({ message: 'Password is required and must be at least 4 characters.' });
+                    }
+                    const salt = await bcrypt.genSalt(10);
+                    const hashedPassword = await bcrypt.hash(dataToUpdate.password, salt);
+                    await collection.updateOne(
+                        { dni: dni },
+                        { $set: { password: hashedPassword, passwordResetRequired: false, accessCode: null } }
+                    );
+                    return res.status(200).json({ success: true, message: 'Password updated successfully.' });
+            }
+        }
+
+        // Generic data update for other properties
         delete dataToUpdate._id;
-        // Prevent client-side from overwriting the limit
-        delete dataToUpdate.dailyQuestionLimit;
+        delete dataToUpdate.dailyQuestionLimit; // Prevent client-side from overwriting
+        delete dataToUpdate.action; // Ensure action is not saved
         
-        const result = await collection.updateOne(
+        await collection.updateOne(
           { dni: dni },
           { $set: dataToUpdate },
           { upsert: false }
         );
-
-        if (result.matchedCount === 0) {
-          return res.status(404).json({ message: 'Client not found' });
-        }
 
         res.status(200).json({ success: true });
       } catch (e) {

@@ -1,5 +1,4 @@
 
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -306,11 +305,13 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
  * Main application component that handles routing and state.
  */
 const App: React.FC = () => {
-    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration'>('landing');
+    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset'>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
     const [currentGym, setCurrentGym] = useState<Gym | null>(null);
     const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
     const [loginError, setLoginError] = useState<string>('');
+    const [loginMessage, setLoginMessage] = useState('');
+
 
     useEffect(() => {
         // Check session storage to maintain login state
@@ -334,13 +335,18 @@ const App: React.FC = () => {
 
     const handleLogin = async (type: 'client' | 'gym', id: string, code?: string) => {
         setLoginError('');
+        setLoginMessage('');
         if (type === 'client') {
-            const isValid = await apiClient.loginClient(id, code!);
-            if (isValid) {
+            const loginResult = await apiClient.loginClient(id, code!);
+            if (loginResult.success) {
                 sessionStorage.setItem('loggedInClientDni', id);
                 sessionStorage.setItem('userType', 'client');
                 setCurrentClientDni(id);
-                setView('clientView');
+                if (loginResult.resetRequired) {
+                    setView('clientPasswordReset');
+                } else {
+                    setView('clientView');
+                }
             } else {
                 setLoginError('DNI o código de acceso/contraseña incorrecto.');
             }
@@ -399,9 +405,19 @@ const App: React.FC = () => {
             case 'landing':
                 return <LandingPage onIngresar={() => setView('login')} />;
             case 'login':
-                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
             case 'clientRegistration':
                 return <ClientRegistrationPage onRegister={handleRegisterAndLogin} onBack={() => setView('login')} />;
+            case 'clientPasswordReset':
+                return <NewPasswordResetPage 
+                    dni={currentClientDni!} 
+                    onPasswordSet={() => {
+                        setCurrentClientDni(null);
+                        setView('login');
+                        setLoginMessage('¡Contraseña actualizada! Por favor, inicia sesión con tus nuevas credenciales.');
+                    }} 
+                    onBackToLogin={() => setView('login')} 
+                />;
             case 'adminDashboard':
                 return <AdminDashboard 
                             onSelectClient={handleSelectClient} 
@@ -417,7 +433,7 @@ const App: React.FC = () => {
             case 'superAdminDashboard':
                 return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
             default:
-                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
         }
     };
 
@@ -444,9 +460,10 @@ const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
 const LoginPage: React.FC<{ 
     onLogin: (type: 'client' | 'gym', id: string, code?: string) => void; 
     error: string; 
+    message: string;
     onBack: () => void;
     onGoToRegister: () => void;
-}> = ({ onLogin, error, onBack, onGoToRegister }) => {
+}> = ({ onLogin, error, message, onBack, onGoToRegister }) => {
     const [loginType, setLoginType] = useState<'client' | 'gym'>('client');
     const [id, setId] = useState('');
     const [code, setCode] = useState('');
@@ -469,6 +486,7 @@ const LoginPage: React.FC<{
 
                 <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Entrenador'}</h2>
                 <p>{loginType === 'client' ? 'Ingresa tu DNI y código o contraseña.' : 'Ingresa tu usuario y contraseña.'}</p>
+                 {message && <p className="success-text" style={{marginBottom: '1rem'}}>{message}</p>}
                 <form onSubmit={handleSubmit}>
                     <input
                         type="text"
@@ -619,6 +637,79 @@ const ClientRegistrationPage: React.FC<{
     );
 };
 
+const NewPasswordResetPage: React.FC<{
+    dni: string;
+    onPasswordSet: () => void;
+    onBackToLogin: () => void;
+}> = ({ dni, onPasswordSet, onBackToLogin }) => {
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+        if (password.length < 4) {
+            setError('La contraseña debe tener al menos 4 caracteres.');
+            return;
+        }
+        
+        setIsLoading(true);
+        const result = await apiClient.setNewPassword(dni, password);
+        if (result) {
+            setSuccess(true);
+            setTimeout(() => {
+                onPasswordSet();
+            }, 2000);
+        } else {
+            setError('No se pudo actualizar la contraseña. Por favor, inténtalo de nuevo.');
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="login-container">
+            <header>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+            </header>
+            <div className="login-box">
+                <h2>Crear Nueva Contraseña</h2>
+                <p>Ingresa tu nueva contraseña para el DNI: {dni}</p>
+                {success ? (
+                     <p className="success-text">¡Contraseña actualizada con éxito! Redirigiendo al inicio de sesión...</p>
+                ) : (
+                    <form onSubmit={handleSubmit}>
+                        <input
+                            type="password"
+                            placeholder="Nueva Contraseña"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                        />
+                        <input
+                            type="password"
+                            placeholder="Confirmar Nueva Contraseña"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            required
+                        />
+                        {error && <p className="error-text">{error}</p>}
+                        <button type="submit" className="cta-button" disabled={isLoading}>
+                            {isLoading ? 'Guardando...' : 'Guardar Contraseña'}
+                        </button>
+                    </form>
+                )}
+            </div>
+            <button onClick={onBackToLogin} className="back-button simple" style={{ marginTop: '2rem' }}>Volver al inicio de sesión</button>
+        </div>
+    );
+};
 
 // --- Super Admin View ---
 
@@ -1479,7 +1570,9 @@ const AdminDashboard: React.FC<{
                                             {client.planStatus === 'pending' && <span className="client-status-badge pending">Pendiente</span>}
                                         </div>
                                         <p>DNI: {client.dni}</p>
-                                        <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
+                                        {client.accessCode && 
+                                            <p className="client-card-access-code">Acceso: <strong>{client.accessCode}</strong></p>
+                                        }
                                     </div>
                                 ))}
                             </div>
@@ -1669,6 +1762,9 @@ const ProfileEditor: React.FC<{
     const [isModified, setIsModified] = useState(isClientOnboarding);
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [resetStatus, setResetStatus] = useState<'idle' | 'success'>('idle');
+
 
     const muscleGroups = {
         superior: ['General', 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'],
@@ -1726,6 +1822,18 @@ const ProfileEditor: React.FC<{
             }
         }
     };
+    
+    const handleRequestPasswordReset = async () => {
+        setShowResetConfirm(false);
+        const success = await apiClient.requestPasswordReset(clientData.dni);
+        if (success) {
+            setResetStatus('success');
+            setTimeout(() => setResetStatus('idle'), 3000);
+        } else {
+            alert("Error al iniciar el reseteo de contraseña.");
+        }
+    };
+
 
     const bmi = useMemo(() => {
         return calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
@@ -1857,14 +1965,35 @@ const ProfileEditor: React.FC<{
             </form>
              {!isClientOnboarding && (
                  <>
-                    <div className="access-code-display">
-                        <span>Código de Acceso del Cliente</span>
-                        <strong>{clientData.accessCode}</strong>
-                    </div>
+                    {clientData.accessCode && (
+                        <div className="access-code-display">
+                            <span>Código de Acceso del Cliente</span>
+                            <strong>{clientData.accessCode}</strong>
+                        </div>
+                    )}
                      <button onClick={handleEnableGeneration} className="cta-button secondary enable-generation-button">
                         Habilitar Nueva Generación
                     </button>
+                    <button 
+                        type="button" 
+                        onClick={() => setShowResetConfirm(true)} 
+                        className="cta-button secondary enable-generation-button" 
+                        style={{marginTop: '0.5rem', backgroundColor: 'var(--warning-border-color)', color: 'var(--background-color)'}}
+                    >
+                        Resetear Contraseña
+                    </button>
+                    {resetStatus === 'success' && <p className="success-text" style={{textAlign: 'center', marginTop: '1rem'}}>¡Reseteo iniciado! El cliente deberá crear una nueva contraseña en su próximo inicio de sesión.</p>}
+
                  </>
+            )}
+             {showResetConfirm && (
+                <ConfirmationModal
+                    message={`¿Estás seguro de que quieres resetear la contraseña para ${clientData.profile.name}? El cliente será forzado a crear una nueva contraseña la próxima vez que inicie sesión.`}
+                    onConfirm={handleRequestPasswordReset}
+                    onCancel={() => setShowResetConfirm(false)}
+                    confirmText="Sí, Resetear"
+                    confirmClass="delete" // Re-using delete class for warning color
+                />
             )}
         </div>
     );
