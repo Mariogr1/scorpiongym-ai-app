@@ -11,7 +11,10 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'GET':
       try {
-        const gyms = await gymsCollection.find({}, { projection: { password: 0 } }).toArray();
+        const gyms = await gymsCollection.find(
+            { username: { $ne: 'superadmin' } }, 
+            { projection: { password: 0 } }
+        ).toArray();
         res.status(200).json(gyms);
       } catch (e) {
         console.error("API /api/gyms [GET] Error:", e);

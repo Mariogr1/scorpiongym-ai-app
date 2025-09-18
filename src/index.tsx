@@ -1,9 +1,4 @@
 
-
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -211,7 +206,7 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
  * Main application component that handles routing and state.
  */
 const App: React.FC = () => {
-    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard'>('landing');
+    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration'>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
     const [currentGym, setCurrentGym] = useState<Gym | null>(null);
     const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
@@ -247,7 +242,7 @@ const App: React.FC = () => {
                 setCurrentClientDni(id);
                 setView('clientView');
             } else {
-                setLoginError('DNI o código de acceso incorrecto.');
+                setLoginError('DNI o código de acceso/contraseña incorrecto.');
             }
         } else { // type === 'gym'
              const gymData = await apiClient.gymLogin(id, code!);
@@ -293,13 +288,20 @@ const App: React.FC = () => {
         setImpersonatedGym(null);
         setView('superAdminDashboard');
     };
+    
+    const handleRegisterAndLogin = async (dni: string, code: string) => {
+        // After registration, log the user in.
+        handleLogin('client', dni, code);
+    };
 
     const renderView = () => {
         switch (view) {
             case 'landing':
                 return <LandingPage onIngresar={() => setView('login')} />;
             case 'login':
-                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
+                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+            case 'clientRegistration':
+                return <ClientRegistrationPage onRegister={handleRegisterAndLogin} onBack={() => setView('login')} />;
             case 'adminDashboard':
                 return <AdminDashboard 
                             onSelectClient={handleSelectClient} 
@@ -315,14 +317,14 @@ const App: React.FC = () => {
             case 'superAdminDashboard':
                 return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
             default:
-                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} />;
+                return <LoginPage onLogin={handleLogin} error={loginError} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
         }
     };
 
     return <>{renderView()}</>;
 };
 
-// --- Landing & Login Views ---
+// --- Landing, Login & Registration Views ---
 
 const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
     return (
@@ -339,7 +341,12 @@ const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
     );
 };
 
-const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?: string) => void; error: string; onBack: () => void; }> = ({ onLogin, error, onBack }) => {
+const LoginPage: React.FC<{ 
+    onLogin: (type: 'client' | 'gym', id: string, code?: string) => void; 
+    error: string; 
+    onBack: () => void;
+    onGoToRegister: () => void;
+}> = ({ onLogin, error, onBack, onGoToRegister }) => {
     const [loginType, setLoginType] = useState<'client' | 'gym'>('client');
     const [id, setId] = useState('');
     const [code, setCode] = useState('');
@@ -361,7 +368,7 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
                 </div>
 
                 <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Entrenador'}</h2>
-                <p>{loginType === 'client' ? 'Ingresa tu DNI y código de acceso.' : 'Ingresa tu usuario y contraseña.'}</p>
+                <p>{loginType === 'client' ? 'Ingresa tu DNI y código o contraseña.' : 'Ingresa tu usuario y contraseña.'}</p>
                 <form onSubmit={handleSubmit}>
                     <input
                         type="text"
@@ -371,8 +378,8 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
                         required
                     />
                     <input
-                        type={loginType === 'client' ? 'text' : 'password'}
-                        placeholder={loginType === 'client' ? 'Código de Acceso' : 'Contraseña'}
+                        type='password'
+                        placeholder={loginType === 'client' ? 'Código o Contraseña' : 'Contraseña'}
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         required
@@ -380,8 +387,134 @@ const LoginPage: React.FC<{ onLogin: (type: 'client' | 'gym', id: string, code?:
                     {error && <p className="error-text">{error}</p>}
                     <button type="submit" className="cta-button">Ingresar</button>
                 </form>
+                 <button onClick={onGoToRegister} className="back-button simple" style={{ marginTop: '1rem' }}>
+                    Crear cuenta de cliente
+                </button>
             </div>
              <button onClick={onBack} className="back-button simple" style={{ marginTop: '2rem' }}>Volver</button>
+        </div>
+    );
+};
+
+
+const ClientRegistrationPage: React.FC<{
+    onRegister: (dni: string, code: string) => void;
+    onBack: () => void;
+}> = ({ onRegister, onBack }) => {
+    const [dni, setDni] = useState('');
+    const [name, setName] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [selectedGymId, setSelectedGymId] = useState('');
+    const [gyms, setGyms] = useState<Gym[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchGyms = async () => {
+            const fetchedGyms = await apiClient.getGyms();
+            setGyms(fetchedGyms);
+            if (fetchedGyms.length > 0) {
+                setSelectedGymId(fetchedGyms[0]._id);
+            }
+            setIsLoading(false);
+        };
+        fetchGyms();
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (password !== confirmPassword) {
+            setError('Las contraseñas no coinciden.');
+            return;
+        }
+        if (!/^\d{7,8}$/.test(dni)) {
+            setError('Por favor, ingresa un DNI válido (7 u 8 dígitos).');
+            return;
+        }
+        if (!selectedGymId) {
+            setError('Por favor, selecciona un gimnasio.');
+            return;
+        }
+
+        setIsLoading(true);
+        const result = await apiClient.registerClient(dni, name, password, selectedGymId);
+        if (result.success) {
+            // Automatically log in the user after successful registration
+            onRegister(dni, password);
+        } else {
+            setError(result.message || 'Ocurrió un error durante el registro.');
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="login-container">
+            <header>
+                <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+            </header>
+            <div className="login-box">
+                <h2>Crear Cuenta de Cliente</h2>
+                <p>Completa tus datos para registrarte.</p>
+                <form onSubmit={handleSubmit}>
+                    <input
+                        type="text"
+                        placeholder="DNI"
+                        value={dni}
+                        onChange={(e) => setDni(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="text"
+                        placeholder="Nombre Completo"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Contraseña"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Confirmar Contraseña"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                    />
+                    <select
+                        value={selectedGymId}
+                        onChange={(e) => setSelectedGymId(e.target.value)}
+                        required
+                        disabled={isLoading || gyms.length === 0}
+                        style={{
+                            width: '100%',
+                            padding: '0.8rem 1rem',
+                            backgroundColor: 'var(--background-color)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            color: 'var(--text-color)',
+                            fontSize: '1rem'
+                        }}
+                    >
+                        {gyms.length === 0 ? (
+                            <option>Cargando gimnasios...</option>
+                        ) : (
+                            gyms.map(gym => <option key={gym._id} value={gym._id}>{gym.name}</option>)
+                        )}
+                    </select>
+
+                    {error && <p className="error-text">{error}</p>}
+                    <button type="submit" className="cta-button" disabled={isLoading}>
+                        {isLoading ? 'Creando...' : 'Crear Cuenta'}
+                    </button>
+                </form>
+            </div>
+            <button onClick={onBack} className="back-button simple" style={{ marginTop: '2rem' }}>Volver al inicio de sesión</button>
         </div>
     );
 };

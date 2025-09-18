@@ -1,3 +1,4 @@
+
 // --- Type Definitions ---
 export type PlanType = 'full' | 'routine' | 'nutrition';
 export interface Profile {
@@ -310,12 +311,34 @@ export const apiClient = {
     }
   },
 
+  async registerClient(dni: string, name: string, password: string, gymId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const response = await fetch('/api/auth/client-register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, name, password, gymId }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, message: errorData.message || 'Failed to register client' };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to register client with DNI ${dni}:`, error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
+  },
+
   async loginClient(dni: string, accessCode: string): Promise<boolean> {
      try {
-        const response = await fetch(`/api/clients/${dni}`);
+        const response = await fetch(`/api/auth/client-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, code: accessCode }),
+        });
         if (!response.ok) return false;
-        const data: ClientData = await response.json();
-        return data.accessCode === accessCode && (data.status === 'active' || data.status === undefined);
+        const data = await response.json();
+        return data.success;
     } catch (error) {
         return false;
     }
