@@ -3438,9 +3438,81 @@ const RequestModal: React.FC<{
     );
 };
 
+const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: string) => void; }> = ({ gymId, onPlayVideo }) => {
+    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            setIsLoading(true);
+            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+            setLibrary(fetchedLibrary);
+            // Automatically open the first group
+            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+                setActiveGroup(Object.keys(fetchedLibrary)[0]);
+            }
+            setIsLoading(false);
+        };
+        fetchLibrary();
+    }, [gymId]);
+
+    const toggleGroup = (group: string) => {
+        setActiveGroup(prev => (prev === group ? null : group));
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
+    }
+
+    if (!library || Object.keys(library).length === 0) {
+        return <div className="placeholder">No hay ejercicios en la biblioteca de este gimnasio.</div>;
+    }
+
+    return (
+        <div className="library-container animated-fade-in" style={{padding: 0, marginTop: 0}}>
+            <div className="plan-header" style={{textAlign: 'center'}}>
+                <h2>Biblioteca de Ejercicios</h2>
+                <p>Explora todos los ejercicios disponibles y mira sus videos de ejecución.</p>
+            </div>
+
+            <div className="accordion-phases">
+                {Object.entries(library).sort(([groupA], [groupB]) => groupA.localeCompare(groupB)).map(([group, exercises]) => (
+                    <div key={group} className="accordion-item">
+                        <button
+                            className={`accordion-header ${activeGroup === group ? 'active' : ''}`}
+                            onClick={() => toggleGroup(group)}
+                            aria-expanded={activeGroup === group}
+                        >
+                            <span>{group}</span>
+                            <span className="accordion-header-icon">+</span>
+                        </button>
+                        <div className={`accordion-content ${activeGroup === group ? 'open' : ''}`}>
+                            <ul className="exercise-list">
+                                {exercises.filter(ex => ex.isEnabled).map((exercise) => (
+                                    <li key={exercise.name} className="exercise-item">
+                                        <div className="exercise-name-wrapper">
+                                            <span className="exercise-name">{exercise.name}</span>
+                                            {exercise.videoUrl && (
+                                                <button onClick={() => onPlayVideo(exercise.videoUrl)} className="video-play-button" aria-label={`Reproducir video de ${exercise.name}`}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M10,16.5L16,12L10,7.5V16.5Z"></path></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
     const planType = clientData.planType || 'full';
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile'>(planType === 'nutrition' ? 'diet' : 'routine');
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile' | 'library'>(planType === 'nutrition' ? 'diet' : 'routine');
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
 
@@ -3458,6 +3530,8 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                 return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
             case 'profile':
                  return <ClientProfileView clientData={clientData} />;
+            case 'library':
+                return <ClientExerciseLibraryView gymId={clientData.gymId} onPlayVideo={setPlayingVideoUrl} />;
             default: return null;
         }
     }
@@ -3473,6 +3547,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                 }
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
                 <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
+                 <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Biblioteca</button>
             </nav>
             <div className="animated-fade-in">
                 {renderContent()}
