@@ -4,6 +4,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3377,7 +3379,7 @@ const ClientOnboardingView: React.FC<{
                  {generationState === 'idle' && (
                      <div className="placeholder-action generation-container">
                         <p>Cuando tu perfil esté listo, la IA creará tu rutina y planes de nutrición personalizados.</p>
-                        <div className="admin-instructions-box" style={{ maxWidth: '100%' }}>
+                        <div className="admin-instructions-box" style={{ maxWidth: 'none', alignSelf: 'stretch' }}>
                             <label htmlFor="client-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
                             <textarea
                                 id="client-instructions-gen"
