@@ -3178,6 +3178,21 @@ const ClientOnboardingView: React.FC<{
     const [generationError, setGenerationError] = useState('');
     const planType = clientData.planType || 'full';
 
+    const isProfileComplete = useMemo(() => {
+        const { profile } = clientData;
+        return (
+            profile.name.trim() !== '' &&
+            profile.age.trim() !== '' &&
+            profile.weight.trim() !== '' &&
+            profile.height.trim() !== '' &&
+            profile.trainingDays.trim() !== '' &&
+            Number(profile.age) > 0 &&
+            Number(profile.weight) > 0 &&
+            Number(profile.height) > 0 &&
+            Number(profile.trainingDays) > 0
+        );
+    }, [clientData.profile]);
+
     const handleAcceptTerms = async () => {
         const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
         if (success) {
@@ -3278,9 +3293,14 @@ const ClientOnboardingView: React.FC<{
                  {generationState === 'idle' && (
                      <div className="placeholder-action">
                         <p>Cuando tu perfil esté listo, haz clic abajo para que la IA cree tu rutina y planes de nutrición personalizados.</p>
-                        <button className="cta-button" onClick={handleGenerateFullPlan}>
+                        <button className="cta-button" onClick={handleGenerateFullPlan} disabled={!isProfileComplete}>
                             Generar Mi Plan Completo
                         </button>
+                        {!isProfileComplete && (
+                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                                Por favor, completa todos los campos del perfil para continuar.
+                            </p>
+                        )}
                     </div>
                 )}
                 
@@ -3528,10 +3548,10 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                     : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
             case 'progress':
                 return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
-            case 'profile':
-                 return <ClientProfileView clientData={clientData} />;
             case 'library':
                 return <ClientExerciseLibraryView gymId={clientData.gymId} onPlayVideo={setPlayingVideoUrl} />;
+            case 'profile':
+                 return <ClientProfileView clientData={clientData} />;
             default: return null;
         }
     }
