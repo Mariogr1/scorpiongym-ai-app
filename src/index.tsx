@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1126,7 +1127,9 @@ const RequestSection: React.FC<{
     onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
     onDelete: (id: string) => void;
 }> = ({ title, requests, onUpdateStatus, onDelete }) => {
-    if (requests.length === 0) return null;
+    if (requests.length === 0) {
+        return <div className="placeholder" style={{ marginTop: '2rem' }}>No hay solicitudes en esta categoría.</div>;
+    }
     
     return (
         <div className="request-section">
@@ -1154,6 +1157,7 @@ const RequestSection: React.FC<{
 
 const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () => void }> = ({ requests, onUpdateRequest }) => {
     const [isLoading, setIsLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'new' | 'read' | 'resolved'>('new');
 
     const handleUpdateStatus = async (id: string, status: 'read' | 'resolved') => {
         setIsLoading(true);
@@ -1171,27 +1175,61 @@ const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () =
         }
     };
     
-    // Sort requests by date, newest first
-    const sortedRequests = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const newRequests = sortedRequests.filter(r => r.status === 'new');
-    const readRequests = sortedRequests.filter(r => r.status === 'read');
-    const resolvedRequests = sortedRequests.filter(r => r.status === 'resolved');
+    const { newRequests, readRequests, resolvedRequests } = useMemo(() => {
+        const sorted = [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return {
+            newRequests: sorted.filter(r => r.status === 'new'),
+            readRequests: sorted.filter(r => r.status === 'read'),
+            resolvedRequests: sorted.filter(r => r.status === 'resolved'),
+        };
+    }, [requests]);
 
     if (isLoading) {
         return <div className="loading-container"><div className="spinner"></div></div>;
     }
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'new':
+                return <RequestSection title="Nuevas Solicitudes" requests={newRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />;
+            case 'read':
+                return <RequestSection title="Solicitudes Leídas" requests={readRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />;
+            case 'resolved':
+                return <RequestSection title="Solicitudes Resueltas" requests={resolvedRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />;
+            default:
+                return null;
+        }
+    };
     
     return (
         <div className="requests-view animated-fade-in">
              <h2>Bandeja de Entrada de Solicitudes</h2>
+
+             <nav className="progress-tabs-nav" style={{ marginTop: '0', marginBottom: 0 }}>
+                <button 
+                    className={`progress-tab-button ${activeTab === 'new' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('new')}>
+                    Nuevos
+                    {newRequests.length > 0 && <span className="notification-badge" style={{ position: 'static', display: 'inline-flex', marginLeft: '8px', transform: 'translateY(-2px)' }}>{newRequests.length}</span>}
+                </button>
+                <button 
+                    className={`progress-tab-button ${activeTab === 'read' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('read')}>
+                    Leídos
+                </button>
+                <button 
+                    className={`progress-tab-button ${activeTab === 'resolved' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('resolved')}>
+                    Resueltos
+                </button>
+            </nav>
+
              {requests.length === 0 ? (
                 <div className="placeholder" style={{marginTop: '2rem'}}>No hay solicitudes pendientes.</div>
              ) : (
-                <>
-                    <RequestSection title="Nuevas Solicitudes" requests={newRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
-                    <RequestSection title="Solicitudes Leídas" requests={readRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
-                    <RequestSection title="Solicitudes Resueltas" requests={resolvedRequests} onUpdateStatus={handleUpdateStatus} onDelete={handleDelete} />
-                </>
+                <div style={{ marginTop: '2rem' }}>
+                    {renderContent()}
+                </div>
              )}
         </div>
     );
@@ -3847,7 +3885,7 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
             </div>
 
             <button onClick={onRequestChange} className="cta-button secondary request-change-button">
-                Solicitar Cambio al Entrenador
+                Enviar Mensaje o Nota al Entrenador
             </button>
             
             <AccordionPhasesClient
