@@ -1669,6 +1669,14 @@ body {
     padding: 0 2rem;
 }
 
+.onboarding-generation {
+    align-items: stretch; /* Override placeholder-action's centering */
+}
+.onboarding-generation .admin-instructions-box {
+    max-width: none; /* Allow it to fill the stretched container */
+}
+
+
 /* --- Onboarding Generation Progress --- */
 .generation-progress-container {
     padding: 1rem 0;
@@ -2403,6 +2411,70 @@ input:checked + .slider:before {
 }
 .video-modal-close-btn:hover {
   opacity: 1;
+}
+
+/* --- Requests View --- */
+.requests-view {
+    padding: 1rem;
+    margin-top: 2rem;
+}
+.requests-view h2 {
+    margin-bottom: 2rem;
+}
+.request-section {
+    margin-bottom: 2.5rem;
+}
+.request-section h3 {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-secondary-color);
+}
+.request-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.request-card {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border-left: 4px solid;
+}
+.request-card.status-new { border-color: var(--primary-color); }
+.request-card.status-read { border-color: var(--archive-color); }
+.request-card.status-resolved { border-color: var(--success-color); opacity: 0.7; }
+
+.request-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.request-card-header h4 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+.request-date {
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+}
+.request-client {
+    font-size: 0.9rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 1rem;
+}
+.request-message {
+    background-color: var(--background-color);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    white-space: pre-wrap;
+}
+.request-card-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
 }
 
 
