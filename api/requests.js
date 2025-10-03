@@ -1,4 +1,5 @@
 
+
 import clientPromise from './util/mongodb.js';
 
 export default async function handler(req, res) {
@@ -9,11 +10,21 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'GET':
       try {
-        const { gymId } = req.query;
-        if (!gymId) {
-            return res.status(400).json({ error: 'Gym ID is required' });
+        const { gymId, clientId } = req.query;
+        
+        const query = {};
+        if (gymId) {
+            query.gymId = gymId;
         }
-        const requests = await collection.find({ gymId }).toArray();
+        if (clientId) {
+            query.clientId = clientId;
+        }
+        
+        if (Object.keys(query).length === 0) {
+            return res.status(400).json({ error: 'Gym ID or Client ID is required' });
+        }
+        
+        const requests = await collection.find(query).toArray();
         res.status(200).json(requests);
       } catch (e) {
         console.error("API /api/requests [GET] Error:", e);

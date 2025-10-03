@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1678,13 +1679,19 @@ const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = 
 
 const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [requests, setRequests] = useState<TrainerRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress'>('routine');
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>('routine');
 
      const fetchClientData = async () => {
         setIsLoading(true);
-        const data = await apiClient.getClientData(dni);
+        const [data, reqs] = await Promise.all([
+            apiClient.getClientData(dni),
+            apiClient.getRequestsByClient(dni)
+        ]);
         setClientData(data);
+        setRequests(reqs);
+
         if (data && data.planType === 'nutrition' && activeTab === 'routine') {
             setActiveTab('diet');
         }
@@ -1746,14 +1753,48 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
                             onClick={() => setActiveTab('progress')}>
                             Progreso
                         </button>
+                        <button 
+                            className={`main-tab-button ${activeTab === 'messages' ? 'active' : ''}`} 
+                            onClick={() => setActiveTab('messages')}>
+                            Mensajes
+                        </button>
                     </nav>
                     <div className="results-section">
                        {activeTab === 'routine' && <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={gym._id} />}
                        {activeTab === 'diet' && <DietPlanGenerator clientData={clientData} setClientData={setClientData} />}
                        {activeTab === 'progress' && <ProgressView clientData={clientData} onDataUpdate={fetchClientData} />}
+                       {activeTab === 'messages' && <ClientRequestsView requests={requests} />}
                     </div>
                 </main>
             </div>
+        </div>
+    );
+};
+
+const ClientRequestsView: React.FC<{ requests: TrainerRequest[] }> = ({ requests }) => {
+    const sortedRequests = useMemo(() => {
+        return [...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [requests]);
+
+    if (requests.length === 0) {
+        return (
+            <div className="placeholder" style={{ marginTop: '2rem' }}>
+                Este cliente no ha enviado ningún mensaje.
+            </div>
+        );
+    }
+
+    return (
+        <div className="request-list animated-fade-in">
+            {sortedRequests.map(req => (
+                <div key={req._id} className={`request-card status-${req.status}`}>
+                    <div className="request-card-header">
+                        <h4>{req.subject}</h4>
+                        <span className="request-date">{new Date(req.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <p className="request-message">{req.message}</p>
+                </div>
+            ))}
         </div>
     );
 };

@@ -1,4 +1,5 @@
 
+
 // --- Type Definitions ---
 export type PlanType = 'full' | 'routine' | 'nutrition';
 export interface Profile {
@@ -428,6 +429,17 @@ export const apiClient = {
       return await response.json();
     } catch (error) {
       console.error("Failed to fetch requests:", error);
+      return [];
+    }
+  },
+
+  async getRequestsByClient(clientId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?clientId=${clientId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to fetch requests for client ${clientId}:`, error);
       return [];
     }
   },
