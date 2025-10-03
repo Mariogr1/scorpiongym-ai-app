@@ -8,6 +8,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3379,7 +3381,7 @@ const ClientOnboardingView: React.FC<{
             <div className="onboarding-section">
                 <h2>Paso 2: Crea tu Plan Integral</h2>
                  {generationState === 'idle' && (
-                     <div className="placeholder-action generation-container onboarding-generation">
+                     <div className="onboarding-generation-container">
                         <p>Cuando tu perfil esté listo, la IA creará tu rutina y planes de nutrición personalizados.</p>
                         <div className="admin-instructions-box">
                             <label htmlFor="client-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
@@ -3395,7 +3397,7 @@ const ClientOnboardingView: React.FC<{
                             Generar Mi Plan Completo
                         </button>
                         {!isProfileComplete && (
-                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>
                                 Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
                             </p>
                         )}

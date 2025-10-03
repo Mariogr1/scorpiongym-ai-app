@@ -1669,11 +1669,21 @@ body {
     padding: 0 2rem;
 }
 
-.onboarding-generation {
-    align-items: stretch; /* Override placeholder-action's centering */
+.onboarding-generation-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    width: 100%;
+    padding: 1rem 0;
 }
-.onboarding-generation .admin-instructions-box {
-    max-width: none; /* Allow it to fill the stretched container */
+.onboarding-generation-container > p {
+    text-align: center;
+    color: var(--text-secondary-color);
+}
+.onboarding-generation-container .admin-instructions-box {
+    max-width: none;
+    width: 100%;
 }
 
 
@@ -2293,6 +2303,7 @@ input:checked + .slider:before {
   background-color: var(--surface-color);
   flex-shrink: 0;
 }
+
 .chat-input-area form {
   display: flex;
   gap: 0.5rem;
