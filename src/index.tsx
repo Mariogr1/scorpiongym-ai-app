@@ -2,6 +2,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3181,7 +3183,7 @@ const ChatAssistant: React.FC<{
 
 
 // --- AI Generation Logic (for Onboarding) ---
-const generateRoutineForClient = async (clientData: ClientData, gymId: string): Promise<Routine> => {
+const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string): Promise<Routine> => {
     const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
@@ -3194,6 +3196,7 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string): 
         Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
         - Perfil: ${JSON.stringify(clientData.profile)}
         - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
+        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
         REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
         1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
         2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
@@ -3215,11 +3218,12 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string): 
     return validateAndCorrectRoutine(generatedPlan, exerciseLibrary);
 };
 
-const generateDietForClient = async (clientData: ClientData): Promise<DietPlan> => {
+const generateDietForClient = async (clientData: ClientData, instructions?: string): Promise<DietPlan> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `
         Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
         - Perfil: ${JSON.stringify(clientData.profile)}
+        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
         REGLAS ESTRICTAS PARA TU RESPUESTA:
         1. **Idioma:** Tu respuesta DEBE estar en español de Argentina.
         2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin texto adicional, markdown o explicaciones.
@@ -3255,6 +3259,7 @@ const ClientOnboardingView: React.FC<{
         diet2: 'pending' as GenerationStatus,
     });
     const [generationError, setGenerationError] = useState('');
+    const [additionalInstructions, setAdditionalInstructions] = useState('');
     const planType = clientData.planType || 'full';
 
     const isProfileComplete = useMemo(() => {
@@ -3290,7 +3295,7 @@ const ClientOnboardingView: React.FC<{
         try {
             if (planType === 'full' || planType === 'routine') {
                 setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
-                const routine = await generateRoutineForClient(clientData, clientData.gymId);
+                const routine = await generateRoutineForClient(clientData, clientData.gymId, additionalInstructions);
                 setClientData(prev => ({ ...prev, routine }));
                 setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
             }
@@ -3301,8 +3306,8 @@ const ClientOnboardingView: React.FC<{
 
                 // Generate both diet plans in parallel.
                 const [diet1, diet2] = await Promise.all([
-                    generateDietForClient(clientData),
-                    generateDietForClient(clientData)
+                    generateDietForClient(clientData, additionalInstructions),
+                    generateDietForClient(clientData, additionalInstructions)
                 ]);
                 
                 // Once both are complete, update the client data with the new plans.
@@ -3370,14 +3375,24 @@ const ClientOnboardingView: React.FC<{
             <div className="onboarding-section">
                 <h2>Paso 2: Crea tu Plan Integral</h2>
                  {generationState === 'idle' && (
-                     <div className="placeholder-action">
-                        <p>Cuando tu perfil esté listo, haz clic abajo para que la IA cree tu rutina y planes de nutrición personalizados.</p>
+                     <div className="placeholder-action generation-container">
+                        <p>Cuando tu perfil esté listo, la IA creará tu rutina y planes de nutrición personalizados.</p>
+                        <div className="admin-instructions-box" style={{ maxWidth: '100%' }}>
+                            <label htmlFor="client-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
+                            <textarea
+                                id="client-instructions-gen"
+                                rows={3}
+                                value={additionalInstructions}
+                                onChange={(e) => setAdditionalInstructions(e.target.value)}
+                                placeholder="Ej: Tengo una lesión en la rodilla, evitar sentadillas. No me gusta el pescado."
+                            ></textarea>
+                        </div>
                         <button className="cta-button" onClick={handleGenerateFullPlan} disabled={!isProfileComplete}>
                             Generar Mi Plan Completo
                         </button>
                         {!isProfileComplete && (
                              <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                                Por favor, completa todos los campos del perfil para continuar.
+                                Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
                             </p>
                         )}
                     </div>
