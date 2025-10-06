@@ -4182,19 +4182,201 @@ const ProgressTracker: React.FC<{
 // --- NEW ACCOUNTING MODULE ---
 
 const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> = ({ user, onLogout }) => {
-    // This is the main view for the accountant, it will hold the state for all accounting data.
+    const [activeTab, setActiveTab] = useState<'transactions' | 'accounts' | 'employees' | 'summary'>('transactions');
+    const [gym, setGym] = useState<StaffUser | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchGymData = async () => {
+            if (user.associatedGymId) {
+                const allUsers = await apiClient.getStaffUsers();
+                const associatedGym = allUsers.find(u => u._id === user.associatedGymId);
+                setGym(associatedGym || null);
+            }
+            setIsLoading(false);
+        };
+        fetchGymData();
+    }, [user.associatedGymId]);
+
+    const renderContent = () => {
+        if (isLoading) {
+            return <div className="loading-container"><div className="spinner"></div></div>;
+        }
+        if (!gym) {
+            return <div className="error-container">No se pudo encontrar el gimnasio asociado.</div>;
+        }
+
+        switch (activeTab) {
+            case 'transactions':
+                return <TransactionsView gymId={gym._id} />;
+            case 'accounts':
+            case 'employees':
+            case 'summary':
+            default:
+                return <div className="placeholder" style={{ marginTop: '2rem' }}>Módulo en construcción.</div>;
+        }
+    };
+    
     return (
-         <div className="admin-dashboard">
+        <div className="admin-dashboard">
             <div className="main-header">
                 <div className="header-title-wrapper">
-                    <h1>Módulo de Contabilidad</h1>
-                    <p>Usuario: {user.username}</p>
+                     {gym?.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
+                    <div>
+                        <h1>Módulo de Contabilidad</h1>
+                        <p>{gym ? `Gimnasio: ${gym.name}` : 'Cargando...'}</p>
+                    </div>
                 </div>
                 <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
             </div>
-             <p className="placeholder" style={{textAlign: 'left', padding: '1.5rem'}}>
-                Módulo en construcción. Próximamente podrás gestionar ingresos, egresos, empleados y reportes desde aquí.
-            </p>
+            
+            <nav className="progress-tabs-nav">
+                <button className={`progress-tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>Transacciones</button>
+                <button className={`progress-tab-button ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Resumen</button>
+                <button className={`progress-tab-button ${activeTab === 'accounts' ? 'active' : ''}`} onClick={() => setActiveTab('accounts')}>Cuentas</button>
+                <button className={`progress-tab-button ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>Empleados</button>
+            </nav>
+            
+            <div className="animated-fade-in" style={{marginTop: '2rem'}}>
+                {renderContent()}
+            </div>
+        </div>
+    );
+};
+
+const TransactionsView: React.FC<{ gymId: string }> = ({ gymId }) => {
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    
+    const fetchData = async () => {
+        setIsLoading(true);
+        const fetchedTransactions = await apiClient.getAccountingData(gymId, 'transactions') as Transaction[];
+        setTransactions(fetchedTransactions);
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [gymId]);
+
+    const { totalIncome, totalExpense, balance } = useMemo(() => {
+        let income = 0;
+        let expense = 0;
+        transactions.forEach(t => {
+            if (t.type === 'income') income += t.amount;
+            else expense += t.amount;
+        });
+        return { totalIncome: income, totalExpense: expense, balance: income - expense };
+    }, [transactions]);
+
+    return (
+         <div>
+            <div className="accounting-summary">
+                <div className="summary-card income">
+                    <span>Ingresos Totales</span>
+                    <strong>${totalIncome.toFixed(2)}</strong>
+                </div>
+                 <div className="summary-card expense">
+                    <span>Egresos Totales</span>
+                    <strong>${totalExpense.toFixed(2)}</strong>
+                </div>
+                 <div className="summary-card balance">
+                    <span>Balance</span>
+                    <strong style={{color: balance >= 0 ? 'var(--success-color)' : 'var(--error-color)'}}>${balance.toFixed(2)}</strong>
+                </div>
+            </div>
+            
+            <AddTransactionForm gymId={gymId} onTransactionAdded={fetchData} />
+
+            {isLoading ? (
+                 <div className="loading-container"><div className="spinner"></div></div>
+            ) : (
+                <TransactionList transactions={transactions} />
+            )}
+        </div>
+    );
+};
+
+const AddTransactionForm: React.FC<{ gymId: string; onTransactionAdded: () => void; }> = ({ gymId, onTransactionAdded }) => {
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [type, setType] = useState<'income' | 'expense'>('income');
+    const [category, setCategory] = useState('Membresías');
+    const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const transactionData = {
+            date, description, amount: parseFloat(amount), type, category, paymentMethod, accountId: 'default' // Placeholder
+        };
+        const success = await apiClient.addAccountingData(gymId, 'transactions', transactionData);
+        if (success) {
+            // Reset form
+            setDescription('');
+            setAmount('');
+            onTransactionAdded();
+        } else {
+            alert('Error al agregar la transacción.');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="add-transaction-container">
+            <h3>Registrar Transacción</h3>
+            <form onSubmit={handleSubmit} className="add-transaction-form">
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                <input type="text" placeholder="Descripción" value={description} onChange={e => setDescription(e.target.value)} required />
+                <input type="number" step="0.01" placeholder="Monto" value={amount} onChange={e => setAmount(e.target.value)} required />
+                <select value={type} onChange={e => setType(e.target.value as 'income' | 'expense')}>
+                    <option value="income">Ingreso</option>
+                    <option value="expense">Egreso</option>
+                </select>
+                <input type="text" placeholder="Categoría (ej: Membresía, Sueldos)" value={category} onChange={e => setCategory(e.target.value)} required />
+                 <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                    <option>Efectivo</option>
+                    <option>Tarjeta</option>
+                    <option>Transferencia</option>
+                </select>
+                <button type="submit" className="cta-button" disabled={isSubmitting}>{isSubmitting ? '...' : 'Registrar'}</button>
+            </form>
+        </div>
+    );
+};
+
+const TransactionList: React.FC<{ transactions: Transaction[] }> = ({ transactions }) => {
+    const sortedTransactions = useMemo(() => {
+        return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [transactions]);
+    
+    if (sortedTransactions.length === 0) {
+        return <div className="placeholder" style={{marginTop: '2rem'}}>No hay transacciones registradas.</div>
+    }
+
+    return (
+        <div className="transaction-list-container">
+            <h3>Historial de Transacciones</h3>
+            <ul className="transaction-list">
+                 <li className="transaction-item header">
+                    <span>Fecha</span>
+                    <span className="description">Descripción</span>
+                    <span>Categoría</span>
+                    <span className="amount">Monto</span>
+                </li>
+                {sortedTransactions.map(t => (
+                    <li key={t._id} className={`transaction-item ${t.type}`}>
+                        <span>{new Date(t.date).toLocaleDateString()}</span>
+                        <span className="description">{t.description}</span>
+                        <span>{t.category}</span>
+                        <span className="amount">
+                            {t.type === 'expense' ? '-' : ''}${t.amount.toFixed(2)}
+                        </span>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 };
