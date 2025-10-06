@@ -1,19 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -956,7 +941,7 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
         if (role === 'accountant') {
             const fetchGyms = async () => {
                 const allUsers = await apiClient.getStaffUsers();
-                const trainerUsers = allUsers.filter(u => u.role === 'trainer');
+                const trainerUsers = allUsers.filter(u => u.role === 'trainer' || !u.role);
                 setGyms(trainerUsers);
                 if (trainerUsers.length > 0) {
                     setAssociatedGymId(trainerUsers[0]._id);
