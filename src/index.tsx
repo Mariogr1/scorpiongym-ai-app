@@ -12,6 +12,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -34,11 +36,14 @@ import {
     ExerciseLibrary,
     ProgressLogEntry,
     ExerciseDefinition,
-    Gym,
+    StaffUser,
     Phase,
     DayPlan,
     Request as TrainerRequest, // Renamed to avoid conflict
-    PlanType
+    PlanType,
+    Transaction,
+    Account,
+    Employee
 } from './apiClient';
 
 
@@ -318,10 +323,10 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
  * Main application component that handles routing and state.
  */
 const App: React.FC = () => {
-    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset'>('landing');
+    const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset' | 'accountantDashboard'>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
-    const [currentGym, setCurrentGym] = useState<Gym | null>(null);
-    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
+    const [currentGym, setCurrentGym] = useState<StaffUser | null>(null);
+    const [impersonatedGym, setImpersonatedGym] = useState<StaffUser | null>(null);
     const [loginError, setLoginError] = useState<string>('');
     const [loginMessage, setLoginMessage] = useState('');
 
@@ -336,11 +341,13 @@ const App: React.FC = () => {
             setCurrentClientDni(loggedInClient);
             setView('clientView');
         } else if (loggedInGym) {
-            const gymData = JSON.parse(loggedInGym);
+            const gymData: StaffUser = JSON.parse(loggedInGym);
             setCurrentGym(gymData);
-            if (gymData.username === 'superadmin') {
+            if (gymData.role === 'superadmin') {
                 setView('superAdminDashboard');
-            } else {
+            } else if (gymData.role === 'accountant') {
+                setView('accountantDashboard');
+            } else { // trainer
                 setView('adminDashboard');
             }
         }
@@ -369,9 +376,11 @@ const App: React.FC = () => {
                  sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
                  sessionStorage.setItem('userType', 'gym');
                  setCurrentGym(gymData);
-                 if (gymData.username === 'superadmin') {
+                 if (gymData.role === 'superadmin') {
                     setView('superAdminDashboard');
-                 } else {
+                 } else if (gymData.role === 'accountant') {
+                    setView('accountantDashboard');
+                 } else { // trainer or legacy
                     setView('adminDashboard');
                  }
              } else {
@@ -398,7 +407,7 @@ const App: React.FC = () => {
         setView('adminDashboard');
     };
     
-    const handleSelectGym = (gymToManage: Gym) => {
+    const handleSelectGym = (gymToManage: StaffUser) => {
         setImpersonatedGym(gymToManage);
         setView('adminDashboard');
     };
@@ -445,6 +454,8 @@ const App: React.FC = () => {
                 return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
             case 'superAdminDashboard':
                 return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
+            case 'accountantDashboard':
+                return <AccountantDashboard user={currentGym!} onLogout={handleLogout} />;
             default:
                 return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
         }
@@ -494,10 +505,10 @@ const LoginPage: React.FC<{
             <div className="login-box">
                 <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
                     <button className={`view-toggle-button ${loginType === 'client' ? 'active' : ''}`} onClick={() => setLoginType('client')}>Cliente</button>
-                    <button className={`view-toggle-button ${loginType === 'gym' ? 'active' : ''}`} onClick={() => setLoginType('gym')}>Entrenador</button>
+                    <button className={`view-toggle-button ${loginType === 'gym' ? 'active' : ''}`} onClick={() => setLoginType('gym')}>Personal</button>
                 </div>
 
-                <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Entrenador'}</h2>
+                <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Personal'}</h2>
                 <p>{loginType === 'client' ? 'Ingresa tu DNI y código o contraseña.' : 'Ingresa tu usuario y contraseña.'}</p>
                  {message && <p className="success-text" style={{marginBottom: '1rem'}}>{message}</p>}
                 <form onSubmit={handleSubmit}>
@@ -537,16 +548,17 @@ const ClientRegistrationPage: React.FC<{
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [selectedGymId, setSelectedGymId] = useState('');
-    const [gyms, setGyms] = useState<Gym[]>([]);
+    const [gyms, setGyms] = useState<StaffUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         const fetchGyms = async () => {
-            const fetchedGyms = await apiClient.getGyms();
-            setGyms(fetchedGyms);
-            if (fetchedGyms.length > 0) {
-                setSelectedGymId(fetchedGyms[0]._id);
+            const fetchedGyms = await apiClient.getStaffUsers();
+            const trainerGyms = fetchedGyms.filter(u => u.role === 'trainer');
+            setGyms(trainerGyms);
+            if (trainerGyms.length > 0) {
+                setSelectedGymId(trainerGyms[0]._id);
             }
             setIsLoading(false);
         };
@@ -775,7 +787,7 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
         }
 
         setIsSaving(true);
-        const success = await apiClient.updateGym(gymId, { password });
+        const success = await apiClient.updateStaffUser(gymId, { password });
         if (success) {
             setSuccessMessage('¡Contraseña actualizada con éxito!');
             setPassword('');
@@ -819,42 +831,50 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
     );
 };
 
-const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGym: (gym: Gym) => void; }> = ({ gym, onLogout, onSelectGym }) => {
-    const [gyms, setGyms] = useState<Gym[]>([]);
+const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSelectGym: (gym: StaffUser) => void; }> = ({ gym, onLogout, onSelectGym }) => {
+    const [users, setUsers] = useState<StaffUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [editingGym, setEditingGym] = useState<Gym | null>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState<Gym | null>(null);
+    const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<StaffUser | null>(null);
 
-    const fetchGyms = async () => {
+    const fetchUsers = async () => {
         setIsLoading(true);
-        const fetchedGyms = await apiClient.getGyms();
-        setGyms(fetchedGyms);
+        const fetchedUsers = await apiClient.getStaffUsers();
+        setUsers(fetchedUsers);
         setIsLoading(false);
     };
 
     useEffect(() => {
-        fetchGyms();
+        fetchUsers();
     }, []);
 
-    const handleGymCreated = () => {
-        fetchGyms();
+    const handleUserCreated = () => {
+        fetchUsers();
     };
     
-    const handleGymUpdated = () => {
-        setEditingGym(null);
-        fetchGyms();
+    const handleUserUpdated = () => {
+        setEditingUser(null);
+        fetchUsers();
     };
 
-    const handleGymDeleted = async () => {
+    const handleUserDeleted = async () => {
         if (!showDeleteConfirm) return;
-        const success = await apiClient.deleteGym(showDeleteConfirm._id);
+        const success = await apiClient.deleteStaffUser(showDeleteConfirm._id);
         if (success) {
             setShowDeleteConfirm(null);
-            fetchGyms();
+            fetchUsers();
         } else {
-            alert("Error al eliminar el gimnasio.");
+            alert("Error al eliminar el usuario.");
         }
     };
+
+    const getRoleName = (role?: 'trainer' | 'accountant' | 'superadmin') => {
+        switch (role) {
+            case 'trainer': return 'Entrenador';
+            case 'accountant': return 'Contador';
+            default: return 'Gimnasio';
+        }
+    }
 
     return (
         <div className="admin-dashboard">
@@ -867,46 +887,47 @@ const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGy
             
             <PasswordManagement gymId={gym._id} />
 
-            <AddGymForm onGymCreated={handleGymCreated} />
+            <AddUserForm onUserCreated={handleUserCreated} />
 
-            {editingGym && (
-                <EditGymModal 
-                    gym={editingGym} 
-                    onClose={() => setEditingGym(null)} 
-                    onGymUpdated={handleGymUpdated} 
+            {editingUser && (
+                <EditUserModal 
+                    user={editingUser} 
+                    onClose={() => setEditingUser(null)} 
+                    onUserUpdated={handleUserUpdated} 
                 />
             )}
             
             {showDeleteConfirm && (
                 <ConfirmationModal
-                    message={`¿Estás seguro de que quieres eliminar el gimnasio "${showDeleteConfirm.name}"? Esta acción es irreversible y eliminará a todos sus clientes y datos asociados.`}
-                    onConfirm={handleGymDeleted}
+                    message={`¿Estás seguro de que quieres eliminar a "${showDeleteConfirm.name}"? Esta acción es irreversible y eliminará todos sus datos asociados.`}
+                    onConfirm={handleUserDeleted}
                     onCancel={() => setShowDeleteConfirm(null)}
                     confirmText="Eliminar"
                     confirmClass="delete"
                 />
             )}
 
+            <h2>Usuarios del Sistema</h2>
             {isLoading ? (
-                <div className="loading-container"><div className="spinner"></div>Cargando gimnasios...</div>
+                <div className="loading-container"><div className="spinner"></div>Cargando usuarios...</div>
             ) : (
                 <div className="gym-list">
-                    {gyms.filter(g => g.username !== 'superadmin').map(gym => (
-                        <div key={gym._id} className="gym-card" onClick={() => onSelectGym(gym)}>
+                    {users.filter(g => g.username !== 'superadmin').map(user => (
+                        <div key={user._id} className="gym-card" onClick={() => user.role === 'trainer' && onSelectGym(user)}>
                            <div className="gym-card-header">
-                                {gym.logoSvg && (
+                                {user.logoSvg && user.role === 'trainer' && (
                                     <div className="gym-card-logo">
-                                        <SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} />
+                                        <SvgImage svgString={user.logoSvg} altText={`${user.name} logo`} />
                                     </div>
                                 )}
                                 <div className="gym-card-info">
-                                    <h3>{gym.name}</h3>
-                                    <p>Usuario: {gym.username} | Límite IA: {gym.dailyQuestionLimit || 'N/A'}</p>
+                                    <h3>{user.name}</h3>
+                                    <p>Usuario: {user.username} | Rol: <strong>{getRoleName(user.role)}</strong></p>
                                 </div>
                             </div>
                             <div className="gym-card-actions">
-                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingGym(gym); }}>Editar</button>
-                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(gym); }}>Eliminar</button>
+                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingUser(user); }}>Editar</button>
+                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(user); }}>Eliminar</button>
                             </div>
                         </div>
                     ))}
@@ -917,16 +938,34 @@ const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGy
 };
 
 
-const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) => {
+const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated }) => {
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [dailyQuestionLimit, setDailyQuestionLimit] = useState(10);
     const [logoSvg, setLogoSvg] = useState<string | null>(null);
     const [planType, setPlanType] = useState<PlanType>('full');
+    const [role, setRole] = useState<'trainer' | 'accountant'>('trainer');
+    const [associatedGymId, setAssociatedGymId] = useState('');
+    const [gyms, setGyms] = useState<StaffUser[]>([]);
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     
+    useEffect(() => {
+        if (role === 'accountant') {
+            const fetchGyms = async () => {
+                const allUsers = await apiClient.getStaffUsers();
+                const trainerUsers = allUsers.filter(u => u.role === 'trainer');
+                setGyms(trainerUsers);
+                if (trainerUsers.length > 0) {
+                    setAssociatedGymId(trainerUsers[0]._id);
+                }
+            };
+            fetchGyms();
+        }
+    }, [role]);
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file && file.type === "image/svg+xml") {
@@ -943,9 +982,19 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (role === 'accountant' && !associatedGymId) {
+            setError('Debe seleccionar un gimnasio para el contador.');
+            return;
+        }
         setIsSubmitting(true);
         setError('');
-        const success = await apiClient.createGym(name, username, password, dailyQuestionLimit, logoSvg, planType);
+        const success = await apiClient.createStaffUser({
+            name, username, password, role, 
+            dailyQuestionLimit: role === 'trainer' ? dailyQuestionLimit : undefined, 
+            logoSvg: role === 'trainer' ? logoSvg : undefined, 
+            planType: role === 'trainer' ? planType : undefined, 
+            associatedGymId: role === 'accountant' ? associatedGymId : undefined
+        });
         if (success) {
             setName('');
             setUsername('');
@@ -953,19 +1002,21 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
             setDailyQuestionLimit(10);
             setLogoSvg(null);
             setPlanType('full');
-            onGymCreated();
+            setRole('trainer');
+            setAssociatedGymId('');
+            onUserCreated();
         } else {
-            setError('No se pudo crear el gimnasio. El nombre de usuario puede que ya exista.');
+            setError('No se pudo crear el usuario. El nombre de usuario puede que ya exista.');
         }
         setIsSubmitting(false);
     };
 
     return (
         <div className="add-gym-container">
-            <h3>Añadir Nuevo Gimnasio</h3>
+            <h3>Añadir Nuevo Usuario</h3>
             <form onSubmit={handleSubmit} className="add-gym-form">
                 <div className="form-group">
-                    <label>Nombre del Gimnasio</label>
+                    <label>Nombre Completo / Gimnasio</label>
                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
                 </div>
                 <div className="form-group">
@@ -977,31 +1028,51 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
                  <div className="form-group">
-                    <label>Límite Preguntas IA / día</label>
-                    <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
-                </div>
-                <div className="form-group">
-                    <label>Tipo de Plan</label>
-                    {/* FIX: Cast the string value from the select event to the PlanType union type to satisfy the state setter's type requirement. */}
-                    <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
-                        <option value="full">Plan Completo (Rutina y Nutrición)</option>
-                        <option value="routine">Solo Plan de Rutina</option>
-                        <option value="nutrition">Solo Plan de Nutrición</option>
+                    <label>Rol de Usuario</label>
+                    <select value={role} onChange={(e) => setRole(e.target.value as 'trainer' | 'accountant')} required>
+                        <option value="trainer">Entrenador / Gimnasio</option>
+                        <option value="accountant">Contador</option>
                     </select>
                 </div>
-                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label>Logo (SVG)</label>
-                    <div className="file-input-wrapper">
-                        <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
-                        <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
-                        <div className="file-input-preview">
-                            {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
-                        </div>
+
+                {role === 'accountant' && (
+                     <div className="form-group animated-fade-in">
+                        <label>Asociar al Gimnasio</label>
+                        <select value={associatedGymId} onChange={(e) => setAssociatedGymId(e.target.value)} required>
+                             {gyms.length === 0 ? <option>Cargando...</option> : gyms.map(g => <option key={g._id} value={g._id}>{g.name}</option>)}
+                        </select>
                     </div>
-                </div>
+                )}
+                
+                {role === 'trainer' && (
+                    <>
+                         <div className="form-group animated-fade-in">
+                            <label>Límite Preguntas IA / día</label>
+                            <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                        </div>
+                        <div className="form-group animated-fade-in">
+                            <label>Tipo de Plan</label>
+                            <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                                <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                                <option value="routine">Solo Plan de Rutina</option>
+                                <option value="nutrition">Solo Plan de Nutrición</option>
+                            </select>
+                        </div>
+                         <div className="form-group animated-fade-in" style={{ gridColumn: '1 / -1' }}>
+                            <label>Logo (SVG)</label>
+                            <div className="file-input-wrapper">
+                                <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
+                                <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
+                                <div className="file-input-preview">
+                                    {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
                 <div className="add-gym-actions">
                     <button type="submit" className="cta-button" disabled={isSubmitting}>
-                        {isSubmitting ? 'Creando...' : 'Crear Gimnasio'}
+                        {isSubmitting ? 'Creando...' : 'Crear Usuario'}
                     </button>
                 </div>
             </form>
@@ -1011,32 +1082,31 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
 };
 
 
-const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () => void; }> = ({ gym, onClose, onGymUpdated }) => {
-    const [name, setName] = useState(gym.name);
+const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpdated: () => void; }> = ({ user, onClose, onUserUpdated }) => {
+    const [name, setName] = useState(user.name);
     const [password, setPassword] = useState('');
-    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(gym.dailyQuestionLimit || 10);
-    const [logoSvg, setLogoSvg] = useState<string | null>(gym.logoSvg || null);
-    const [planType, setPlanType] = useState<PlanType>(gym.planType || 'full');
+    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(user.dailyQuestionLimit || 10);
+    const [logoSvg, setLogoSvg] = useState<string | null>(user.logoSvg || null);
+    const [planType, setPlanType] = useState<PlanType>(user.planType || 'full');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        const dataToUpdate: { name?: string; password?: string; dailyQuestionLimit?: number; logoSvg?: string | null; planType?: PlanType; } = {
-            name: name,
-            dailyQuestionLimit: dailyQuestionLimit,
-            logoSvg: logoSvg,
-            planType: planType,
-        };
-        if (password) {
-            dataToUpdate.password = password;
+        const dataToUpdate: Partial<StaffUser> = { name };
+        
+        if (password) dataToUpdate.password = password;
+        if (user.role === 'trainer') {
+            dataToUpdate.dailyQuestionLimit = dailyQuestionLimit;
+            dataToUpdate.logoSvg = logoSvg;
+            dataToUpdate.planType = planType;
         }
         
-        const success = await apiClient.updateGym(gym._id, dataToUpdate);
+        const success = await apiClient.updateStaffUser(user._id, dataToUpdate);
         if (success) {
-            onGymUpdated();
+            onUserUpdated();
         } else {
-            alert("Error al actualizar el gimnasio.");
+            alert("Error al actualizar el usuario.");
         }
         setIsSubmitting(false);
     };
@@ -1062,39 +1132,43 @@ const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () =
         <div className="modal-overlay">
             <div className="modal-content edit-modal">
                 <button className="close-button" onClick={onClose}>&times;</button>
-                <h3>Editando: {gym.name}</h3>
+                <h3>Editando: {user.name}</h3>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>Nombre del Gimnasio</label>
+                        <label>Nombre</label>
                         <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
                     <div className="form-group">
                         <label>Nueva Contraseña (dejar en blanco para no cambiar)</label>
                         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                     </div>
-                    <div className="form-group">
-                        <label>Límite Preguntas IA / día</label>
-                        <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
-                    </div>
-                    <div className="form-group">
-                        <label>Tipo de Plan</label>
-                        <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
-                            <option value="full">Plan Completo (Rutina y Nutrición)</option>
-                            <option value="routine">Solo Plan de Rutina</option>
-                            <option value="nutrition">Solo Plan de Nutrición</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label>Logo (SVG)</label>
-                        <div className="file-input-wrapper">
-                             <label htmlFor="svg-upload-edit" className="file-input-label">Cambiar SVG</label>
-                             <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
-                             {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
-                             <div className="file-input-preview">
-                                {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
+                    {user.role === 'trainer' && (
+                        <>
+                            <div className="form-group">
+                                <label>Límite Preguntas IA / día</label>
+                                <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
                             </div>
-                        </div>
-                    </div>
+                            <div className="form-group">
+                                <label>Tipo de Plan</label>
+                                <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                                    <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                                    <option value="routine">Solo Plan de Rutina</option>
+                                    <option value="nutrition">Solo Plan de Nutrición</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Logo (SVG)</label>
+                                <div className="file-input-wrapper">
+                                     <label htmlFor="svg-upload-edit" className="file-input-label">Cambiar SVG</label>
+                                     <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
+                                     {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
+                                     <div className="file-input-preview">
+                                        {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
                     <div className="modal-actions" style={{marginTop: '2rem'}}>
                         <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
                         <button type="submit" className="cta-button" disabled={isSubmitting}>
@@ -1474,8 +1548,8 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
     onLogout: () => void; 
-    gym: Gym; 
-    loggedInGym: Gym;
+    gym: StaffUser; 
+    loggedInGym: StaffUser;
     onBackToSuperAdmin: () => void;
 }> = ({ onSelectClient, onLogout, gym, loggedInGym, onBackToSuperAdmin }) => {
     const [clients, setClients] = useState<ClientListItem[]>([]);
@@ -1725,7 +1799,7 @@ const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = 
 };
 
 
-const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
+const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: StaffUser }> = ({ dni, onBack, onLogout, gym }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [requests, setRequests] = useState<TrainerRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -4116,6 +4190,26 @@ const ProgressTracker: React.FC<{
                 )}
             </button>
         </form>
+    );
+};
+
+// --- NEW ACCOUNTING MODULE ---
+
+const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> = ({ user, onLogout }) => {
+    // This is the main view for the accountant, it will hold the state for all accounting data.
+    return (
+         <div className="admin-dashboard">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                    <h1>Módulo de Contabilidad</h1>
+                    <p>Usuario: {user.username}</p>
+                </div>
+                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+            </div>
+             <p className="placeholder" style={{textAlign: 'left', padding: '1.5rem'}}>
+                Módulo en construcción. Próximamente podrás gestionar ingresos, egresos, empleados y reportes desde aquí.
+            </p>
+        </div>
     );
 };
 

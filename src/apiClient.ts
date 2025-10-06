@@ -1,5 +1,3 @@
-
-
 // --- Type Definitions ---
 export type PlanType = 'full' | 'routine' | 'nutrition';
 export interface Profile {
@@ -127,11 +125,15 @@ export interface ClientListItem {
     planStatus: 'pending' | 'active' | 'expired';
 }
 
-export interface Gym {
+export interface StaffUser {
     _id: string;
     name: string;
     username: string;
-    dailyQuestionLimit?: number; // Added
+    // FIX: Add optional 'password' property to allow password updates and user creation.
+    password?: string;
+    role?: 'trainer' | 'accountant' | 'superadmin';
+    associatedGymId?: string; // For accountants to link to a gym
+    dailyQuestionLimit?: number;
     logoSvg?: string;
     planType?: PlanType;
 }
@@ -147,6 +149,33 @@ export interface Request {
     createdAt: string;
 }
 
+// --- NEW Accounting Types ---
+export interface Transaction {
+    _id: string;
+    gymId: string;
+    type: 'income' | 'expense';
+    date: string; // ISO String
+    description: string;
+    amount: number;
+    category: string;
+    paymentMethod: string; // 'Efectivo', 'Tarjeta', 'Transferencia'
+    accountId: string;
+}
+
+export interface Account {
+    _id: string;
+    gymId: string;
+    name: string;
+}
+
+export interface Employee {
+    _id: string;
+    gymId: string;
+    name: string;
+    role: string;
+    hourlyRate: number;
+}
+
 
 // --- Constants ---
 
@@ -160,57 +189,57 @@ export const advancedTechniqueOptions: { value: string; label: string; descripti
 
 export const apiClient = {
   // --- Super Admin ---
-  async getGyms(): Promise<Gym[]> {
+  async getStaffUsers(): Promise<StaffUser[]> {
     try {
         const response = await fetch('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
         return await response.json();
     } catch (error) {
-        console.error("Failed to fetch gyms:", error);
+        console.error("Failed to fetch users:", error);
         return [];
     }
   },
   
-  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
+  async createStaffUser(data: Partial<StaffUser>): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
+            body: JSON.stringify(data),
         });
         return response.ok;
     } catch (error) {
-        console.error("Failed to create gym:", error);
+        console.error("Failed to create user:", error);
         return false;
     }
   },
   
-  async updateGym(gymId: string, data: { name?: string; password?: string, dailyQuestionLimit?: number, logoSvg?: string | null, planType?: PlanType }): Promise<boolean> {
+  async updateStaffUser(userId: string, data: Partial<StaffUser>): Promise<boolean> {
      try {
-        const response = await fetch(`/api/gyms/${gymId}`, {
+        const response = await fetch(`/api/gyms/${userId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to update gym ${gymId}:`, error);
+        console.error(`Failed to update user ${userId}:`, error);
         return false;
     }
   },
 
-  async deleteGym(gymId: string): Promise<boolean> {
+  async deleteStaffUser(userId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
+        const response = await fetch(`/api/gyms/${userId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to delete gym ${gymId}:`, error);
+        console.error(`Failed to delete user ${userId}:`, error);
         return false;
     }
   },
 
   // --- Gym/Coach Auth ---
-  async gymLogin(username: string, password: string): Promise<Gym | null> {
+  async gymLogin(username: string, password: string): Promise<StaffUser | null> {
     try {
         const response = await fetch('/api/auth/gym-login', {
             method: 'POST',
@@ -220,7 +249,7 @@ export const apiClient = {
         if (!response.ok) return null;
         return await response.json();
     } catch (error) {
-        console.error("Gym login failed:", error);
+        console.error("Staff login failed:", error);
         return null;
     }
   },
@@ -479,6 +508,32 @@ export const apiClient = {
     } catch (error) {
       console.error(`Failed to delete request ${requestId}:`, error);
       return false;
+    }
+  },
+
+  // --- NEW Accounting API Methods ---
+  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<any[]> {
+    try {
+        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
+        if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
+        return await response.json();
+    } catch (error) {
+        console.error(`Error fetching ${entity}:`, error);
+        return [];
+    }
+  },
+
+  async addAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...data, gymId }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Error adding ${entity}:`, error);
+        return false;
     }
   },
 };

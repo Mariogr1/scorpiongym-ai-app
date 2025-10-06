@@ -1,4 +1,6 @@
 
+
+
 import clientPromise from '../util/mongodb.js';
 import bcrypt from 'bcryptjs';
 
@@ -35,20 +37,25 @@ export default async function handler(req, res) {
                 name: 'Super Administrador',
                 username: 'superadmin', // Store in a canonical lowercase form
                 password: hashedPassword,
+                role: 'superadmin',
                 dailyQuestionLimit: 999,
                 planType: 'full',
                 logoSvg: null,
             };
             await gymsCollection.insertOne(defaultSuperAdmin);
-        } else if (!superAdminUser.password.startsWith('$2')) {
-            // If user exists but password is NOT hashed, update it.
-            console.log("Superadmin password is not hashed. Updating to a hashed password.");
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash('admin', salt);
-            await gymsCollection.updateOne(
-                { _id: superAdminUser._id },
-                { $set: { password: hashedPassword } }
-            );
+        } else {
+            const updates = {};
+            if (!superAdminUser.password.startsWith('$2')) {
+                console.log("Superadmin password is not hashed. Updating to a hashed password.");
+                const salt = await bcrypt.genSalt(10);
+                updates.password = await bcrypt.hash('admin', salt);
+            }
+            if (superAdminUser.role !== 'superadmin') {
+                updates.role = 'superadmin';
+            }
+            if (Object.keys(updates).length > 0) {
+                 await gymsCollection.updateOne({ _id: superAdminUser._id }, { $set: updates });
+            }
         }
     }
 

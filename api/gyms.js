@@ -1,5 +1,7 @@
 
 
+
+
 import clientPromise from './util/mongodb.js';
 import bcrypt from 'bcryptjs';
 
@@ -24,33 +26,37 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password, dailyQuestionLimit, logoSvg, planType } = req.body;
-        if (!name || !username || !password) {
-          return res.status(400).json({ message: 'Name, username, and password are required' });
+        const { name, username, password, dailyQuestionLimit, logoSvg, planType, role, associatedGymId } = req.body;
+        if (!name || !username || !password || !role) {
+          return res.status(400).json({ message: 'Name, username, password, and role are required' });
         }
         
-        const existingGym = await gymsCollection.findOne({ username });
-        if (existingGym) {
-          return res.status(409).json({ message: 'Gym with this username already exists' });
+        const existingUser = await gymsCollection.findOne({ username });
+        if (existingUser) {
+          return res.status(409).json({ message: 'User with this username already exists' });
         }
         
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const newGym = {
+        const newUser = {
           name,
           username,
           password: hashedPassword,
-          dailyQuestionLimit: Number(dailyQuestionLimit) || 10, // Default to 10 if not provided or invalid
-          logoSvg: logoSvg || null,
-          planType: planType || 'full',
+          role,
+          // Trainer-specific fields
+          dailyQuestionLimit: role === 'trainer' ? (Number(dailyQuestionLimit) || 10) : undefined,
+          logoSvg: role === 'trainer' ? (logoSvg || null) : undefined,
+          planType: role === 'trainer' ? (planType || 'full') : undefined,
+          // Accountant-specific fields
+          associatedGymId: role === 'accountant' ? associatedGymId : undefined,
         };
         
-        const result = await gymsCollection.insertOne(newGym);
+        const result = await gymsCollection.insertOne(newUser);
         res.status(201).json({ success: true, insertedId: result.insertedId });
       } catch (e) {
         console.error("API /api/gyms [POST] Error:", e);
-        res.status(500).json({ error: 'Unable to create gym' });
+        res.status(500).json({ error: 'Unable to create user' });
       }
       break;
 
