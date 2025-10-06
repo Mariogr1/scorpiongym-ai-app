@@ -10,6 +10,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1870,7 +1872,7 @@ const ProfileEditor: React.FC<{
 
     // Reset muscle focus when body focus changes
     useEffect(() => {
-        if (profile.bodyFocusArea === 'Full Body') {
+        if (['Full Body', 'Cuerpo Completo'].includes(profile.bodyFocusArea)) {
              if (profile.muscleFocus !== 'General') {
                 handleChange('muscleFocus', 'General');
              }
@@ -2014,7 +2016,8 @@ const ProfileEditor: React.FC<{
                  <div className="form-group">
                     <label>Enfoque Corporal</label>
                      <select value={profile.bodyFocusArea} onChange={e => handleChange('bodyFocusArea', e.target.value)}>
-                        <option value="Full Body">Full Body</option>
+                        <option value="Cuerpo Completo">Cuerpo Completo (Rutina Dividida)</option>
+                        <option value="Full Body">Full Body (Cuerpo Entero por Sesión)</option>
                         <option value="Tren Superior">Tren Superior</option>
                         <option value="Tren Inferior">Tren Inferior</option>
                     </select>
@@ -2172,7 +2175,10 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 7.  Si el perfil incluye 'includeAdaptationPhase: "Sí"', la primera fase debe ser de adaptación.
                 8.  Si el perfil incluye 'includeDeloadPhase: "Sí"', una de las fases (preferiblemente intermedia o la última) debe ser una "Fase de Descarga" con una notable reducción de volumen e intensidad (ej. reducir series, usar pesos más ligeros) para facilitar la recuperación.
                 9.  Ajusta el número de ejercicios por día según la 'trainingIntensity' del perfil: 'Baja' (5-6 ejercicios), 'Moderada' (6-7), 'Alta' (8-10), y 'Extrema' (11-13, mezclando fuerza, hipertrofia y resistencia).
-                10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares.
+                10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares, siguiendo la lógica de la regla 11.
+                11. Diferencia entre 'Full Body' y 'Cuerpo Completo':
+                    - Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior).
+                    - Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
             `;
             
             const response: GenerateContentResponse = await withRetry(() => 
@@ -3212,7 +3218,8 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
         7. Incluye fases de adaptación y descarga si el perfil lo indica.
         8. Ajusta el número de ejercicios según la 'trainingIntensity'.
-        9. Prioriza 'bodyFocusArea' y 'muscleFocus'.
+        9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
+        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
     `;
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })

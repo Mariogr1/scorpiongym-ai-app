@@ -1,4 +1,5 @@
 
+
 import clientPromise from '../util/mongodb.js';
 import bcrypt from 'bcryptjs';
 
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
             trainingDays: "4", 
             activityFactor: "Sedentario", 
             useAdvancedTechniques: "No", 
-            bodyFocusArea: "Full Body", 
+            bodyFocusArea: "Cuerpo Completo", 
             muscleFocus: "General", 
             includeAdaptationPhase: "Sí", 
             includeDeloadPhase: "No", 
