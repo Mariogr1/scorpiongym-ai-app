@@ -899,9 +899,9 @@ const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSe
             ) : (
                 <div className="gym-list">
                     {users.filter(g => g.username !== 'superadmin').map(user => (
-                        <div key={user._id} className="gym-card" onClick={() => user.role === 'trainer' && onSelectGym(user)}>
+                        <div key={user._id} className="gym-card" onClick={() => (user.role === 'trainer' || !user.role) && onSelectGym(user)}>
                            <div className="gym-card-header">
-                                {user.logoSvg && user.role === 'trainer' && (
+                                {user.logoSvg && (user.role === 'trainer' || !user.role) && (
                                     <div className="gym-card-logo">
                                         <SvgImage svgString={user.logoSvg} altText={`${user.name} logo`} />
                                     </div>
@@ -1082,7 +1082,7 @@ const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpda
         const dataToUpdate: Partial<StaffUser> = { name };
         
         if (password) dataToUpdate.password = password;
-        if (user.role === 'trainer') {
+        if (user.role === 'trainer' || !user.role) {
             dataToUpdate.dailyQuestionLimit = dailyQuestionLimit;
             dataToUpdate.logoSvg = logoSvg;
             dataToUpdate.planType = planType;
@@ -1128,7 +1128,7 @@ const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpda
                         <label>Nueva Contraseña (dejar en blanco para no cambiar)</label>
                         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                     </div>
-                    {user.role === 'trainer' && (
+                    {(user.role === 'trainer' || !user.role) && (
                         <>
                             <div className="form-group">
                                 <label>Límite Preguntas IA / día</label>
