@@ -159,7 +159,7 @@ export interface Transaction {
     amount: number;
     category: string;
     paymentMethod: string; // For backward compatibility / display
-    accountId?: string; // The ID of the account
+    accountId: string; // The ID of the account
 }
 
 export interface Account {
@@ -440,112 +440,108 @@ export const apiClient = {
     }
   },
 
-  async saveExerciseLibrary(library: ExerciseLibrary, gymId: string): Promise<boolean> {
+  async saveExerciseLibrary(libraryData: ExerciseLibrary, gymId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/library?gymId=${gymId}`, {
+      const response = await fetch(`/api/library?gymId=${gymId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(libraryData),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Failed to save exercise library:', error);
+      return false;
+    }
+  },
+  
+  // --- Requests ---
+  async getRequests(gymId: string): Promise<Request[]> {
+     try {
+        const response = await fetch(`/api/requests?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch requests:", error);
+        return [];
+    }
+  },
+  
+  async getRequestsByClient(clientId: string): Promise<Request[]> {
+     try {
+        const response = await fetch(`/api/requests?clientId=${clientId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch requests:", error);
+        return [];
+    }
+  },
+  
+  async createRequest(data: Partial<Request>): Promise<boolean> {
+     try {
+        const response = await fetch('/api/requests', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(library),
+            body: JSON.stringify(data),
         });
-        if (!response.ok) {
-            console.error('Failed to save exercise library, server responded with error:', await response.text());
-            return false;
-        }
-        return true;
+        return response.ok;
     } catch (error) {
-        console.error(`Failed to save exercise library:`, error);
+        console.error("Failed to create request:", error);
         return false;
     }
   },
-
-  // --- Trainer Request System ---
-  async getRequests(gymId: string): Promise<Request[]> {
-    try {
-      const response = await fetch(`/api/requests?gymId=${gymId}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      return await response.json();
+  
+  async updateRequestStatus(id: string, status: 'read' | 'resolved'): Promise<boolean> {
+      try {
+        const response = await fetch(`/api/requests/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
+        });
+        return response.ok;
     } catch (error) {
-      console.error("Failed to fetch requests:", error);
-      return [];
+        console.error(`Failed to update request ${id}:`, error);
+        return false;
     }
   },
-
-  async getRequestsByClient(clientId: string): Promise<Request[]> {
-    try {
-      const response = await fetch(`/api/requests?clientId=${clientId}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      return await response.json();
+  
+  async deleteRequest(id: string): Promise<boolean> {
+       try {
+        const response = await fetch(`/api/requests/${id}`, { method: 'DELETE' });
+        return response.ok;
     } catch (error) {
-      console.error(`Failed to fetch requests for client ${clientId}:`, error);
-      return [];
+        console.error(`Failed to delete request ${id}:`, error);
+        return false;
     }
   },
-
-  async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
-    try {
-      const response = await fetch('/api/requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestData),
-      });
-      return response.ok;
-    } catch (error) {
-      console.error("Failed to create request:", error);
-      return false;
-    }
-  },
-
-  async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
-    try {
-      const response = await fetch(`/api/requests/${requestId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      return response.ok;
-    } catch (error) {
-      console.error(`Failed to update request ${requestId}:`, error);
-      return false;
-    }
-  },
-
-  async deleteRequest(requestId: string): Promise<boolean> {
-    try {
-      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
-      return response.ok;
-    } catch (error) {
-      console.error(`Failed to delete request ${requestId}:`, error);
-      return false;
-    }
-  },
-
-  // --- NEW Accounting API Methods ---
+  
+  // --- NEW Accounting ---
   async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees' | 'balanceSnapshots'): Promise<any[]> {
     try {
         const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
-        if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
+        if (!response.ok) throw new Error(`Network response was not ok for ${entity}`);
         return await response.json();
     } catch (error) {
-        console.error(`Error fetching ${entity}:`, error);
+        console.error(`Failed to fetch ${entity}:`, error);
         return [];
     }
   },
 
   async addAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
     try {
-        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
+        const response = await fetch(`/api/accounting?entity=${entity}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...data, gymId }),
         });
         return response.ok;
     } catch (error) {
-        console.error(`Error adding ${entity}:`, error);
+        console.error(`Failed to create ${entity}:`, error);
         return false;
     }
   },
-  
-  async updateAccountingData(id: string, entity: 'transactions' | 'accounts', data: any): Promise<boolean> {
+
+  async updateAccountingData(id: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
     try {
         const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
             method: 'PUT',
@@ -554,34 +550,37 @@ export const apiClient = {
         });
         return response.ok;
     } catch (error) {
-        console.error(`Error updating ${entity}:`, error);
+        console.error(`Failed to update ${entity} with id ${id}:`, error);
         return false;
     }
   },
 
-  async deleteAccountingData(id: string, entity: 'transactions' | 'accounts'): Promise<boolean> {
-     try {
+  async deleteAccountingData(id: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<boolean> {
+    try {
         const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
             method: 'DELETE',
         });
         return response.ok;
     } catch (error) {
-        console.error(`Error deleting ${entity}:`, error);
+        console.error(`Failed to delete ${entity} with id ${id}:`, error);
         return false;
     }
   },
   
-  async addBalanceSnapshot(gymId: string, data: { accountId: string; date: string; totalBalance: number }): Promise<{success: boolean, registeredIncome: number} | {success: false}> {
-     try {
+  async addBalanceSnapshot(gymId: string, data: { accountId: string, date: string, totalBalance: number }): Promise<{ success: boolean; registeredIncome?: number }> {
+    try {
         const response = await fetch(`/api/accounting?entity=balanceSnapshot`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...data, gymId }),
         });
-         if (!response.ok) return { success: false };
+        if (!response.ok) {
+          console.error('Failed to add balance snapshot:', await response.text());
+          return { success: false };
+        }
         return await response.json();
     } catch (error) {
-        console.error(`Error adding balance snapshot:`, error);
+        console.error(`Failed to add balance snapshot:`, error);
         return { success: false };
     }
   },
