@@ -2539,7 +2539,7 @@ input:checked + .slider:before {
     border: 1px solid var(--border-color);
 }
 
-.add-transaction-container h3 {
+.add-transaction-container h3, .accounts-view h3, .daily-balances-view h3 {
     margin-bottom: 1.5rem;
     font-size: 1.5rem;
     color: var(--primary-color);
@@ -2585,7 +2585,7 @@ input:checked + .slider:before {
 
 .transaction-item {
     display: grid;
-    grid-template-columns: 120px 2fr 1.5fr 1fr;
+    grid-template-columns: 120px 2fr 1.5fr 1fr 120px;
     gap: 1rem;
     align-items: center;
     background-color: var(--surface-color);
@@ -2599,8 +2599,6 @@ input:checked + .slider:before {
     color: var(--text-secondary-color);
     border-bottom: 1px solid var(--border-color);
     border-radius: 0;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
 }
 
 .transaction-item .description {
@@ -2620,6 +2618,56 @@ input:checked + .slider:before {
 .transaction-item.expense .amount {
     color: var(--error-color);
 }
+
+.transaction-item .actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.accounts-list, .daily-balances-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.account-item, .daily-balance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--surface-color);
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+}
+.account-item-name {
+    font-weight: 600;
+}
+.account-item-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+.daily-balance-item {
+    gap: 1rem;
+}
+.daily-balance-item .account-name {
+    flex: 1 1 30%;
+    font-weight: 600;
+}
+.daily-balance-item .balance-input {
+     flex: 1 1 40%;
+}
+.daily-balance-item .balance-input input {
+    width: 100%;
+    padding: 0.6rem;
+}
+.daily-balance-item .balance-actions {
+    flex: 0 0 auto;
+}
+.daily-balance-item .balance-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary-color);
+}
+
 
 /* --- Responsive Design --- */
 
@@ -2662,6 +2710,47 @@ input:checked + .slider:before {
         justify-content: flex-start;
     }
 }
+
+@media (max-width: 768px) {
+    .transaction-item.header {
+        display: none;
+    }
+    .transaction-item {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        padding: 1rem;
+        border-left: 4px solid;
+    }
+    .transaction-item.income { border-color: var(--success-color); }
+    .transaction-item.expense { border-color: var(--error-color); }
+
+    .transaction-item span {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+    }
+     .transaction-item .description {
+      font-weight: 600;
+      color: var(--text-color);
+      font-size: 1.1rem;
+    }
+    .transaction-item span::before {
+        font-weight: 600;
+        color: var(--text-secondary-color);
+        margin-right: 1rem;
+    }
+    .transaction-item .amount { text-align: right; }
+    .transaction-item span:nth-child(1)::before { content: 'Fecha:'; }
+    .transaction-item span:nth-child(2) { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .transaction-item span:nth-child(2)::before { content: none; }
+    .transaction-item span:nth-child(3)::before { content: 'Categoría:'; }
+    .transaction-item span:nth-child(4)::before { content: 'Monto:'; }
+    .transaction-item span:nth-child(4) { font-size: 1.4rem; font-weight: 700; }
+    .transaction-item .actions { justify-content: flex-start; margin-top: 0.5rem; }
+    .transaction-item .actions::before { content: 'Acciones:'; }
+}
+
 
 @media (max-width: 600px) {
     #root {
@@ -2800,39 +2889,10 @@ input:checked + .slider:before {
     .log-list li.weight-log span:nth-child(2)::before { content: 'Peso (kg):'; }
     .log-list li.weight-log span:nth-child(3)::before { content: 'IMC:'; }
 
-    .transaction-item.header {
-        display: none;
+    .daily-balance-item {
+        flex-direction: column;
+        align-items: stretch;
     }
-    .transaction-item {
-        display: block;
-        padding: 1rem;
-        border-left: 4px solid;
-    }
-    .transaction-item.income { border-color: var(--success-color); }
-    .transaction-item.expense { border-color: var(--error-color); }
-
-    .transaction-item span {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.25rem 0;
-    }
-    .transaction-item .description {
-      font-weight: 600;
-      color: var(--text-color);
-    }
-    .transaction-item span::before {
-        font-weight: 600;
-        color: var(--text-secondary-color);
-        margin-right: 1rem;
-    }
-    .transaction-item .amount { text-align: right; }
-    .transaction-item span:nth-child(1)::before { content: 'Fecha:'; }
-    .transaction-item span:nth-child(2)::before { content: 'Descripción:'; }
-    .transaction-item span:nth-child(3)::before { content: 'Categoría:'; }
-    .transaction-item span:nth-child(4)::before { content: 'Monto:'; }
-    .transaction-item span:nth-child(4) { font-size: 1.2rem; }
-
 
     .agreement-buttons {
         flex-direction: column;

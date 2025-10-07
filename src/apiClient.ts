@@ -158,8 +158,8 @@ export interface Transaction {
     description: string;
     amount: number;
     category: string;
-    paymentMethod: string; // 'Efectivo', 'Tarjeta', 'Transferencia'
-    accountId: string;
+    paymentMethod: string; // For backward compatibility / display
+    accountId?: string; // The ID of the account
 }
 
 export interface Account {
@@ -174,6 +174,14 @@ export interface Employee {
     name: string;
     role: string;
     hourlyRate: number;
+}
+
+export interface BalanceSnapshot {
+    _id: string;
+    gymId: string;
+    accountId: string;
+    date: string; // YYYY-MM-DD
+    totalBalance: number;
 }
 
 
@@ -512,7 +520,7 @@ export const apiClient = {
   },
 
   // --- NEW Accounting API Methods ---
-  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<any[]> {
+  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees' | 'balanceSnapshots'): Promise<any[]> {
     try {
         const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
         if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
@@ -534,6 +542,47 @@ export const apiClient = {
     } catch (error) {
         console.error(`Error adding ${entity}:`, error);
         return false;
+    }
+  },
+  
+  async updateAccountingData(id: string, entity: 'transactions' | 'accounts', data: any): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Error updating ${entity}:`, error);
+        return false;
+    }
+  },
+
+  async deleteAccountingData(id: string, entity: 'transactions' | 'accounts'): Promise<boolean> {
+     try {
+        const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
+            method: 'DELETE',
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Error deleting ${entity}:`, error);
+        return false;
+    }
+  },
+  
+  async addBalanceSnapshot(gymId: string, data: { accountId: string; date: string; totalBalance: number }): Promise<{success: boolean, registeredIncome: number} | {success: false}> {
+     try {
+        const response = await fetch(`/api/accounting?entity=balanceSnapshot`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...data, gymId }),
+        });
+         if (!response.ok) return { success: false };
+        return await response.json();
+    } catch (error) {
+        console.error(`Error adding balance snapshot:`, error);
+        return { success: false };
     }
   },
 };

@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -826,7 +827,12 @@ const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSe
     const fetchUsers = async () => {
         setIsLoading(true);
         const fetchedUsers = await apiClient.getStaffUsers();
-        setUsers(fetchedUsers);
+        // FIX: Add a runtime check to ensure fetchedUsers is an array.
+        if (Array.isArray(fetchedUsers)) {
+            setUsers(fetchedUsers);
+        } else {
+            setUsers([]);
+        }
         setIsLoading(false);
     };
 
@@ -1555,8 +1561,19 @@ const AdminDashboard: React.FC<{
             apiClient.getClients(gym._id),
             apiClient.getRequests(gym._id)
         ]);
-        setClients(fetchedClients);
-        setRequests(fetchedRequests);
+        // FIX: Add runtime checks to ensure fetched data is an array before setting state.
+        if (Array.isArray(fetchedClients)) {
+            setClients(fetchedClients);
+        } else {
+            console.error("Fetched clients is not an array:", fetchedClients);
+            setClients([]);
+        }
+        if (Array.isArray(fetchedRequests)) {
+            setRequests(fetchedRequests);
+        } else {
+            console.error("Fetched requests is not an array:", fetchedRequests);
+            setRequests([]);
+        }
         setIsLoading(false);
     };
     
@@ -2169,7 +2186,13 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     useEffect(() => {
         const fetchLibrary = async () => {
             const library = await apiClient.getExerciseLibrary(gymId);
-            setExerciseLibrary(library);
+            // FIX: Add a runtime check to ensure library is an object.
+            if (library && typeof library === 'object' && !Array.isArray(library)) {
+                setExerciseLibrary(library);
+            } else {
+                console.error("Fetched library is not an object:", library);
+                setExerciseLibrary({});
+            }
         };
         fetchLibrary();
     }, [gymId]);
@@ -2241,13 +2264,14 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                     - Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
             `;
             
-            const response: GenerateContentResponse = await withRetry(() => 
+            // FIX: Explicitly cast the response to access the .text property safely.
+            const response = await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
             );
-            const text = response.text;
+            const text = (response as GenerateContentResponse).text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -2742,13 +2766,14 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
             
-            const response: GenerateContentResponse = await withRetry(() => 
+            // FIX: Explicitly cast the response to access the .text property safely.
+            const response = await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
             );
-            const text = response.text;
+            const text = (response as GenerateContentResponse).text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -3148,6 +3173,7 @@ const ChatAssistant: React.FC<{
                     { text: `Analiza esta comida. ${userMessageText}` }
                 ];
 
+                // FIX: Explicitly cast the response to access the .text property safely.
                 const response = await withRetry(() => 
                     ai.models.generateContent({
                         model: 'gemini-2.5-flash',
@@ -3155,14 +3181,15 @@ const ChatAssistant: React.FC<{
                         config: { systemInstruction: calorieSystemInstruction }
                     })
                 );
-                responseText = response.text;
+                responseText = (response as GenerateContentResponse).text;
                 // Note: This special request does not get added to the main 'chat' history object
                 // to keep that conversation's context clean (as a fitness coach).
             } else if (chat) {
-                const result: GenerateContentResponse = await withRetry(() => 
+                // FIX: Explicitly cast the response to access the .text property safely.
+                const result = await withRetry(() => 
                     chat.sendMessage({ message: userMessageText })
                 );
-                responseText = result.text;
+                responseText = (result as GenerateContentResponse).text;
             } else {
                  throw new Error("Chat not initialized.");
             }
@@ -3281,10 +3308,11 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
         10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
     `;
+    // FIX: Explicitly cast the response to access the .text property safely.
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson(response.text);
+    const jsonString = extractJson((response as GenerateContentResponse).text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
     
     const generatedPlan = JSON.parse(jsonString);
@@ -3305,10 +3333,11 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
         5. Distribuye las calorías en 4-6 comidas.
         6. Usa alimentos comunes en Argentina.
     `;
+    // FIX: Explicitly cast the response to access the .text property safely.
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson(response.text);
+    const jsonString = extractJson((response as GenerateContentResponse).text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
     return JSON.parse(jsonString);
 };
@@ -3634,10 +3663,16 @@ const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: st
         const fetchLibrary = async () => {
             setIsLoading(true);
             const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
-            setLibrary(fetchedLibrary);
-            // Automatically open the first group
-            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
-                setActiveGroup(Object.keys(fetchedLibrary)[0]);
+            // FIX: Add runtime check to ensure fetched library is an object.
+            if (fetchedLibrary && typeof fetchedLibrary === 'object' && !Array.isArray(fetchedLibrary)) {
+                setLibrary(fetchedLibrary);
+                // Automatically open the first group
+                if (Object.keys(fetchedLibrary).length > 0) {
+                    setActiveGroup(Object.keys(fetchedLibrary)[0]);
+                }
+            } else {
+                console.error("Fetched library is not an object:", fetchedLibrary);
+                setLibrary({});
             }
             setIsLoading(false);
         };
@@ -4250,8 +4285,14 @@ const TransactionsView: React.FC<{ gymId: string }> = ({ gymId }) => {
     
     const fetchData = async () => {
         setIsLoading(true);
-        const fetchedTransactions = await apiClient.getAccountingData(gymId, 'transactions') as Transaction[];
-        setTransactions(fetchedTransactions);
+        const fetchedTransactions = await apiClient.getAccountingData(gymId, 'transactions');
+        // FIX: Add a runtime check to ensure fetchedTransactions is an array.
+        if (Array.isArray(fetchedTransactions)) {
+            setTransactions(fetchedTransactions as Transaction[]);
+        } else {
+            console.error('Fetched transactions is not an array:', fetchedTransactions);
+            setTransactions([]);
+        }
         setIsLoading(false);
     };
 
