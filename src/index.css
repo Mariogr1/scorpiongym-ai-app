@@ -2531,7 +2531,7 @@ input:checked + .slider:before {
     border-color: var(--archive-color);
 }
 
-.add-transaction-container, .add-fixed-expense-container {
+.add-transaction-container {
     background-color: var(--surface-color);
     padding: 2rem;
     border-radius: 12px;
@@ -2539,7 +2539,7 @@ input:checked + .slider:before {
     border: 1px solid var(--border-color);
 }
 
-.add-transaction-container h3, .add-fixed-expense-container h3 {
+.add-transaction-container h3 {
     margin-bottom: 1.5rem;
     font-size: 1.5rem;
     color: var(--primary-color);
@@ -2551,16 +2551,9 @@ input:checked + .slider:before {
     gap: 1rem;
     align-items: end;
 }
-.add-fixed-expense-form {
-    display: grid;
-    grid-template-columns: 2fr 1fr auto;
-    gap: 1rem;
-    align-items: end;
-}
 
 .add-transaction-form input,
-.add-transaction-form select,
-.add-fixed-expense-form input {
+.add-transaction-form select {
     width: 100%;
     padding: 0.8rem 1rem;
     background-color: var(--background-color);
@@ -2570,20 +2563,20 @@ input:checked + .slider:before {
     font-size: 1rem;
 }
 
-.add-transaction-form .cta-button, .add-fixed-expense-form .cta-button {
+.add-transaction-form .cta-button {
     height: calc(0.8rem * 2 + 1rem + 2px); /* Match input height */
     padding: 0.8rem 1.5rem;
 }
 
-.transaction-list-container, .fixed-expense-list-container {
+.transaction-list-container {
     margin-top: 2rem;
 }
 
-.transaction-list-container h3, .fixed-expense-list-container h3 {
+.transaction-list-container h3 {
     margin-bottom: 1rem;
 }
 
-.transaction-list, .fixed-expense-list {
+.transaction-list {
     list-style: none;
     display: flex;
     flex-direction: column;
@@ -2630,42 +2623,44 @@ input:checked + .slider:before {
 
 .fixed-expense-item {
     display: grid;
-    grid-template-columns: 2fr 1fr auto;
+    grid-template-columns: 2fr 1fr 1fr;
     gap: 1rem;
     align-items: center;
     background-color: var(--surface-color);
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     border-radius: 8px;
-    transition: all 0.2s ease;
+}
+
+.fixed-expense-item.header {
+    background-color: transparent;
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+}
+
+.fixed-expense-item .amount {
+    font-weight: 600;
+    text-align: right;
+    color: var(--error-color); /* Expenses are red */
+}
+
+.fixed-expense-item .action {
+    text-align: right;
+}
+
+.fixed-expense-item .pay-button {
+    width: auto;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
 }
 
 .fixed-expense-item.paid {
-    opacity: 0.5;
-}
-.fixed-expense-item.paid .description {
-    text-decoration: line-through;
+    opacity: 0.6;
 }
 
-.fixed-expense-item .description {
-    font-weight: 500;
-}
-.fixed-expense-item .amount {
-    font-weight: 600;
-    color: var(--error-color);
-}
-.fixed-expense-item .actions {
-    display: flex;
-    gap: 0.5rem;
-}
-.fixed-expense-item .pay-button {
-    background-color: var(--success-color);
-    color: white;
-}
-.fixed-expense-item .paid-indicator {
-    background-color: transparent;
-    border: 1px solid var(--success-color);
-    color: var(--success-color);
-    cursor: default;
+.fixed-expense-item.paid .description {
+    text-decoration: line-through;
 }
 
 
@@ -2804,7 +2799,7 @@ input:checked + .slider:before {
         border-bottom: 1px solid var(--border-color);
     }
     
-    .add-exercise-form, .add-transaction-form, .add-fixed-expense-form {
+    .add-exercise-form, .add-transaction-form {
         grid-template-columns: 1fr;
     }
 
@@ -2881,6 +2876,33 @@ input:checked + .slider:before {
     .transaction-item span:nth-child(4)::before { content: 'Monto:'; }
     .transaction-item span:nth-child(4) { font-size: 1.2rem; }
 
+    .fixed-expense-item:not(.header) {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        padding: 1rem;
+        border-left: 4px solid var(--border-color);
+    }
+    
+    .fixed-expense-item .amount,
+    .fixed-expense-item .action {
+        text-align: left;
+    }
+    
+    .fixed-expense-item .amount::before {
+        content: 'Monto: ';
+        font-weight: 600;
+        color: var(--text-secondary-color);
+        margin-right: 1rem;
+    }
+
+    .fixed-expense-item.header {
+        display: none;
+    }
+
+    .fixed-expense-item .pay-button {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
 
     .agreement-buttons {
         flex-direction: column;

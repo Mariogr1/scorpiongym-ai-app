@@ -176,13 +176,15 @@ export interface Employee {
     hourlyRate: number;
 }
 
+// FIX: Export missing FixedExpense interface
 export interface FixedExpense {
     _id: string;
     gymId: string;
-    type: 'gym' | 'personal';
     description: string;
     amount: number;
-    lastPaidDate: string | null;
+    category: string;
+    frequency: 'monthly' | 'yearly' | 'onetime';
+    startDate: string; // ISO String
 }
 
 
@@ -542,55 +544,6 @@ export const apiClient = {
         return response.ok;
     } catch (error) {
         console.error(`Error adding ${entity}:`, error);
-        return false;
-    }
-  },
-
-  // --- NEW Fixed Expenses API Methods ---
-  async getFixedExpenses(gymId: string): Promise<FixedExpense[]> {
-    try {
-        const response = await fetch(`/api/fixed-expenses?gymId=${gymId}`);
-        if (!response.ok) throw new Error('Failed to fetch fixed expenses');
-        return await response.json();
-    } catch (error) {
-        console.error("Error fetching fixed expenses:", error);
-        return [];
-    }
-  },
-
-  async addFixedExpense(gymId: string, data: { description: string; amount: number; type: 'gym' | 'personal' }): Promise<boolean> {
-    try {
-        const response = await fetch(`/api/fixed-expenses?gymId=${gymId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        return response.ok;
-    } catch (error) {
-        console.error("Error adding fixed expense:", error);
-        return false;
-    }
-  },
-
-  async payFixedExpense(expenseId: string): Promise<boolean> {
-     try {
-        const response = await fetch(`/api/fixed-expenses/${expenseId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-        });
-        return response.ok;
-    } catch (error) {
-        console.error(`Error paying fixed expense ${expenseId}:`, error);
-        return false;
-    }
-  },
-
-  async deleteFixedExpense(expenseId: string): Promise<boolean> {
-    try {
-        const response = await fetch(`/api/fixed-expenses/${expenseId}`, { method: 'DELETE' });
-        return response.ok;
-    } catch (error) {
-        console.error(`Error deleting fixed expense ${expenseId}:`, error);
         return false;
     }
   },
