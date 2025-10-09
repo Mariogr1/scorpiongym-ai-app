@@ -158,8 +158,8 @@ export interface Transaction {
     description: string;
     amount: number;
     category: string;
-    paymentMethod: string; // For backward compatibility / display
-    accountId: string; // The ID of the account
+    paymentMethod: string; // 'Efectivo', 'Tarjeta', 'Transferencia'
+    accountId: string;
 }
 
 export interface Account {
@@ -176,12 +176,13 @@ export interface Employee {
     hourlyRate: number;
 }
 
-export interface BalanceSnapshot {
+export interface FixedExpense {
     _id: string;
     gymId: string;
-    accountId: string;
-    date: string; // YYYY-MM-DD
-    totalBalance: number;
+    type: 'gym' | 'personal';
+    description: string;
+    amount: number;
+    lastPaidDate: string | null;
 }
 
 
@@ -440,148 +441,157 @@ export const apiClient = {
     }
   },
 
-  async saveExerciseLibrary(libraryData: ExerciseLibrary, gymId: string): Promise<boolean> {
+  async saveExerciseLibrary(library: ExerciseLibrary, gymId: string): Promise<boolean> {
     try {
-      const response = await fetch(`/api/library?gymId=${gymId}`, {
+        const response = await fetch(`/api/library?gymId=${gymId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(library),
+        });
+        if (!response.ok) {
+            console.error('Failed to save exercise library, server responded with error:', await response.text());
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error(`Failed to save exercise library:`, error);
+        return false;
+    }
+  },
+
+  // --- Trainer Request System ---
+  async getRequests(gymId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?gymId=${gymId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error("Failed to fetch requests:", error);
+      return [];
+    }
+  },
+
+  async getRequestsByClient(clientId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?clientId=${clientId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to fetch requests for client ${clientId}:`, error);
+      return [];
+    }
+  },
+
+  async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
+    try {
+      const response = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(libraryData),
+        body: JSON.stringify(requestData),
       });
       return response.ok;
     } catch (error) {
-      console.error('Failed to save exercise library:', error);
+      console.error("Failed to create request:", error);
       return false;
     }
   },
-  
-  // --- Requests ---
-  async getRequests(gymId: string): Promise<Request[]> {
-     try {
-        const response = await fetch(`/api/requests?gymId=${gymId}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        return await response.json();
+
+  async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      return response.ok;
     } catch (error) {
-        console.error("Failed to fetch requests:", error);
-        return [];
+      console.error(`Failed to update request ${requestId}:`, error);
+      return false;
     }
   },
-  
-  async getRequestsByClient(clientId: string): Promise<Request[]> {
-     try {
-        const response = await fetch(`/api/requests?clientId=${clientId}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        return await response.json();
+
+  async deleteRequest(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
+      return response.ok;
     } catch (error) {
-        console.error("Failed to fetch requests:", error);
-        return [];
+      console.error(`Failed to delete request ${requestId}:`, error);
+      return false;
     }
   },
-  
-  async createRequest(data: Partial<Request>): Promise<boolean> {
-     try {
-        const response = await fetch('/api/requests', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        return response.ok;
-    } catch (error) {
-        console.error("Failed to create request:", error);
-        return false;
-    }
-  },
-  
-  async updateRequestStatus(id: string, status: 'read' | 'resolved'): Promise<boolean> {
-      try {
-        const response = await fetch(`/api/requests/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status }),
-        });
-        return response.ok;
-    } catch (error) {
-        console.error(`Failed to update request ${id}:`, error);
-        return false;
-    }
-  },
-  
-  async deleteRequest(id: string): Promise<boolean> {
-       try {
-        const response = await fetch(`/api/requests/${id}`, { method: 'DELETE' });
-        return response.ok;
-    } catch (error) {
-        console.error(`Failed to delete request ${id}:`, error);
-        return false;
-    }
-  },
-  
-  // --- NEW Accounting ---
-  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees' | 'balanceSnapshots'): Promise<any[]> {
+
+  // --- NEW Accounting API Methods ---
+  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<any[]> {
     try {
         const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
-        if (!response.ok) throw new Error(`Network response was not ok for ${entity}`);
+        if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
         return await response.json();
     } catch (error) {
-        console.error(`Failed to fetch ${entity}:`, error);
+        console.error(`Error fetching ${entity}:`, error);
         return [];
     }
   },
 
   async addAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
     try {
-        const response = await fetch(`/api/accounting?entity=${entity}`, {
+        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...data, gymId }),
         });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to create ${entity}:`, error);
+        console.error(`Error adding ${entity}:`, error);
         return false;
     }
   },
 
-  async updateAccountingData(id: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
+  // --- NEW Fixed Expenses API Methods ---
+  async getFixedExpenses(gymId: string): Promise<FixedExpense[]> {
     try {
-        const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
-            method: 'PUT',
+        const response = await fetch(`/api/fixed-expenses?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Failed to fetch fixed expenses');
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching fixed expenses:", error);
+        return [];
+    }
+  },
+
+  async addFixedExpense(gymId: string, data: { description: string; amount: number; type: 'gym' | 'personal' }): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/fixed-expenses?gymId=${gymId}`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to update ${entity} with id ${id}:`, error);
+        console.error("Error adding fixed expense:", error);
         return false;
     }
   },
 
-  async deleteAccountingData(id: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<boolean> {
-    try {
-        const response = await fetch(`/api/accounting?id=${id}&entity=${entity}`, {
-            method: 'DELETE',
+  async payFixedExpense(expenseId: string): Promise<boolean> {
+     try {
+        const response = await fetch(`/api/fixed-expenses/${expenseId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
         });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to delete ${entity} with id ${id}:`, error);
+        console.error(`Error paying fixed expense ${expenseId}:`, error);
         return false;
     }
   },
-  
-  async addBalanceSnapshot(gymId: string, data: { accountId: string, date: string, totalBalance: number }): Promise<{ success: boolean; registeredIncome?: number }> {
+
+  async deleteFixedExpense(expenseId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/accounting?entity=balanceSnapshot`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...data, gymId }),
-        });
-        if (!response.ok) {
-          console.error('Failed to add balance snapshot:', await response.text());
-          return { success: false };
-        }
-        return await response.json();
+        const response = await fetch(`/api/fixed-expenses/${expenseId}`, { method: 'DELETE' });
+        return response.ok;
     } catch (error) {
-        console.error(`Failed to add balance snapshot:`, error);
-        return { success: false };
+        console.error(`Error deleting fixed expense ${expenseId}:`, error);
+        return false;
     }
   },
 };

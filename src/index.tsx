@@ -1,9 +1,6 @@
 
 
 
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -33,8 +30,7 @@ import {
     PlanType,
     Transaction,
     Account,
-    Employee,
-    BalanceSnapshot
+    Employee
 } from './apiClient';
 
 
@@ -545,7 +541,8 @@ const ClientRegistrationPage: React.FC<{
 
     useEffect(() => {
         const fetchGyms = async () => {
-            const fetchedGyms = await apiClient.getStaffUsers();
+            // FIX: Cast the result to StaffUser[] to fix potential 'unknown' type issues.
+            const fetchedGyms = await apiClient.getStaffUsers() as StaffUser[];
             const trainerGyms = fetchedGyms.filter(u => u.role === 'trainer');
             setGyms(trainerGyms);
             if (trainerGyms.length > 0) {
@@ -830,13 +827,9 @@ const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSe
 
     const fetchUsers = async () => {
         setIsLoading(true);
-        const fetchedUsers = await apiClient.getStaffUsers();
-        // FIX: Add a runtime check to ensure fetchedUsers is an array.
-        if (Array.isArray(fetchedUsers)) {
-            setUsers(fetchedUsers);
-        } else {
-            setUsers([]);
-        }
+        // FIX: Cast the result from the API to StaffUser[] to prevent type errors.
+        const fetchedUsers = await apiClient.getStaffUsers() as StaffUser[];
+        setUsers(fetchedUsers);
         setIsLoading(false);
     };
 
@@ -951,7 +944,8 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
     useEffect(() => {
         if (role === 'accountant') {
             const fetchGyms = async () => {
-                const allUsers = await apiClient.getStaffUsers();
+                // FIX: Cast the result from the API to StaffUser[] to prevent type errors.
+                const allUsers = await apiClient.getStaffUsers() as StaffUser[];
                 const trainerUsers = allUsers.filter(u => u.role === 'trainer' || !u.role);
                 setGyms(trainerUsers);
                 if (trainerUsers.length > 0) {
@@ -1331,7 +1325,8 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
 
     const fetchLibrary = async () => {
         setIsLoading(true);
-        const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+        // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+        const fetchedLibrary = await apiClient.getExerciseLibrary(gymId) as ExerciseLibrary;
         setLibrary(fetchedLibrary);
         if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
             const firstGroup = Object.keys(fetchedLibrary)[0];
@@ -1565,27 +1560,16 @@ const AdminDashboard: React.FC<{
             apiClient.getClients(gym._id),
             apiClient.getRequests(gym._id)
         ]);
-        // FIX: Add runtime checks to ensure fetched data is an array before setting state.
-        if (Array.isArray(fetchedClients)) {
-            setClients(fetchedClients);
-        } else {
-            console.error("Fetched clients is not an array:", fetchedClients);
-            setClients([]);
-        }
-        if (Array.isArray(fetchedRequests)) {
-            setRequests(fetchedRequests);
-        } else {
-            console.error("Fetched requests is not an array:", fetchedRequests);
-            setRequests([]);
-        }
+        // FIX: Cast API responses to their correct types to avoid operations on 'unknown'.
+        setClients(fetchedClients as ClientListItem[]);
+        setRequests(fetchedRequests as TrainerRequest[]);
         setIsLoading(false);
     };
     
     const fetchRequests = async () => {
-        const fetchedRequests = await apiClient.getRequests(gym._id);
-        if(Array.isArray(fetchedRequests)) {
-             setRequests(fetchedRequests);
-        }
+        // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+        const fetchedRequests = await apiClient.getRequests(gym._id) as TrainerRequest[];
+        setRequests(fetchedRequests);
     };
 
     useEffect(() => {
@@ -1821,10 +1805,8 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
             apiClient.getRequestsByClient(dni)
         ]);
         setClientData(data);
-         if(Array.isArray(reqs)) {
-            setRequests(reqs);
-         }
-        
+        // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+        setRequests(reqs as TrainerRequest[]);
 
         if (data && data.planType === 'nutrition' && activeTab === 'routine') {
             setActiveTab('diet');
@@ -2194,14 +2176,9 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
 
     useEffect(() => {
         const fetchLibrary = async () => {
-            const library = await apiClient.getExerciseLibrary(gymId);
-            // FIX: Add a runtime check to ensure library is an object.
-            if (library && typeof library === 'object' && !Array.isArray(library)) {
-                setExerciseLibrary(library);
-            } else {
-                console.error("Fetched library is not an object:", library);
-                setExerciseLibrary({});
-            }
+            // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+            const library = await apiClient.getExerciseLibrary(gymId) as ExerciseLibrary;
+            setExerciseLibrary(library);
         };
         fetchLibrary();
     }, [gymId]);
@@ -2273,14 +2250,14 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                     - Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
             `;
             
-            // FIX: Explicitly cast the response to access the .text property safely.
-            const response = await withRetry(() => 
+            // FIX: Explicitly type the response from the AI call to ensure `response.text` is accessible.
+            const response: GenerateContentResponse = await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
             );
-            const text = (response as GenerateContentResponse).text;
+            const text = response.text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -2775,14 +2752,14 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
             
-            // FIX: Explicitly cast the response to access the .text property safely.
-            const response = await withRetry(() => 
+            // FIX: Explicitly type the response from the AI call to ensure `response.text` is accessible.
+            const response: GenerateContentResponse = await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
             );
-            const text = (response as GenerateContentResponse).text;
+            const text = response.text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -3182,23 +3159,23 @@ const ChatAssistant: React.FC<{
                     { text: `Analiza esta comida. ${userMessageText}` }
                 ];
 
-                // FIX: Explicitly cast the response to access the .text property safely.
-                const response = await withRetry(() => 
+                // FIX: Explicitly type the response from the AI call to ensure `response.text` is accessible.
+                const response: GenerateContentResponse = await withRetry(() => 
                     ai.models.generateContent({
                         model: 'gemini-2.5-flash',
                         contents: { parts },
                         config: { systemInstruction: calorieSystemInstruction }
                     })
                 );
-                responseText = (response as GenerateContentResponse).text;
+                responseText = response.text;
                 // Note: This special request does not get added to the main 'chat' history object
                 // to keep that conversation's context clean (as a fitness coach).
             } else if (chat) {
-                // FIX: Explicitly cast the response to access the .text property safely.
-                const result = await withRetry(() => 
+                // FIX: Explicitly type the response from the chat message to ensure `result.text` is accessible.
+                const result: GenerateContentResponse = await withRetry(() => 
                     chat.sendMessage({ message: userMessageText })
                 );
-                responseText = (result as GenerateContentResponse).text;
+                responseText = result.text;
             } else {
                  throw new Error("Chat not initialized.");
             }
@@ -3292,7 +3269,8 @@ const ChatAssistant: React.FC<{
 
 // --- AI Generation Logic (for Onboarding) ---
 const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string): Promise<Routine> => {
-    const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
+    // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+    const exerciseLibrary = await apiClient.getExerciseLibrary(gymId) as ExerciseLibrary;
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
         const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
@@ -3317,11 +3295,11 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
         10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
     `;
-    // FIX: Explicitly cast the response to access the .text property safely.
-    const response = await withRetry(() => 
+    // FIX: Explicitly type the response from the AI call to ensure `response.text` is accessible.
+    const response: GenerateContentResponse = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson((response as GenerateContentResponse).text);
+    const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
     
     const generatedPlan = JSON.parse(jsonString);
@@ -3342,11 +3320,11 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
         5. Distribuye las calorías en 4-6 comidas.
         6. Usa alimentos comunes en Argentina.
     `;
-    // FIX: Explicitly cast the response to access the .text property safely.
-    const response = await withRetry(() => 
+    // FIX: Explicitly type the response from the AI call to ensure `response.text` is accessible.
+    const response: GenerateContentResponse = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson((response as GenerateContentResponse).text);
+    const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
     return JSON.parse(jsonString);
 };
@@ -3671,17 +3649,12 @@ const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: st
     useEffect(() => {
         const fetchLibrary = async () => {
             setIsLoading(true);
-            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
-            // FIX: Add runtime check to ensure fetched library is an object.
-            if (fetchedLibrary && typeof fetchedLibrary === 'object' && !Array.isArray(fetchedLibrary)) {
-                setLibrary(fetchedLibrary);
-                // Automatically open the first group
-                if (Object.keys(fetchedLibrary).length > 0) {
-                    setActiveGroup(Object.keys(fetchedLibrary)[0]);
-                }
-            } else {
-                console.error("Fetched library is not an object:", fetchedLibrary);
-                setLibrary({});
+            // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId) as ExerciseLibrary;
+            setLibrary(fetchedLibrary);
+            // Automatically open the first group
+            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+                setActiveGroup(Object.keys(fetchedLibrary)[0]);
             }
             setIsLoading(false);
         };
@@ -3991,7 +3964,8 @@ const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () =
 
     useEffect(() => {
         const fetchLibrary = async () => {
-            const library = await apiClient.getExerciseLibrary(gymId);
+            // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+            const library = await apiClient.getExerciseLibrary(gymId) as ExerciseLibrary;
             setExerciseLibrary(library);
         };
         fetchLibrary();
@@ -4225,301 +4199,16 @@ const ProgressTracker: React.FC<{
 
 // --- NEW ACCOUNTING MODULE ---
 
-// FIX: Added missing AddAccountForm component.
-const AddAccountForm: React.FC<{ onAdd: (name: string) => void }> = ({ onAdd }) => {
-    const [name, setName] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        setIsSubmitting(true);
-        await onAdd(name);
-        setName('');
-        setIsSubmitting(false);
-    };
-
-    return (
-        <div className="add-transaction-container" style={{marginBottom: '2rem'}}>
-            <h3>Añadir Nueva Cuenta</h3>
-            <form onSubmit={handleSubmit} className="add-transaction-form" style={{gridTemplateColumns: '1fr auto'}}>
-                <input type="text" placeholder="Nombre de la cuenta (ej: Efectivo, Banco)" value={name} onChange={e => setName(e.target.value)} required />
-                <button type="submit" className="cta-button" disabled={isSubmitting}>{isSubmitting ? '...' : 'Añadir'}</button>
-            </form>
-        </div>
-    );
-};
-
-// FIX: Added missing EditAccountModal component.
-const EditAccountModal: React.FC<{ 
-    account: Account; 
-    onClose: () => void;
-    onSave: (id: string, name: string) => void;
-}> = ({ account, onClose, onSave }) => {
-    const [name, setName] = useState(account.name);
-    const [isSaving, setIsSaving] = useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        await onSave(account._id, name);
-        setIsSaving(false);
-    };
-
-    return (
-        <div className="modal-overlay">
-            <div className="modal-content edit-modal">
-                <button className="close-button" onClick={onClose}>&times;</button>
-                <h3>Editando Cuenta</h3>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Nombre de la Cuenta</label>
-                        <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-                    </div>
-                    <div className="modal-actions" style={{marginTop: '2rem'}}>
-                        <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="cta-button" disabled={isSaving}>
-                            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-// FIX: Added missing AccountsView component.
-const AccountsView: React.FC<{ gymId: string }> = ({ gymId }) => {
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-    const [deletingAccount, setDeletingAccount] = useState<Account | null>(null);
-
-    const fetchData = async () => {
-        setIsLoading(true);
-        const fetchedAccounts = await apiClient.getAccountingData(gymId, 'accounts');
-        if (Array.isArray(fetchedAccounts)) {
-            setAccounts(fetchedAccounts as Account[]);
-        } else {
-            setAccounts([]);
-        }
-        setIsLoading(false);
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [gymId]);
-
-    const handleAddAccount = async (name: string) => {
-        const success = await apiClient.addAccountingData(gymId, 'accounts', { name });
-        if (success) {
-            fetchData();
-        } else {
-            alert('Error al agregar la cuenta.');
-        }
-    };
-    
-    const handleUpdateAccount = async (id: string, name: string) => {
-        const success = await apiClient.updateAccountingData(id, 'accounts', { name });
-        if (success) {
-            fetchData();
-            setEditingAccount(null);
-        } else {
-            alert('Error al actualizar la cuenta.');
-        }
-    };
-    
-    const handleDeleteAccount = async () => {
-        if (!deletingAccount) return;
-        const success = await apiClient.deleteAccountingData(deletingAccount._id, 'accounts');
-        if (success) {
-            fetchData();
-        } else {
-            alert('Error al eliminar la cuenta.');
-        }
-        setDeletingAccount(null);
-    };
-
-    if (isLoading) {
-        return <div className="loading-container"><div className="spinner"></div></div>;
-    }
-
-    return (
-        <div>
-            <AddAccountForm onAdd={handleAddAccount} />
-            <div className="account-list-container">
-                <h3>Cuentas Existentes</h3>
-                {accounts.length === 0 ? (
-                    <p className="placeholder" style={{marginTop: '1rem'}}>No hay cuentas creadas.</p>
-                ) : (
-                    <ul className="account-list">
-                        {accounts.map(account => (
-                            <li key={account._id} className="account-item">
-                                <span>{account.name}</span>
-                                <div className="actions">
-                                    <button className="action-btn edit" onClick={() => setEditingAccount(account)}>Editar</button>
-                                    <button className="action-btn delete" onClick={() => setDeletingAccount(account)}>Borrar</button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-            
-            {editingAccount && (
-                <EditAccountModal 
-                    account={editingAccount} 
-                    onClose={() => setEditingAccount(null)} 
-                    onSave={handleUpdateAccount} 
-                />
-            )}
-
-            {deletingAccount && (
-                <ConfirmationModal 
-                    message={`¿Estás seguro de que quieres eliminar la cuenta "${deletingAccount.name}"? Esto podría afectar transacciones existentes.`}
-                    onConfirm={handleDeleteAccount}
-                    onCancel={() => setDeletingAccount(null)}
-                    confirmText="Sí, Eliminar"
-                    confirmClass="delete"
-                />
-            )}
-        </div>
-    );
-};
-
-// FIX: Added missing DailyBalancesView component.
-const DailyBalancesView: React.FC<{ gymId: string }> = ({ gymId }) => {
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [snapshots, setSnapshots] = useState<BalanceSnapshot[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [balance, setBalance] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [lastIncome, setLastIncome] = useState<number | null>(null);
-
-    const fetchData = async () => {
-        setIsLoading(true);
-        const [fetchedAccounts, fetchedSnapshots] = await Promise.all([
-            apiClient.getAccountingData(gymId, 'accounts'),
-            apiClient.getAccountingData(gymId, 'balanceSnapshots')
-        ]);
-        
-        if (Array.isArray(fetchedAccounts)) {
-            setAccounts(fetchedAccounts as Account[]);
-            if (fetchedAccounts.length > 0 && !selectedAccountId) {
-                setSelectedAccountId((fetchedAccounts[0] as Account)._id);
-            }
-        } else {
-            setAccounts([]);
-        }
-
-        if (Array.isArray(fetchedSnapshots)) {
-            setSnapshots(fetchedSnapshots as BalanceSnapshot[]);
-        } else {
-            setSnapshots([]);
-        }
-        setIsLoading(false);
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [gymId]);
-    
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedAccountId || !date || !balance) return;
-        setIsSaving(true);
-        setSaveStatus('idle');
-        setLastIncome(null);
-
-        const result = await apiClient.addBalanceSnapshot(gymId, {
-            accountId: selectedAccountId,
-            date,
-            totalBalance: parseFloat(balance)
-        });
-
-        if (result.success) {
-            setSaveStatus('success');
-            setLastIncome(result.registeredIncome);
-            setBalance('');
-            // Refetch snapshots to show the new one
-            const fetchedSnapshots = await apiClient.getAccountingData(gymId, 'balanceSnapshots');
-            if (Array.isArray(fetchedSnapshots)) setSnapshots(fetchedSnapshots as BalanceSnapshot[]);
-            setTimeout(() => setSaveStatus('idle'), 4000);
-        } else {
-            setSaveStatus('error');
-        }
-        setIsSaving(false);
-    };
-
-    const sortedSnapshots = useMemo(() => {
-        return snapshots
-            .filter(s => s.accountId === selectedAccountId)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [snapshots, selectedAccountId]);
-
-    return (
-        <div className="daily-balances-view">
-             <div className="add-transaction-container">
-                <h3>Registrar Balance Diario de Cuenta</h3>
-                <p>Ingresa el balance total al final del día. El sistema calculará y registrará automáticamente el ingreso del día como una transacción.</p>
-                <form onSubmit={handleSubmit} className="add-transaction-form" style={{ gridTemplateColumns: '1fr 1fr 1fr auto', gap: '1rem' }}>
-                     <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)} required>
-                        {accounts.length > 0 ? accounts.map(acc => (
-                            <option key={acc._id} value={acc._id}>{acc.name}</option>
-                        )) : <option disabled>No hay cuentas</option>}
-                    </select>
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
-                    <input type="number" step="0.01" placeholder="Balance Total del Día" value={balance} onChange={e => setBalance(e.target.value)} required />
-                    <button type="submit" className="cta-button" disabled={isSaving || accounts.length === 0}>
-                        {isSaving ? 'Guardando...' : 'Guardar Balance'}
-                    </button>
-                </form>
-                {saveStatus === 'success' && (
-                    <p className="success-text" style={{marginTop: '1rem'}}>
-                        ¡Balance guardado!
-                        {lastIncome !== null && lastIncome > 0 && ` Se registró un ingreso de $${lastIncome.toFixed(2)}.`}
-                        {lastIncome === 0 && ' No se registraron nuevos ingresos.'}
-                    </p>
-                )}
-                 {saveStatus === 'error' && <p className="error-text" style={{marginTop: '1rem'}}>No se pudo guardar el balance.</p>}
-            </div>
-             <div className="transaction-list-container" style={{marginTop: '2rem'}}>
-                <h3>Historial de Balances para: {accounts.find(a => a._id === selectedAccountId)?.name || ''}</h3>
-                {isLoading ? (
-                    <div className="loading-container"><div className="spinner"></div></div>
-                ) : sortedSnapshots.length === 0 ? (
-                    <div className="placeholder">No hay balances registrados para esta cuenta.</div>
-                ) : (
-                    <ul className="transaction-list">
-                         <li className="transaction-item header">
-                            <span>Fecha</span>
-                            <span className="amount">Balance Total</span>
-                        </li>
-                        {sortedSnapshots.map(s => (
-                            <li key={s._id} className="transaction-item income">
-                                <span>{new Date(s.date).toLocaleDateString()}</span>
-                                <span className="amount">${s.totalBalance.toFixed(2)}</span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </div>
-    );
-};
-
 const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> = ({ user, onLogout }) => {
-    const [activeTab, setActiveTab] = useState<'transactions' | 'accounts' | 'dailyBalances' | 'summary'>('transactions');
+    const [activeTab, setActiveTab] = useState<'transactions' | 'accounts' | 'employees' | 'summary'>('transactions');
     const [gym, setGym] = useState<StaffUser | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchGymData = async () => {
             if (user.associatedGymId) {
-                const allUsers = await apiClient.getStaffUsers();
+                // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+                const allUsers = await apiClient.getStaffUsers() as StaffUser[];
                 const associatedGym = allUsers.find(u => u._id === user.associatedGymId);
                 setGym(associatedGym || null);
             }
@@ -4540,9 +4229,7 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
             case 'transactions':
                 return <TransactionsView gymId={gym._id} />;
             case 'accounts':
-                return <AccountsView gymId={gym._id} />;
-            case 'dailyBalances':
-                return <DailyBalancesView gymId={gym._id} />;
+            case 'employees':
             case 'summary':
             default:
                 return <div className="placeholder" style={{ marginTop: '2rem' }}>Módulo en construcción.</div>;
@@ -4564,9 +4251,9 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
             
             <nav className="progress-tabs-nav">
                 <button className={`progress-tab-button ${activeTab === 'transactions' ? 'active' : ''}`} onClick={() => setActiveTab('transactions')}>Transacciones</button>
-                <button className={`progress-tab-button ${activeTab === 'dailyBalances' ? 'active' : ''}`} onClick={() => setActiveTab('dailyBalances')}>Balances Diarios</button>
-                <button className={`progress-tab-button ${activeTab === 'accounts' ? 'active' : ''}`} onClick={() => setActiveTab('accounts')}>Cuentas</button>
                 <button className={`progress-tab-button ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Resumen</button>
+                <button className={`progress-tab-button ${activeTab === 'accounts' ? 'active' : ''}`} onClick={() => setActiveTab('accounts')}>Cuentas</button>
+                <button className={`progress-tab-button ${activeTab === 'employees' ? 'active' : ''}`} onClick={() => setActiveTab('employees')}>Empleados</button>
             </nav>
             
             <div className="animated-fade-in" style={{marginTop: '2rem'}}>
@@ -4578,28 +4265,13 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
 
 const TransactionsView: React.FC<{ gymId: string }> = ({ gymId }) => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [accounts, setAccounts] = useState<Account[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     
     const fetchData = async () => {
         setIsLoading(true);
-        const [fetchedTransactions, fetchedAccounts] = await Promise.all([
-             apiClient.getAccountingData(gymId, 'transactions'),
-             apiClient.getAccountingData(gymId, 'accounts')
-        ]);
-        
-        if (Array.isArray(fetchedTransactions)) {
-            setTransactions(fetchedTransactions as Transaction[]);
-        } else {
-            console.error('Fetched transactions is not an array:', fetchedTransactions);
-            setTransactions([]);
-        }
-
-        if(Array.isArray(fetchedAccounts)){
-            setAccounts(fetchedAccounts as Account[]);
-        } else {
-            setAccounts([]);
-        }
+        // FIX: Cast API response to the correct type to avoid operations on 'unknown'.
+        const fetchedTransactions = await apiClient.getAccountingData(gymId, 'transactions') as Transaction[];
+        setTransactions(fetchedTransactions);
         setIsLoading(false);
     };
 
@@ -4634,49 +4306,37 @@ const TransactionsView: React.FC<{ gymId: string }> = ({ gymId }) => {
                 </div>
             </div>
             
-            <AddTransactionForm gymId={gymId} accounts={accounts} onTransactionAdded={fetchData} />
+            <AddTransactionForm gymId={gymId} onTransactionAdded={fetchData} />
 
             {isLoading ? (
                  <div className="loading-container"><div className="spinner"></div></div>
             ) : (
-                <TransactionList transactions={transactions} accounts={accounts} onDataUpdate={fetchData} />
+                <TransactionList transactions={transactions} />
             )}
         </div>
     );
 };
 
-const AddTransactionForm: React.FC<{ gymId: string; accounts: Account[]; onTransactionAdded: () => void; }> = ({ gymId, accounts, onTransactionAdded }) => {
+const AddTransactionForm: React.FC<{ gymId: string; onTransactionAdded: () => void; }> = ({ gymId, onTransactionAdded }) => {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
     const [type, setType] = useState<'income' | 'expense'>('income');
-    const [category, setCategory] = useState('');
-    const [accountId, setAccountId] = useState<string>(accounts[0]?._id || '');
+    const [category, setCategory] = useState('Membresías');
+    const [paymentMethod, setPaymentMethod] = useState('Efectivo');
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        // Set default account when accounts are loaded
-        if (accounts.length > 0 && !accountId) {
-            setAccountId(accounts[0]._id);
-        }
-    }, [accounts, accountId]);
-
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        const selectedAccount = accounts.find(a => a._id === accountId);
         const transactionData = {
-            date, description, amount: parseFloat(amount), type, category, 
-            paymentMethod: selectedAccount ? selectedAccount.name : 'N/A', // For display legacy
-            accountId
+            date, description, amount: parseFloat(amount), type, category, paymentMethod, accountId: 'default' // Placeholder
         };
         const success = await apiClient.addAccountingData(gymId, 'transactions', transactionData);
         if (success) {
             // Reset form
             setDescription('');
             setAmount('');
-            setCategory('');
             onTransactionAdded();
         } else {
             alert('Error al agregar la transacción.');
@@ -4695,120 +4355,23 @@ const AddTransactionForm: React.FC<{ gymId: string; accounts: Account[]; onTrans
                     <option value="income">Ingreso</option>
                     <option value="expense">Egreso</option>
                 </select>
-                <input type="text" placeholder="Categoría (ej: Membresía)" value={category} onChange={e => setCategory(e.target.value)} required />
-                 <select value={accountId} onChange={e => setAccountId(e.target.value)} required>
-                    {accounts.length > 0 ? accounts.map(acc => (
-                        <option key={acc._id} value={acc._id}>{acc.name}</option>
-                    )) : <option disabled>Crea una cuenta primero</option>}
+                <input type="text" placeholder="Categoría (ej: Membresía, Sueldos)" value={category} onChange={e => setCategory(e.target.value)} required />
+                 <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                    <option>Efectivo</option>
+                    <option>Tarjeta</option>
+                    <option>Transferencia</option>
                 </select>
-                <button type="submit" className="cta-button" disabled={isSubmitting || accounts.length === 0}>{isSubmitting ? '...' : 'Registrar'}</button>
+                <button type="submit" className="cta-button" disabled={isSubmitting}>{isSubmitting ? '...' : 'Registrar'}</button>
             </form>
         </div>
     );
 };
 
-// FIX: Added missing EditTransactionModal component.
-const EditTransactionModal: React.FC<{
-    transaction: Transaction;
-    accounts: Account[];
-    onClose: () => void;
-    onSave: () => void;
-}> = ({ transaction, accounts, onClose, onSave }) => {
-    const [formData, setFormData] = useState({
-        ...transaction,
-        date: new Date(transaction.date).toISOString().split('T')[0] // Format for input[type=date]
-    });
-    const [isSaving, setIsSaving] = useState(false);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSaving(true);
-        const dataToUpdate = {
-            ...formData,
-            amount: parseFloat(String(formData.amount))
-        };
-        const success = await apiClient.updateAccountingData(transaction._id, 'transactions', dataToUpdate);
-        if (success) {
-            onSave();
-        } else {
-            alert('No se pudo actualizar la transacción.');
-        }
-        setIsSaving(false);
-    };
-
-    return (
-        <div className="modal-overlay">
-            <div className="modal-content edit-modal">
-                <button className="close-button" onClick={onClose}>&times;</button>
-                <h3>Editando Transacción</h3>
-                <form onSubmit={handleSubmit} className="add-transaction-form" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                    <div className="form-group" style={{gridColumn: '1 / -1'}}>
-                        <label>Descripción</label>
-                        <input type="text" name="description" value={formData.description} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                        <label>Fecha</label>
-                        <input type="date" name="date" value={formData.date} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                        <label>Monto</label>
-                        <input type="number" step="0.01" name="amount" value={formData.amount} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                        <label>Tipo</label>
-                        <select name="type" value={formData.type} onChange={handleChange}>
-                            <option value="income">Ingreso</option>
-                            <option value="expense">Egreso</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label>Categoría</label>
-                        <input type="text" name="category" value={formData.category} onChange={handleChange} required />
-                    </div>
-                    <div className="form-group">
-                        <label>Cuenta</label>
-                        <select name="accountId" value={formData.accountId} onChange={handleChange} required>
-                            {accounts.map(acc => (
-                                <option key={acc._id} value={acc._id}>{acc.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                     <div className="modal-actions" style={{ gridColumn: '1 / -1', marginTop: '1.5rem' }}>
-                        <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="cta-button" disabled={isSaving}>
-                            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-const TransactionList: React.FC<{ transactions: Transaction[], accounts: Account[], onDataUpdate: () => void }> = ({ transactions, accounts, onDataUpdate }) => {
-    const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-    const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
-
+const TransactionList: React.FC<{ transactions: Transaction[] }> = ({ transactions }) => {
     const sortedTransactions = useMemo(() => {
         return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [transactions]);
     
-    const handleDelete = async () => {
-        if (!deletingTransaction) return;
-        const success = await apiClient.deleteAccountingData(deletingTransaction._id, 'transactions');
-        if (success) {
-            onDataUpdate();
-        } else {
-            alert('Error al eliminar la transacción.');
-        }
-        setDeletingTransaction(null);
-    };
-
     if (sortedTransactions.length === 0) {
         return <div className="placeholder" style={{marginTop: '2rem'}}>No hay transacciones registradas.</div>
     }
@@ -4822,7 +4385,6 @@ const TransactionList: React.FC<{ transactions: Transaction[], accounts: Account
                     <span className="description">Descripción</span>
                     <span>Categoría</span>
                     <span className="amount">Monto</span>
-                     <span className="actions" style={{justifyContent: 'flex-end'}}>Acciones</span>
                 </li>
                 {sortedTransactions.map(t => (
                     <li key={t._id} className={`transaction-item ${t.type}`}>
@@ -4832,35 +4394,9 @@ const TransactionList: React.FC<{ transactions: Transaction[], accounts: Account
                         <span className="amount">
                             {t.type === 'expense' ? '-' : ''}${t.amount.toFixed(2)}
                         </span>
-                        <div className="actions">
-                            <button className="action-btn edit" onClick={() => setEditingTransaction(t)}>Editar</button>
-                            <button className="action-btn delete" onClick={() => setDeletingTransaction(t)}>Borrar</button>
-                        </div>
                     </li>
                 ))}
             </ul>
-
-            {editingTransaction && (
-                <EditTransactionModal 
-                    transaction={editingTransaction}
-                    accounts={accounts}
-                    onClose={() => setEditingTransaction(null)}
-                    onSave={() => {
-                        setEditingTransaction(null);
-                        onDataUpdate();
-                    }}
-                />
-            )}
-
-            {deletingTransaction && (
-                <ConfirmationModal 
-                    message={`¿Estás seguro que quieres eliminar la transacción "${deletingTransaction.description}" por $${deletingTransaction.amount}?`}
-                    onConfirm={handleDelete}
-                    onCancel={() => setDeletingTransaction(null)}
-                    confirmText="Sí, Eliminar"
-                    confirmClass="delete"
-                />
-            )}
         </div>
     );
 };
