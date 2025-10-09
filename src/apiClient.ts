@@ -129,7 +129,6 @@ export interface StaffUser {
     _id: string;
     name: string;
     username: string;
-    // FIX: Add optional 'password' property to allow password updates and user creation.
     password?: string;
     role?: 'trainer' | 'accountant' | 'superadmin';
     associatedGymId?: string; // For accountants to link to a gym
@@ -176,15 +175,13 @@ export interface Employee {
     hourlyRate: number;
 }
 
-// FIX: Export missing FixedExpense interface
 export interface FixedExpense {
     _id: string;
     gymId: string;
     description: string;
     amount: number;
-    category: string;
-    frequency: 'monthly' | 'yearly' | 'onetime';
-    startDate: string; // ISO String
+    category: 'gym' | 'personal';
+    lastPaid?: string; // ISO date string for the month it was paid
 }
 
 
@@ -523,28 +520,45 @@ export const apiClient = {
   },
 
   // --- NEW Accounting API Methods ---
-  async getAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees'): Promise<any[]> {
-    try {
-        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
-        if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching ${entity}:`, error);
-        return [];
-    }
-  },
+    async getAccountingData<T>(gymId: string, entity: 'transactions' | 'accounts' | 'employees' | 'fixed-expenses'): Promise<T[]> {
+        try {
+            const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`);
+            if (!response.ok) throw new Error(`Failed to fetch ${entity}`);
+            return await response.json();
+        } catch (error) {
+            console.error(`Error fetching ${entity}:`, error);
+            return [];
+        }
+    },
 
-  async addAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees', data: any): Promise<boolean> {
-    try {
-        const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...data, gymId }),
-        });
-        return response.ok;
-    } catch (error) {
-        console.error(`Error adding ${entity}:`, error);
-        return false;
+    async addAccountingData(gymId: string, entity: 'transactions' | 'accounts' | 'employees' | 'fixed-expenses', data: any): Promise<any> {
+        try {
+            const response = await fetch(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...data, gymId }),
+            });
+             if (!response.ok) {
+                throw new Error(`Failed to add ${entity}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(`Error adding ${entity}:`, error);
+            return null;
+        }
+    },
+    
+    async updateFixedExpense(gymId: string, expenseId: string, data: Partial<FixedExpense>): Promise<boolean> {
+        try {
+            const response = await fetch(`/api/fixed-expenses/${expenseId}?gymId=${gymId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            return response.ok;
+        } catch (error) {
+            console.error(`Error updating fixed expense ${expenseId}:`, error);
+            return false;
+        }
     }
-  },
 };

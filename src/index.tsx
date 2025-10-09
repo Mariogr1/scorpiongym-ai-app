@@ -1,6 +1,5 @@
 
 
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -442,7 +441,6 @@ const App: React.FC = () => {
                 return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
             case 'superAdminDashboard':
                 return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
-// FIX: Add case for AccountantDashboard
             case 'accountantDashboard':
                 return <AccountantDashboard user={currentGym!} onLogout={handleLogout} />;
             default:
@@ -732,7 +730,6 @@ const NewPasswordResetPage: React.FC<{
 
 // --- Super Admin View ---
 
-// FIX: Added missing ConfirmationModal component.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -816,86 +813,6 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
             </form>
             {error && <p className="error-text" style={{ marginTop: '1rem' }}>{error}</p>}
             {successMessage && <p className="success-text" style={{ marginTop: '1rem' }}>{successMessage}</p>}
-        </div>
-    );
-};
-
-// FIX: Add AccountantDashboard component definition
-const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> = ({ user, onLogout }) => {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const gymId = user.associatedGymId || user._id; // Accountants are associated with a gym
-
-    const fetchData = async () => {
-        setIsLoading(true);
-        const [trans, accs, emps] = await Promise.all([
-            apiClient.getAccountingData(gymId, 'transactions'),
-            apiClient.getAccountingData(gymId, 'accounts'),
-            apiClient.getAccountingData(gymId, 'employees')
-        ]);
-        setTransactions(trans as Transaction[]);
-        setAccounts(accs as Account[]);
-        setEmployees(emps as Employee[]);
-        setIsLoading(false);
-    };
-
-    useEffect(() => {
-        if (gymId) {
-            fetchData();
-        } else {
-            setIsLoading(false);
-        }
-    }, [gymId]);
-
-    const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0), [transactions]);
-    const totalExpense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0), [transactions]);
-    const balance = totalIncome - totalExpense;
-
-    return (
-        <div className="admin-dashboard">
-            <div className="main-header">
-                <div className="header-title-wrapper">
-                    <h1>Panel de Contador</h1>
-                    <p>Usuario: {user.name}</p>
-                </div>
-                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
-            </div>
-
-            {isLoading ? (
-                 <div className="loading-container"><div className="spinner"></div>Cargando datos contables...</div>
-            ) : !gymId ? (
-                <div className="placeholder" style={{ padding: '2rem' }}>Este usuario no está asociado a ningún gimnasio.</div>
-            ) : (
-                <div className="accounting-container">
-                    <div className="accounting-summary">
-                        <div className="summary-card income">
-                            <h4>Ingresos Totales</h4>
-                            <p>${totalIncome.toFixed(2)}</p>
-                        </div>
-                        <div className="summary-card expense">
-                            <h4>Egresos Totales</h4>
-                            <p>${totalExpense.toFixed(2)}</p>
-                        </div>
-                        <div className={`summary-card balance ${balance >= 0 ? 'positive' : 'negative'}`}>
-                            <h4>Balance</h4>
-                            <p>${balance.toFixed(2)}</p>
-                        </div>
-                    </div>
-
-                    <h2>Transacciones Recientes</h2>
-                    <div className="transaction-list">
-                       {transactions.length > 0 ? transactions.slice(0, 10).map(t => (
-                           <div key={t._id} className={`transaction-item ${t.type}`}>
-                               <span>{new Date(t.date).toLocaleDateString()}</span>
-                               <span>{t.description}</span>
-                               <span className="amount">${t.amount.toFixed(2)}</span>
-                           </div>
-                       )) : <p>No hay transacciones.</p>}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
@@ -1250,6 +1167,301 @@ const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpda
     );
 };
 
+// --- Fix: Added AccountantDashboard and helper components to resolve compilation error ---
+// --- Accountant View ---
+
+const AddTransactionForm: React.FC<{
+    accounts: Account[];
+    gymId: string;
+    onTransactionAdded: () => void;
+}> = ({ accounts, gymId, onTransactionAdded }) => {
+    const [type, setType] = useState<'income' | 'expense'>('income');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [category, setCategory] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+    const [accountId, setAccountId] = useState(accounts[0]?._id || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (!accountId && accounts[0]) {
+            setAccountId(accounts[0]._id);
+        }
+    }, [accounts, accountId]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!description || !amount || !accountId) {
+            setError('Todos los campos son obligatorios.');
+            return;
+        }
+        setIsSubmitting(true);
+        const newTransaction: Omit<Transaction, '_id' | 'gymId'> = {
+            type,
+            date,
+            description,
+            amount: parseFloat(amount),
+            category,
+            paymentMethod,
+            accountId,
+        };
+        const result = await apiClient.addAccountingData(gymId, 'transactions', newTransaction);
+        if (result) {
+            setType('income');
+            setDescription('');
+            setAmount('');
+            setCategory('');
+            onTransactionAdded();
+        } else {
+            setError('No se pudo añadir la transacción.');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="add-gym-container">
+            <h3>Añadir Nueva Transacción</h3>
+            <form onSubmit={handleSubmit} className="add-gym-form">
+                <div className="form-group">
+                    <label>Tipo</label>
+                    <select value={type} onChange={e => setType(e.target.value as 'income' | 'expense')}>
+                        <option value="income">Ingreso</option>
+                        <option value="expense">Gasto</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Fecha</label>
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                </div>
+                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Descripción</label>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} required />
+                </div>
+                 <div className="form-group">
+                    <label>Monto</label>
+                    <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required />
+                </div>
+                 <div className="form-group">
+                    <label>Categoría (Opcional)</label>
+                    <input type="text" value={category} onChange={e => setCategory(e.target.value)} />
+                </div>
+                 <div className="form-group">
+                    <label>Método de Pago</label>
+                    <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                        <option>Efectivo</option>
+                        <option>Tarjeta</option>
+                        <option>Transferencia</option>
+                    </select>
+                </div>
+                 <div className="form-group">
+                    <label>Cuenta</label>
+                    <select value={accountId} onChange={e => setAccountId(e.target.value)} required>
+                        {accounts.map(acc => <option key={acc._id} value={acc._id}>{acc.name}</option>)}
+                    </select>
+                </div>
+                <div className="add-gym-actions">
+                    <button type="submit" className="cta-button" disabled={isSubmitting}>
+                        {isSubmitting ? 'Añadiendo...' : 'Añadir Transacción'}
+                    </button>
+                </div>
+                 {error && <p className="error-text" style={{marginTop: '1rem'}}>{error}</p>}
+            </form>
+        </div>
+    );
+};
+
+
+const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> = ({ user, onLogout }) => {
+    const [gym, setGym] = useState<StaffUser | null>(null);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'summary' | 'transactions'>('summary');
+    
+    const associatedGymId = user.associatedGymId;
+
+    const fetchData = async () => {
+        if (!associatedGymId) {
+            setIsLoading(false);
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const [fetchedTransactions, fetchedAccounts, allUsers] = await Promise.all([
+                apiClient.getAccountingData<Transaction>(associatedGymId, 'transactions'),
+                apiClient.getAccountingData<Account>(associatedGymId, 'accounts'),
+                apiClient.getStaffUsers()
+            ]);
+
+            setTransactions(fetchedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            
+            const gymData = allUsers.find(u => u._id === associatedGymId);
+            setGym(gymData || null);
+
+            if (fetchedAccounts.length === 0 && associatedGymId) {
+                const newAccount = await apiClient.addAccountingData(associatedGymId, 'accounts', { name: 'Caja Principal' });
+                if (newAccount) {
+                    setAccounts([newAccount]);
+                }
+            } else {
+                 setAccounts(fetchedAccounts);
+            }
+        } catch (error) {
+            console.error("Failed to fetch accounting data:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+    
+    useEffect(() => {
+        fetchData();
+    }, [associatedGymId]);
+
+    const { monthlyIncome, monthlyExpenses, balance } = useMemo(() => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        const monthlyTransactions = transactions.filter(t => new Date(t.date) >= startOfMonth);
+        
+        const income = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expenses = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        
+        return {
+            monthlyIncome: income,
+            monthlyExpenses: expenses,
+            balance: income - expenses
+        };
+    }, [transactions]);
+    
+    const renderContent = () => {
+        switch(activeTab) {
+            case 'summary':
+                return (
+                    <div className="summary-grid" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                        gap: '1.5rem',
+                        marginTop: '2rem'
+                    }}>
+                        <div className="summary-card" style={{
+                            backgroundColor: 'var(--card-background-color)',
+                            padding: '1.5rem',
+                            borderRadius: '12px',
+                            textAlign: 'center',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                            <h4>Ingresos del Mes</h4>
+                            <p className="summary-value" style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: 'var(--success-color)'}}>${monthlyIncome.toFixed(2)}</p>
+                        </div>
+                        <div className="summary-card" style={{
+                            backgroundColor: 'var(--card-background-color)',
+                            padding: '1.5rem',
+                            borderRadius: '12px',
+                            textAlign: 'center',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                            <h4>Gastos del Mes</h4>
+                            <p className="summary-value" style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: 'var(--error-color)'}}>${monthlyExpenses.toFixed(2)}</p>
+                        </div>
+                        <div className="summary-card" style={{
+                            backgroundColor: 'var(--card-background-color)',
+                            padding: '1.5rem',
+                            borderRadius: '12px',
+                            textAlign: 'center',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                            <h4>Balance Mensual</h4>
+                            <p className={`summary-value ${balance >= 0 ? 'income' : 'expense'}`} style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: balance >= 0 ? 'var(--success-color)' : 'var(--error-color)'}}>${balance.toFixed(2)}</p>
+                        </div>
+                    </div>
+                );
+            case 'transactions':
+                return (
+                    <div>
+                        <AddTransactionForm accounts={accounts} gymId={associatedGymId!} onTransactionAdded={fetchData} />
+                        <h2 style={{marginTop: '3rem'}}>Historial de Transacciones</h2>
+                         {transactions.length === 0 ? (
+                            <div className="placeholder" style={{ marginTop: '2rem' }}>No hay transacciones registradas.</div>
+                        ) : (
+                            <ul className="log-list" style={{paddingLeft: 0, listStyle: 'none'}}>
+                                {transactions.map(t => (
+                                    <li key={t._id} className="weight-log" style={{justifyContent: 'space-between', flexWrap: 'wrap'}}>
+                                        <div>
+                                            <span style={{display: 'block', fontWeight: 'bold'}}>{t.description}</span>
+                                            <span style={{fontSize: '0.9rem', color: 'var(--text-secondary-color)'}}>{new Date(t.date).toLocaleDateString()} - {t.category}</span>
+                                        </div>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            color: t.type === 'income' ? 'var(--success-color)' : 'var(--error-color)'
+                                        }}>
+                                            {t.type === 'income' ? '+' : '-'}$ {t.amount.toFixed(2)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando datos contables...</div>;
+    }
+
+    if (!associatedGymId || !gym) {
+        return (
+             <div className="admin-dashboard">
+                <div className="main-header">
+                    <div className="header-title-wrapper">
+                        <h1>Panel de Contador</h1>
+                    </div>
+                    <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                </div>
+                <div className="error-container" style={{marginTop: '2rem'}}>
+                    <p>Este usuario contador no está asociado a ningún gimnasio.</p>
+                </div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="admin-dashboard">
+            <div className="main-header">
+                 <div className="header-title-wrapper">
+                    {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
+                    <div>
+                        <h1>Panel de Contador: {gym.name}</h1>
+                        <p>Gestionando como {user.name}</p>
+                    </div>
+                </div>
+                <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+            </div>
+            
+            <nav className="main-tabs-nav" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button 
+                    className={`main-tab-button ${activeTab === 'summary' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('summary')}>
+                    Resumen
+                </button>
+                <button 
+                    className={`main-tab-button ${activeTab === 'transactions' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('transactions')}>
+                    Transacciones
+                </button>
+            </nav>
+
+            <div className="animated-fade-in">
+                {renderContent()}
+            </div>
+        </div>
+    );
+};
 
 
 // --- Admin/Coach Views ---
@@ -1273,7 +1485,6 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-// FIX: Added missing RequestsView and RequestSection components.
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -2770,60 +2981,6 @@ const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) =>
     );
 };
 
-// FIX: Add ClientDietView component
-const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
-    if (!dietPlan) {
-        return <p>No hay un plan de nutrición disponible.</p>;
-    }
-
-    return (
-        <div className="diet-plan-view animated-fade-in">
-            <h3>{dietPlan.planTitle}</h3>
-            <div className="diet-summary">
-                <div className="summary-item">
-                    <span>Calorías</span>
-                    <strong>{dietPlan.summary.totalCalories}</strong>
-                </div>
-                <div className="summary-item">
-                    <span>Proteínas</span>
-                    <strong>{dietPlan.summary.macronutrients.proteinGrams}g</strong>
-                </div>
-                <div className="summary-item">
-                    <span>Carbs</span>
-                    <strong>{dietPlan.summary.macronutrients.carbsGrams}g</strong>
-                </div>
-                <div className="summary-item">
-                    <span>Grasas</span>
-                    <strong>{dietPlan.summary.macronutrients.fatGrams}g</strong>
-                </div>
-            </div>
-            <div className="meals-grid">
-                {dietPlan.meals.map((meal, index) => (
-                    <div key={index} className="meal-card">
-                        <h4>{meal.mealName}</h4>
-                        <ul>
-                            {meal.foodItems.map((item, itemIndex) => (
-                                <li key={itemIndex}>
-                                    <span>{item.food}</span>
-                                    <span>{item.amount}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-            </div>
-            <div className="recommendations-section">
-                <h4>Recomendaciones</h4>
-                <ul>
-                    {dietPlan.recommendations.map((rec, index) => (
-                        <li key={index}>{rec}</li>
-                    ))}
-                </ul>
-            </div>
-        </div>
-    );
-};
-
 const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
@@ -3113,7 +3270,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 // --- Client View ---
 
-// FIX: Add ClientOnboardingView component definition
 const ClientOnboardingView: React.FC<{
     initialClientData: ClientData;
     onOnboardingComplete: () => void;
@@ -3290,7 +3446,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
     );
 };
 
-// FIX: Add ClientPortalTabs component and its sub-components
 const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
     const defaultTab = (clientData.planType === 'nutrition') ? 'diet' : 'routine';
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>(defaultTab);
@@ -3445,6 +3600,61 @@ const ClientRoutineView: React.FC<{ routine: Routine; getExerciseVideoUrl: (name
         </div>
     );
 }
+
+const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
+    if (!dietPlan) {
+        return <p>No hay un plan de nutrición disponible.</p>;
+    }
+
+    return (
+        <div className="diet-plan-container animated-fade-in">
+            <div className="plan-header">
+                <h2>{dietPlan.planTitle}</h2>
+            </div>
+            <div className="diet-summary">
+                <div>
+                    <strong>CALORÍAS</strong>
+                    <span>{dietPlan.summary.totalCalories}</span>
+                </div>
+                 <div>
+                    <strong>PROTEÍNAS</strong>
+                    <span>{dietPlan.summary.macronutrients.proteinGrams}g</span>
+                </div>
+                 <div>
+                    <strong>CARBS</strong>
+                    <span>{dietPlan.summary.macronutrients.carbsGrams}g</span>
+                </div>
+                 <div>
+                    <strong>GRASAS</strong>
+                    <span>{dietPlan.summary.macronutrients.fatGrams}g</span>
+                </div>
+            </div>
+            <div className="meals-grid">
+                {dietPlan.meals.map((meal, idx) => (
+                    <div key={idx} className="meal-card">
+                        <h3>{meal.mealName}</h3>
+                        <ul>
+                            {meal.foodItems.map((item, itemIdx) => (
+                                <li key={itemIdx}>
+                                    <span>{item.food}</span>
+                                    <strong>{item.amount}</strong>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+             <div className="recommendations-section">
+                <h4>Recomendaciones</h4>
+                <ul>
+                    {dietPlan.recommendations.map((rec, idx) => (
+                        <li key={idx}>{rec}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
 
 const ClientProgressTracker: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState<'bodyWeight' | 'exercises'>('bodyWeight');
@@ -3735,7 +3945,7 @@ const ChatAssistant: React.FC<{
                     </div>
                 )}
                 {!canAsk ? (
-                    <div className="limit-reached-message">
+                    <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary-color)' }}>
                         Has alcanzado tu límite de preguntas diarias.
                     </div>
                 ) : (
@@ -3763,7 +3973,6 @@ const ChatAssistant: React.FC<{
 
 
 // --- AI Generation Logic (for Onboarding) ---
-// FIX: Complete the generateRoutineForClient function and ensure it always returns a value or throws.
 const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string): Promise<Routine> => {
     const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -3846,4 +4055,6 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         throw err; // Re-throw to be handled by the caller
     }
 };
---- END OF FILE ---
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
