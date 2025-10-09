@@ -1,5 +1,4 @@
 
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1167,8 +1166,111 @@ const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpda
     );
 };
 
-// --- Fix: Added AccountantDashboard and helper components to resolve compilation error ---
 // --- Accountant View ---
+
+const FixedExpensesView: React.FC<{
+    expenses: FixedExpense[],
+    gymId: string,
+    onDataUpdate: () => void
+}> = ({ expenses, gymId, onDataUpdate }) => {
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [category, setCategory] = useState<'gym' | 'personal'>('gym');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleAddExpense = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!description || !amount) return;
+        setIsSubmitting(true);
+        const newExpense = {
+            description,
+            amount: parseFloat(amount),
+            category
+        };
+        const result = await apiClient.addAccountingData(gymId, 'fixed-expenses', newExpense);
+        if (result) {
+            setDescription('');
+            setAmount('');
+            onDataUpdate();
+        } else {
+            alert('No se pudo añadir el gasto fijo.');
+        }
+        setIsSubmitting(false);
+    };
+    
+    const handleMarkAsPaid = async (expenseId: string) => {
+        const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+        const success = await apiClient.updateFixedExpense(gymId, expenseId, { lastPaid: currentMonth });
+        if (success) {
+            onDataUpdate();
+        } else {
+            alert('No se pudo marcar como pagado.');
+        }
+    };
+    
+    const isPaidThisMonth = (lastPaid?: string) => {
+        if (!lastPaid) return false;
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        return lastPaid === currentMonth;
+    };
+
+    return (
+        <div className="animated-fade-in">
+             <div className="add-transaction-container">
+                <h3>Añadir Gasto Fijo</h3>
+                <form onSubmit={handleAddExpense} className="add-transaction-form">
+                    <div className="form-group" style={{gridColumn: 'span 2'}}>
+                        <label>Descripción</label>
+                        <input type="text" value={description} onChange={e => setDescription(e.target.value)} required />
+                    </div>
+                     <div className="form-group">
+                        <label>Monto Mensual</label>
+                        <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required />
+                    </div>
+                     <div className="form-group">
+                        <label>Categoría</label>
+                        <select value={category} onChange={e => setCategory(e.target.value as 'gym'|'personal')}>
+                            <option value="gym">Gimnasio</option>
+                            <option value="personal">Personal</option>
+                        </select>
+                    </div>
+                    <button type="submit" className="cta-button" disabled={isSubmitting}>Añadir</button>
+                </form>
+            </div>
+            
+            <div className="transaction-list-container">
+                 <h3>Lista de Gastos Fijos</h3>
+                  {expenses.length === 0 ? (
+                    <div className="placeholder">No hay gastos fijos registrados.</div>
+                ) : (
+                    <div className="transaction-list">
+                         <div className="fixed-expense-item header">
+                            <span>Descripción</span>
+                            <span style={{textAlign: 'right'}}>Monto</span>
+                            <span style={{textAlign: 'right'}}>Acción</span>
+                        </div>
+                        {expenses.map(exp => (
+                            <div key={exp._id} className={`fixed-expense-item ${isPaidThisMonth(exp.lastPaid) ? 'paid' : ''}`}>
+                                <span className="description">{exp.description}</span>
+                                <span className="amount">${exp.amount.toFixed(2)}</span>
+                                <span className="action">
+                                     <button 
+                                        className="cta-button pay-button" 
+                                        onClick={() => handleMarkAsPaid(exp._id)}
+                                        disabled={isPaidThisMonth(exp.lastPaid)}
+                                     >
+                                        {isPaidThisMonth(exp.lastPaid) ? 'Pagado' : 'Marcar Pagado'}
+                                    </button>
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 const AddTransactionForm: React.FC<{
     accounts: Account[];
@@ -1222,9 +1324,9 @@ const AddTransactionForm: React.FC<{
     };
 
     return (
-        <div className="add-gym-container">
+        <div className="add-transaction-container">
             <h3>Añadir Nueva Transacción</h3>
-            <form onSubmit={handleSubmit} className="add-gym-form">
+            <form onSubmit={handleSubmit} className="add-transaction-form">
                 <div className="form-group">
                     <label>Tipo</label>
                     <select value={type} onChange={e => setType(e.target.value as 'income' | 'expense')}>
@@ -1236,7 +1338,7 @@ const AddTransactionForm: React.FC<{
                     <label>Fecha</label>
                     <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
                 </div>
-                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
                     <label>Descripción</label>
                     <input type="text" value={description} onChange={e => setDescription(e.target.value)} required />
                 </div>
@@ -1264,7 +1366,7 @@ const AddTransactionForm: React.FC<{
                 </div>
                 <div className="add-gym-actions">
                     <button type="submit" className="cta-button" disabled={isSubmitting}>
-                        {isSubmitting ? 'Añadiendo...' : 'Añadir Transacción'}
+                        {isSubmitting ? 'Añadiendo...' : 'Añadir'}
                     </button>
                 </div>
                  {error && <p className="error-text" style={{marginTop: '1rem'}}>{error}</p>}
@@ -1278,8 +1380,9 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
     const [gym, setGym] = useState<StaffUser | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
+    const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'summary' | 'transactions'>('summary');
+    const [activeTab, setActiveTab] = useState<'summary' | 'transactions' | 'fixedExpenses'>('summary');
     
     const associatedGymId = user.associatedGymId;
 
@@ -1290,13 +1393,15 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
         }
         setIsLoading(true);
         try {
-            const [fetchedTransactions, fetchedAccounts, allUsers] = await Promise.all([
+            const [fetchedTransactions, fetchedAccounts, allUsers, fetchedFixedExpenses] = await Promise.all([
                 apiClient.getAccountingData<Transaction>(associatedGymId, 'transactions'),
                 apiClient.getAccountingData<Account>(associatedGymId, 'accounts'),
-                apiClient.getStaffUsers()
+                apiClient.getStaffUsers(),
+                apiClient.getAccountingData<FixedExpense>(associatedGymId, 'fixed-expenses'),
             ]);
 
             setTransactions(fetchedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            setFixedExpenses(fetchedFixedExpenses.sort((a,b) => a.description.localeCompare(b.description)));
             
             const gymData = allUsers.find(u => u._id === associatedGymId);
             setGym(gymData || null);
@@ -1320,7 +1425,7 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
         fetchData();
     }, [associatedGymId]);
 
-    const { monthlyIncome, monthlyExpenses, balance } = useMemo(() => {
+    const { monthlyIncome, monthlyExpenses, totalFixedExpenses, balance } = useMemo(() => {
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         
@@ -1328,53 +1433,36 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
         
         const income = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
         const expenses = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const fixed = fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
         
         return {
             monthlyIncome: income,
             monthlyExpenses: expenses,
-            balance: income - expenses
+            totalFixedExpenses: fixed,
+            balance: income - expenses - fixed,
         };
-    }, [transactions]);
+    }, [transactions, fixedExpenses]);
     
     const renderContent = () => {
         switch(activeTab) {
             case 'summary':
                 return (
-                    <div className="summary-grid" style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                        gap: '1.5rem',
-                        marginTop: '2rem'
-                    }}>
-                        <div className="summary-card" style={{
-                            backgroundColor: 'var(--card-background-color)',
-                            padding: '1.5rem',
-                            borderRadius: '12px',
-                            textAlign: 'center',
-                            border: '1px solid var(--border-color)'
-                        }}>
-                            <h4>Ingresos del Mes</h4>
-                            <p className="summary-value" style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: 'var(--success-color)'}}>${monthlyIncome.toFixed(2)}</p>
+                    <div className="accounting-summary">
+                        <div className="summary-card income">
+                            <span>Ingresos del Mes (variables)</span>
+                            <strong>${monthlyIncome.toFixed(2)}</strong>
                         </div>
-                        <div className="summary-card" style={{
-                            backgroundColor: 'var(--card-background-color)',
-                            padding: '1.5rem',
-                            borderRadius: '12px',
-                            textAlign: 'center',
-                            border: '1px solid var(--border-color)'
-                        }}>
-                            <h4>Gastos del Mes</h4>
-                            <p className="summary-value" style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: 'var(--error-color)'}}>${monthlyExpenses.toFixed(2)}</p>
+                        <div className="summary-card expense">
+                            <span>Gastos del Mes (variables)</span>
+                           <strong>${monthlyExpenses.toFixed(2)}</strong>
                         </div>
-                        <div className="summary-card" style={{
-                            backgroundColor: 'var(--card-background-color)',
-                            padding: '1.5rem',
-                            borderRadius: '12px',
-                            textAlign: 'center',
-                            border: '1px solid var(--border-color)'
-                        }}>
-                            <h4>Balance Mensual</h4>
-                            <p className={`summary-value ${balance >= 0 ? 'income' : 'expense'}`} style={{fontSize: '2rem', fontWeight: 700, margin: '0.5rem 0', color: balance >= 0 ? 'var(--success-color)' : 'var(--error-color)'}}>${balance.toFixed(2)}</p>
+                        <div className="summary-card expense">
+                            <span>Gastos Fijos (mensual)</span>
+                             <strong>${totalFixedExpenses.toFixed(2)}</strong>
+                        </div>
+                         <div className={`summary-card balance ${balance >= 0 ? 'income' : 'expense'}`}>
+                            <span>Balance Mensual (estimado)</span>
+                            <strong>${balance.toFixed(2)}</strong>
                         </div>
                     </div>
                 );
@@ -1382,28 +1470,36 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
                 return (
                     <div>
                         <AddTransactionForm accounts={accounts} gymId={associatedGymId!} onTransactionAdded={fetchData} />
-                        <h2 style={{marginTop: '3rem'}}>Historial de Transacciones</h2>
-                         {transactions.length === 0 ? (
-                            <div className="placeholder" style={{ marginTop: '2rem' }}>No hay transacciones registradas.</div>
-                        ) : (
-                            <ul className="log-list" style={{paddingLeft: 0, listStyle: 'none'}}>
-                                {transactions.map(t => (
-                                    <li key={t._id} className="weight-log" style={{justifyContent: 'space-between', flexWrap: 'wrap'}}>
-                                        <div>
-                                            <span style={{display: 'block', fontWeight: 'bold'}}>{t.description}</span>
-                                            <span style={{fontSize: '0.9rem', color: 'var(--text-secondary-color)'}}>{new Date(t.date).toLocaleDateString()} - {t.category}</span>
-                                        </div>
-                                        <span style={{
-                                            fontWeight: 'bold',
-                                            color: t.type === 'income' ? 'var(--success-color)' : 'var(--error-color)'
-                                        }}>
-                                            {t.type === 'income' ? '+' : '-'}$ {t.amount.toFixed(2)}
-                                        </span>
+                        <div className="transaction-list-container">
+                            <h3>Historial de Transacciones</h3>
+                             {transactions.length === 0 ? (
+                                <div className="placeholder">No hay transacciones registradas.</div>
+                            ) : (
+                                <ul className="transaction-list">
+                                     <li className="transaction-item header">
+                                        <span>Fecha</span>
+                                        <span className="description">Descripción</span>
+                                        <span style={{textAlign: 'right'}}>Categoría</span>
+                                        <span className="amount">Monto</span>
                                     </li>
-                                ))}
-                            </ul>
-                        )}
+                                    {transactions.map(t => (
+                                        <li key={t._id} className={`transaction-item ${t.type}`}>
+                                            <span>{new Date(t.date).toLocaleDateString()}</span>
+                                            <span className="description">{t.description}</span>
+                                            <span style={{textAlign: 'right'}}>{t.category}</span>
+                                            <span className="amount">
+                                                {t.type === 'income' ? '+' : '-'}$ {t.amount.toFixed(2)}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     </div>
+                );
+            case 'fixedExpenses':
+                return (
+                    <FixedExpensesView expenses={fixedExpenses} gymId={associatedGymId!} onDataUpdate={fetchData} />
                 );
             default:
                 return null;
@@ -1453,6 +1549,11 @@ const AccountantDashboard: React.FC<{ user: StaffUser; onLogout: () => void; }> 
                     className={`main-tab-button ${activeTab === 'transactions' ? 'active' : ''}`} 
                     onClick={() => setActiveTab('transactions')}>
                     Transacciones
+                </button>
+                 <button 
+                    className={`main-tab-button ${activeTab === 'fixedExpenses' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('fixedExpenses')}>
+                    Gastos Fijos
                 </button>
             </nav>
 

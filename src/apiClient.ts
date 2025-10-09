@@ -1,3 +1,4 @@
+
 // --- Type Definitions ---
 export type PlanType = 'full' | 'routine' | 'nutrition';
 export interface Profile {
