@@ -609,15 +609,6 @@ const ClientRegistrationPage: React.FC<{
                         onChange={(e) => setSelectedGymId(e.target.value)}
                         required
                         disabled={isLoading || gyms.length === 0}
-                        style={{
-                            width: '100%',
-                            padding: '0.8rem 1rem',
-                            backgroundColor: 'var(--background-color)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            color: 'var(--text-color)',
-                            fontSize: '1rem'
-                        }}
                     >
                         {gyms.length === 0 ? (
                             <option>Cargando gimnasios...</option>
@@ -632,7 +623,7 @@ const ClientRegistrationPage: React.FC<{
                     </button>
                 </form>
             </div>
-            <button onClick={onBack} className="back-button simple" style={{ marginTop: '2rem' }}>Volver al inicio de sesión</button>
+            <button onClick={onBack} className="back-button simple">Volver al inicio de sesión</button>
         </div>
     );
 };
@@ -711,14 +702,13 @@ const NewPasswordResetPage: React.FC<{
                     </form>
                 )}
             </div>
-            <button onClick={onBackToLogin} className="back-button simple" style={{ marginTop: '2rem' }}>Volver al inicio de sesión</button>
+            <button onClick={onBackToLogin} className="back-button simple">Volver al inicio de sesión</button>
         </div>
     );
 };
 
 // --- Super Admin View ---
 
-// FIX: Added missing ConfirmationModal component.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -1116,7 +1106,6 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-// FIX: Added missing RequestsView and RequestSection components.
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -1206,7 +1195,7 @@ const RequestsView: React.FC<{ requests: TrainerRequest[], onUpdateRequest: () =
                     className={`progress-tab-button ${activeTab === 'new' ? 'active' : ''}`} 
                     onClick={() => setActiveTab('new')}>
                     Nuevos
-                    {newRequests.length > 0 && <span className="notification-badge" style={{ position: 'static', display: 'inline-flex', marginLeft: '8px', transform: 'translateY(-2px)' }}>{newRequests.length}</span>}
+                    {newRequests.length > 0 && <span className="notification-badge requests-badge">{newRequests.length}</span>}
                 </button>
                 <button 
                     className={`progress-tab-button ${activeTab === 'read' ? 'active' : ''}`} 
@@ -2613,7 +2602,6 @@ const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) =>
     );
 };
 
-
 const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
@@ -3390,7 +3378,7 @@ const ClientOnboardingView: React.FC<{
                             Generar Mi Plan Completo
                         </button>
                         {!isProfileComplete && (
-                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>
+                             <p className="onboarding-notice">
                                 Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
                             </p>
                         )}
@@ -3468,7 +3456,6 @@ const GenerationProgressIndicator: React.FC<{
     );
 };
 
-// Fix: Add missing RequestModal component definition.
 const RequestModal: React.FC<{
     client: ClientData;
     onClose: () => void;
