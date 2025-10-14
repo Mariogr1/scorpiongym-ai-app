@@ -1,8 +1,4 @@
 
-
-
-
-
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
 import bcrypt from 'bcryptjs';
@@ -15,7 +11,7 @@ export default async function handler(req, res) {
   const clientsCollection = db.collection("clients");
 
   if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid User ID format' });
+      return res.status(400).json({ message: 'Invalid Gym ID format' });
   }
   const objectId = new ObjectId(id);
 
@@ -31,7 +27,6 @@ export default async function handler(req, res) {
             updateData.password = await bcrypt.hash(password, salt);
         }
 
-        // Only update these fields if they are provided (for trainers)
         if (dailyQuestionLimit !== undefined) {
             updateData.dailyQuestionLimit = Number(dailyQuestionLimit);
         }
@@ -52,14 +47,14 @@ export default async function handler(req, res) {
         );
 
         if (result.matchedCount === 0) {
-          return res.status(404).json({ message: 'User not found' });
+          return res.status(404).json({ message: 'Gym not found' });
         }
 
         res.status(200).json({ success: true });
 
       } catch (e) {
         console.error(`API /api/gyms/${id} [PUT] Error:`, e);
-        res.status(500).json({ error: 'Unable to update user' });
+        res.status(500).json({ error: 'Unable to update gym' });
       }
       break;
 
@@ -67,33 +62,25 @@ export default async function handler(req, res) {
       const session = client.startSession();
       try {
         await session.withTransaction(async () => {
-          // Find the user to check its role
-          const userToDelete = await gymsCollection.findOne({ _id: objectId }, { session });
-          if (!userToDelete) {
-             throw new Error('UserNotFound');
-          }
-
-          // Delete the user
-          const userDeleteResult = await gymsCollection.deleteOne({ _id: objectId }, { session });
-          if (userDeleteResult.deletedCount === 0) {
-            throw new Error('UserNotFound');
+          // Delete the gym
+          const gymDeleteResult = await gymsCollection.deleteOne({ _id: objectId }, { session });
+          if (gymDeleteResult.deletedCount === 0) {
+             throw new Error('GymNotFound');
           }
           
-          // If the user was a trainer, delete associated clients and library
-          if (userToDelete.role === 'trainer') {
-            await clientsCollection.deleteMany({ gymId: id }, { session });
-            await db.collection("exerciselibrary").deleteOne({ gymId: id }, { session });
-          }
+          // Delete associated clients and library
+          await clientsCollection.deleteMany({ gymId: id }, { session });
+          await db.collection("exerciselibrary").deleteOne({ gymId: id }, { session });
         });
         
         res.status(200).json({ success: true });
 
       } catch (e) {
-        if (e.message === 'UserNotFound') {
-            res.status(404).json({ message: 'User not found' });
+        if (e.message === 'GymNotFound') {
+            res.status(404).json({ message: 'Gym not found' });
         } else {
             console.error(`API /api/gyms/${id} [DELETE] Error:`, e);
-            res.status(500).json({ error: 'Unable to delete user and their data' });
+            res.status(500).json({ error: 'Unable to delete gym and associated data' });
         }
       } finally {
         session.endSession();

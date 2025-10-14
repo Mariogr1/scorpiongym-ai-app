@@ -21,11 +21,11 @@ import {
     ExerciseLibrary,
     ProgressLogEntry,
     ExerciseDefinition,
-    StaffUser,
+    Gym,
     Phase,
     DayPlan,
     Request as TrainerRequest, // Renamed to avoid conflict
-    PlanType,
+    PlanType
 } from './apiClient';
 
 
@@ -307,8 +307,8 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
 const App: React.FC = () => {
     const [view, setView] = useState<'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset'>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
-    const [currentGym, setCurrentGym] = useState<StaffUser | null>(null);
-    const [impersonatedGym, setImpersonatedGym] = useState<StaffUser | null>(null);
+    const [currentGym, setCurrentGym] = useState<Gym | null>(null);
+    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
     const [loginError, setLoginError] = useState<string>('');
     const [loginMessage, setLoginMessage] = useState('');
 
@@ -323,11 +323,11 @@ const App: React.FC = () => {
             setCurrentClientDni(loggedInClient);
             setView('clientView');
         } else if (loggedInGym) {
-            const gymData: StaffUser = JSON.parse(loggedInGym);
+            const gymData = JSON.parse(loggedInGym);
             setCurrentGym(gymData);
-            if (gymData.role === 'superadmin') {
+            if (gymData.username === 'superadmin') {
                 setView('superAdminDashboard');
-            } else { // trainer
+            } else {
                 setView('adminDashboard');
             }
         }
@@ -356,9 +356,9 @@ const App: React.FC = () => {
                  sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
                  sessionStorage.setItem('userType', 'gym');
                  setCurrentGym(gymData);
-                 if (gymData.role === 'superadmin') {
+                 if (gymData.username === 'superadmin') {
                     setView('superAdminDashboard');
-                 } else { // trainer or legacy
+                 } else {
                     setView('adminDashboard');
                  }
              } else {
@@ -385,7 +385,7 @@ const App: React.FC = () => {
         setView('adminDashboard');
     };
     
-    const handleSelectGym = (gymToManage: StaffUser) => {
+    const handleSelectGym = (gymToManage: Gym) => {
         setImpersonatedGym(gymToManage);
         setView('adminDashboard');
     };
@@ -481,10 +481,10 @@ const LoginPage: React.FC<{
             <div className="login-box">
                 <div className="view-toggle" style={{justifyContent: 'center', marginBottom: '2rem'}}>
                     <button className={`view-toggle-button ${loginType === 'client' ? 'active' : ''}`} onClick={() => setLoginType('client')}>Cliente</button>
-                    <button className={`view-toggle-button ${loginType === 'gym' ? 'active' : ''}`} onClick={() => setLoginType('gym')}>Personal</button>
+                    <button className={`view-toggle-button ${loginType === 'gym' ? 'active' : ''}`} onClick={() => setLoginType('gym')}>Entrenador</button>
                 </div>
 
-                <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Personal'}</h2>
+                <h2>{loginType === 'client' ? 'Acceso Cliente' : 'Acceso Entrenador'}</h2>
                 <p>{loginType === 'client' ? 'Ingresa tu DNI y código o contraseña.' : 'Ingresa tu usuario y contraseña.'}</p>
                  {message && <p className="success-text" style={{marginBottom: '1rem'}}>{message}</p>}
                 <form onSubmit={handleSubmit}>
@@ -524,17 +524,16 @@ const ClientRegistrationPage: React.FC<{
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [selectedGymId, setSelectedGymId] = useState('');
-    const [gyms, setGyms] = useState<StaffUser[]>([]);
+    const [gyms, setGyms] = useState<Gym[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         const fetchGyms = async () => {
-            const fetchedGyms = await apiClient.getStaffUsers();
-            const trainerGyms = fetchedGyms.filter(u => u.role === 'trainer');
-            setGyms(trainerGyms);
-            if (trainerGyms.length > 0) {
-                setSelectedGymId(trainerGyms[0]._id);
+            const fetchedGyms = await apiClient.getGyms();
+            setGyms(fetchedGyms);
+            if (fetchedGyms.length > 0) {
+                setSelectedGymId(fetchedGyms[0]._id);
             }
             setIsLoading(false);
         };
@@ -718,6 +717,8 @@ const NewPasswordResetPage: React.FC<{
 };
 
 // --- Super Admin View ---
+
+// FIX: Added missing ConfirmationModal component.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -761,7 +762,7 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
         }
 
         setIsSaving(true);
-        const success = await apiClient.updateStaffUser(gymId, { password });
+        const success = await apiClient.updateGym(gymId, { password });
         if (success) {
             setSuccessMessage('¡Contraseña actualizada con éxito!');
             setPassword('');
@@ -805,49 +806,42 @@ const PasswordManagement: React.FC<{ gymId: string }> = ({ gymId }) => {
     );
 };
 
-const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSelectGym: (gym: StaffUser) => void; }> = ({ gym, onLogout, onSelectGym }) => {
-    const [users, setUsers] = useState<StaffUser[]>([]);
+const SuperAdminDashboard: React.FC<{ gym: Gym; onLogout: () => void; onSelectGym: (gym: Gym) => void; }> = ({ gym, onLogout, onSelectGym }) => {
+    const [gyms, setGyms] = useState<Gym[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState<StaffUser | null>(null);
+    const [editingGym, setEditingGym] = useState<Gym | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<Gym | null>(null);
 
-    const fetchUsers = async () => {
+    const fetchGyms = async () => {
         setIsLoading(true);
-        const fetchedUsers = await apiClient.getStaffUsers();
-        setUsers(fetchedUsers);
+        const fetchedGyms = await apiClient.getGyms();
+        setGyms(fetchedGyms);
         setIsLoading(false);
     };
 
     useEffect(() => {
-        fetchUsers();
+        fetchGyms();
     }, []);
 
-    const handleUserCreated = () => {
-        fetchUsers();
+    const handleGymCreated = () => {
+        fetchGyms();
     };
     
-    const handleUserUpdated = () => {
-        setEditingUser(null);
-        fetchUsers();
+    const handleGymUpdated = () => {
+        setEditingGym(null);
+        fetchGyms();
     };
 
-    const handleUserDeleted = async () => {
+    const handleGymDeleted = async () => {
         if (!showDeleteConfirm) return;
-        const success = await apiClient.deleteStaffUser(showDeleteConfirm._id);
+        const success = await apiClient.deleteGym(showDeleteConfirm._id);
         if (success) {
             setShowDeleteConfirm(null);
-            fetchUsers();
+            fetchGyms();
         } else {
-            alert("Error al eliminar el usuario.");
+            alert("Error al eliminar el gimnasio.");
         }
     };
-
-    const getRoleName = (role?: 'trainer' | 'superadmin') => {
-        switch (role) {
-            case 'trainer': return 'Entrenador';
-            default: return 'Gimnasio';
-        }
-    }
 
     return (
         <div className="admin-dashboard">
@@ -860,47 +854,46 @@ const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSe
             
             <PasswordManagement gymId={gym._id} />
 
-            <AddUserForm onUserCreated={handleUserCreated} />
+            <AddGymForm onGymCreated={handleGymCreated} />
 
-            {editingUser && (
-                <EditUserModal 
-                    user={editingUser} 
-                    onClose={() => setEditingUser(null)} 
-                    onUserUpdated={handleUserUpdated} 
+            {editingGym && (
+                <EditGymModal 
+                    gym={editingGym} 
+                    onClose={() => setEditingGym(null)} 
+                    onGymUpdated={handleGymUpdated} 
                 />
             )}
             
             {showDeleteConfirm && (
                 <ConfirmationModal
-                    message={`¿Estás seguro de que quieres eliminar a "${showDeleteConfirm.name}"? Esta acción es irreversible y eliminará todos sus datos asociados.`}
-                    onConfirm={handleUserDeleted}
+                    message={`¿Estás seguro de que quieres eliminar el gimnasio "${showDeleteConfirm.name}"? Esta acción es irreversible y eliminará a todos sus clientes y datos asociados.`}
+                    onConfirm={handleGymDeleted}
                     onCancel={() => setShowDeleteConfirm(null)}
                     confirmText="Eliminar"
                     confirmClass="delete"
                 />
             )}
 
-            <h2>Usuarios del Sistema</h2>
             {isLoading ? (
-                <div className="loading-container"><div className="spinner"></div>Cargando usuarios...</div>
+                <div className="loading-container"><div className="spinner"></div>Cargando gimnasios...</div>
             ) : (
                 <div className="gym-list">
-                    {users.filter(g => g.username !== 'superadmin').map(user => (
-                        <div key={user._id} className="gym-card" onClick={() => (user.role === 'trainer' || !user.role) && onSelectGym(user)}>
+                    {gyms.filter(g => g.username !== 'superadmin').map(gym => (
+                        <div key={gym._id} className="gym-card" onClick={() => onSelectGym(gym)}>
                            <div className="gym-card-header">
-                                {user.logoSvg && (user.role === 'trainer' || !user.role) && (
+                                {gym.logoSvg && (
                                     <div className="gym-card-logo">
-                                        <SvgImage svgString={user.logoSvg} altText={`${user.name} logo`} />
+                                        <SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} />
                                     </div>
                                 )}
                                 <div className="gym-card-info">
-                                    <h3>{user.name}</h3>
-                                    <p>Usuario: {user.username} | Rol: <strong>{getRoleName(user.role)}</strong></p>
+                                    <h3>{gym.name}</h3>
+                                    <p>Usuario: {gym.username} | Límite IA: {gym.dailyQuestionLimit || 'N/A'}</p>
                                 </div>
                             </div>
                             <div className="gym-card-actions">
-                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingUser(user); }}>Editar</button>
-                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(user); }}>Eliminar</button>
+                                <button className="action-btn edit" onClick={(e) => { e.stopPropagation(); setEditingGym(gym); }}>Editar</button>
+                                <button className="action-btn delete" onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(gym); }}>Eliminar</button>
                             </div>
                         </div>
                     ))}
@@ -911,14 +904,13 @@ const SuperAdminDashboard: React.FC<{ gym: StaffUser; onLogout: () => void; onSe
 };
 
 
-const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated }) => {
+const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) => {
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [dailyQuestionLimit, setDailyQuestionLimit] = useState(10);
     const [logoSvg, setLogoSvg] = useState<string | null>(null);
     const [planType, setPlanType] = useState<PlanType>('full');
-    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     
@@ -940,12 +932,7 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
         e.preventDefault();
         setIsSubmitting(true);
         setError('');
-        const success = await apiClient.createStaffUser({
-            name, username, password, role: 'trainer', 
-            dailyQuestionLimit, 
-            logoSvg, 
-            planType, 
-        });
+        const success = await apiClient.createGym(name, username, password, dailyQuestionLimit, logoSvg, planType);
         if (success) {
             setName('');
             setUsername('');
@@ -953,19 +940,19 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
             setDailyQuestionLimit(10);
             setLogoSvg(null);
             setPlanType('full');
-            onUserCreated();
+            onGymCreated();
         } else {
-            setError('No se pudo crear el usuario. El nombre de usuario puede que ya exista.');
+            setError('No se pudo crear el gimnasio. El nombre de usuario puede que ya exista.');
         }
         setIsSubmitting(false);
     };
 
     return (
         <div className="add-gym-container">
-            <h3>Añadir Nuevo Gimnasio / Entrenador</h3>
+            <h3>Añadir Nuevo Gimnasio</h3>
             <form onSubmit={handleSubmit} className="add-gym-form">
                 <div className="form-group">
-                    <label>Nombre Completo / Gimnasio</label>
+                    <label>Nombre del Gimnasio</label>
                     <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
                 </div>
                 <div className="form-group">
@@ -976,38 +963,31 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
                     <label>Contraseña</label>
                     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
-                <div className="form-group">
-                    <label>Rol de Usuario</label>
-                    <input type="text" value="Entrenador / Gimnasio" readOnly disabled />
+                 <div className="form-group">
+                    <label>Límite Preguntas IA / día</label>
+                    <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
                 </div>
-
-                <>
-                     <div className="form-group animated-fade-in">
-                        <label>Límite Preguntas IA / día</label>
-                        <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
-                    </div>
-                    <div className="form-group animated-fade-in">
-                        <label>Tipo de Plan</label>
-                        <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
-                            <option value="full">Plan Completo (Rutina y Nutrición)</option>
-                            <option value="routine">Solo Plan de Rutina</option>
-                            <option value="nutrition">Solo Plan de Nutrición</option>
-                        </select>
-                    </div>
-                     <div className="form-group animated-fade-in" style={{ gridColumn: '1 / -1' }}>
-                        <label>Logo (SVG)</label>
-                        <div className="file-input-wrapper">
-                            <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
-                            <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
-                            <div className="file-input-preview">
-                                {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
-                            </div>
+                <div className="form-group">
+                    <label>Tipo de Plan</label>
+                    <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                        <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                        <option value="routine">Solo Plan de Rutina</option>
+                        <option value="nutrition">Solo Plan de Nutrición</option>
+                    </select>
+                </div>
+                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Logo (SVG)</label>
+                    <div className="file-input-wrapper">
+                        <label htmlFor="svg-upload" className="file-input-label">Seleccionar Archivo</label>
+                        <input id="svg-upload" type="file" accept=".svg" onChange={handleFileChange} />
+                        <div className="file-input-preview">
+                            {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
                         </div>
                     </div>
-                </>
+                </div>
                 <div className="add-gym-actions">
                     <button type="submit" className="cta-button" disabled={isSubmitting}>
-                        {isSubmitting ? 'Creando...' : 'Crear Usuario'}
+                        {isSubmitting ? 'Creando...' : 'Crear Gimnasio'}
                     </button>
                 </div>
             </form>
@@ -1017,31 +997,32 @@ const AddUserForm: React.FC<{ onUserCreated: () => void }> = ({ onUserCreated })
 };
 
 
-const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpdated: () => void; }> = ({ user, onClose, onUserUpdated }) => {
-    const [name, setName] = useState(user.name);
+const EditGymModal: React.FC<{ gym: Gym; onClose: () => void; onGymUpdated: () => void; }> = ({ gym, onClose, onGymUpdated }) => {
+    const [name, setName] = useState(gym.name);
     const [password, setPassword] = useState('');
-    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(user.dailyQuestionLimit || 10);
-    const [logoSvg, setLogoSvg] = useState<string | null>(user.logoSvg || null);
-    const [planType, setPlanType] = useState<PlanType>(user.planType || 'full');
+    const [dailyQuestionLimit, setDailyQuestionLimit] = useState(gym.dailyQuestionLimit || 10);
+    const [logoSvg, setLogoSvg] = useState<string | null>(gym.logoSvg || null);
+    const [planType, setPlanType] = useState<PlanType>(gym.planType || 'full');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        const dataToUpdate: Partial<StaffUser> = { name };
-        
-        if (password) dataToUpdate.password = password;
-        if (user.role === 'trainer' || !user.role) {
-            dataToUpdate.dailyQuestionLimit = dailyQuestionLimit;
-            dataToUpdate.logoSvg = logoSvg;
-            dataToUpdate.planType = planType;
+        const dataToUpdate: { name?: string; password?: string; dailyQuestionLimit?: number; logoSvg?: string | null; planType?: PlanType; } = {
+            name: name,
+            dailyQuestionLimit: dailyQuestionLimit,
+            logoSvg: logoSvg,
+            planType: planType,
+        };
+        if (password) {
+            dataToUpdate.password = password;
         }
         
-        const success = await apiClient.updateStaffUser(user._id, dataToUpdate);
+        const success = await apiClient.updateGym(gym._id, dataToUpdate);
         if (success) {
-            onUserUpdated();
+            onGymUpdated();
         } else {
-            alert("Error al actualizar el usuario.");
+            alert("Error al actualizar el gimnasio.");
         }
         setIsSubmitting(false);
     };
@@ -1067,43 +1048,39 @@ const EditUserModal: React.FC<{ user: StaffUser; onClose: () => void; onUserUpda
         <div className="modal-overlay">
             <div className="modal-content edit-modal">
                 <button className="close-button" onClick={onClose}>&times;</button>
-                <h3>Editando: {user.name}</h3>
+                <h3>Editando: {gym.name}</h3>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label>Nombre</label>
+                        <label>Nombre del Gimnasio</label>
                         <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
                     </div>
                     <div className="form-group">
                         <label>Nueva Contraseña (dejar en blanco para no cambiar)</label>
                         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
                     </div>
-                    {(user.role === 'trainer' || !user.role) && (
-                        <>
-                            <div className="form-group">
-                                <label>Límite Preguntas IA / día</label>
-                                <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                    <div className="form-group">
+                        <label>Límite Preguntas IA / día</label>
+                        <input type="number" value={dailyQuestionLimit} onChange={(e) => setDailyQuestionLimit(Number(e.target.value))} required min="0" />
+                    </div>
+                    <div className="form-group">
+                        <label>Tipo de Plan</label>
+                        <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
+                            <option value="full">Plan Completo (Rutina y Nutrición)</option>
+                            <option value="routine">Solo Plan de Rutina</option>
+                            <option value="nutrition">Solo Plan de Nutrición</option>
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label>Logo (SVG)</label>
+                        <div className="file-input-wrapper">
+                             <label htmlFor="svg-upload-edit" className="file-input-label">Cambiar SVG</label>
+                             <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
+                             {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
+                             <div className="file-input-preview">
+                                {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
                             </div>
-                            <div className="form-group">
-                                <label>Tipo de Plan</label>
-                                <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
-                                    <option value="full">Plan Completo (Rutina y Nutrición)</option>
-                                    <option value="routine">Solo Plan de Rutina</option>
-                                    <option value="nutrition">Solo Plan de Nutrición</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Logo (SVG)</label>
-                                <div className="file-input-wrapper">
-                                     <label htmlFor="svg-upload-edit" className="file-input-label">Cambiar SVG</label>
-                                     <input id="svg-upload-edit" type="file" accept=".svg" onChange={handleFileChange} />
-                                     {logoSvg && <button type="button" className="action-btn delete" onClick={handleRemoveLogo}>Quitar</button>}
-                                     <div className="file-input-preview">
-                                        {logoSvg ? <SvgImage svgString={logoSvg} altText="Logo preview" /> : 'SVG'}
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
+                        </div>
+                    </div>
                     <div className="modal-actions" style={{marginTop: '2rem'}}>
                         <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
                         <button type="submit" className="cta-button" disabled={isSubmitting}>
@@ -1139,6 +1116,7 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
+// FIX: Added missing RequestsView and RequestSection components.
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -1482,8 +1460,8 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
     onLogout: () => void; 
-    gym: StaffUser; 
-    loggedInGym: StaffUser;
+    gym: Gym; 
+    loggedInGym: Gym;
     onBackToSuperAdmin: () => void;
 }> = ({ onSelectClient, onLogout, gym, loggedInGym, onBackToSuperAdmin }) => {
     const [clients, setClients] = useState<ClientListItem[]>([]);
@@ -1733,7 +1711,7 @@ const AddClientForm: React.FC<{ onClientCreated: () => void, gymId: string }> = 
 };
 
 
-const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: StaffUser }> = ({ dni, onBack, onLogout, gym }) => {
+const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout: () => void, gym: Gym }> = ({ dni, onBack, onLogout, gym }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [requests, setRequests] = useState<TrainerRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -2924,620 +2902,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 
 // --- Client View ---
-const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
-    return (
-        <div className="diet-plan-container animated-fade-in">
-             <div className="plan-header">
-                <h2>{dietPlan.planTitle}</h2>
-            </div>
-            <div className="diet-summary">
-                <div>
-                    <strong>Calorías</strong>
-                    <span>{dietPlan.summary.totalCalories} kcal</span>
-                </div>
-                <div>
-                    <strong>Proteínas</strong>
-                    <span>{dietPlan.summary.macronutrients.proteinGrams}g</span>
-                </div>
-                <div>
-                    <strong>Carbs</strong>
-                    <span>{dietPlan.summary.macronutrients.carbsGrams}g</span>
-                </div>
-                <div>
-                    <strong>Grasas</strong>
-                    <span>{dietPlan.summary.macronutrients.fatGrams}g</span>
-                </div>
-            </div>
-            <div className="meals-grid">
-                {dietPlan.meals.map((meal, index) => (
-                    <div key={index} className="meal-card">
-                        <h4>{meal.mealName}</h4>
-                        <ul>
-                            {meal.foodItems.map((item, itemIndex) => (
-                                <li key={itemIndex}>
-                                    {item.food} <span>{item.amount}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-            </div>
-            <div className="recommendations-section">
-                <h4>Recomendaciones</h4>
-                 <ul>
-                    {dietPlan.recommendations.map((rec, index) => (
-                        <li key={index}>{rec}</li>
-                    ))}
-                </ul>
-            </div>
-        </div>
-    );
-};
-
-const ClientPhaseContent: React.FC<{
-    phase: Phase;
-    onPlayVideo: (url: string) => void;
-    findVideoUrl: (exerciseName: string) => string | undefined;
-}> = ({ phase, onPlayVideo, findVideoUrl }) => {
-    const [activeDayIndex, setActiveDayIndex] = useState(0);
-
-    const dayPlan = phase.routine.dias[activeDayIndex];
-
-    if (!dayPlan) {
-        return <p>No hay días definidos para esta fase.</p>;
-    }
-
-    return (
-        <div>
-            <nav className="day-tabs-nav">
-                {phase.routine.dias.map((dia, index) => (
-                    <button
-                        key={index}
-                        className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`}
-                        onClick={() => setActiveDayIndex(index)}
-                    >
-                        {dia.dia}
-                    </button>
-                ))}
-            </nav>
-             <div className="day-card">
-                <h3>
-                    {dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span>
-                </h3>
-                <ul className="exercise-list">
-                    {dayPlan.ejercicios.map((exercise, exerciseIndex) => (
-                        <li key={exerciseIndex} className="exercise-item">
-                           <ExerciseView 
-                                exercise={exercise} 
-                                onPlayVideo={onPlayVideo}
-                                videoUrl={findVideoUrl(exercise.nombre)}
-                            />
-                        </li>
-                    ))}
-                </ul>
-                {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
-            </div>
-        </div>
-    );
-};
-
-const ClientRoutineView: React.FC<{
-    routine: Routine;
-    onPlayVideo: (url: string) => void;
-    findVideoUrl: (exerciseName: string) => string | undefined;
-}> = ({ routine, onPlayVideo, findVideoUrl }) => {
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-
-    const togglePhase = (index: number) => {
-        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
-    };
-
-    if (!routine || !routine.phases || routine.phases.length === 0) {
-        return <div className="placeholder">No hay fases en tu rutina.</div>;
-    }
-
-    return (
-        <div className="client-routine-view animated-fade-in">
-             <h2>{routine.planName}</h2>
-             <div className="accordion-phases">
-                {routine.phases.map((phase, phaseIndex) => (
-                    <div key={phaseIndex} className="accordion-item">
-                        <button 
-                            className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
-                            onClick={() => togglePhase(phaseIndex)}
-                            aria-expanded={activePhaseIndex === phaseIndex}
-                        >
-                            <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
-                            <span className="accordion-header-icon">+</span>
-                        </button>
-                        <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
-                             <ClientPhaseContent 
-                                phase={phase} 
-                                onPlayVideo={onPlayVideo} 
-                                findVideoUrl={findVideoUrl}
-                             />
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const ClientProgressTracker: React.FC<{ 
-    clientData: ClientData;
-    onDataUpdate: () => void;
-    findVideoUrl: (exerciseName: string) => string | undefined;
-}> = ({ clientData, onDataUpdate, findVideoUrl }) => {
-    const [activeTab, setActiveTab] = useState<'log' | 'history'>('log');
-    
-    // For logging new entries
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [selectedDayPlan, setSelectedDayPlan] = useState<DayPlan | null>(null);
-    const [logEntries, setLogEntries] = useState<Record<string, ProgressLogEntry>>({}); // { 'exerciseName': entry }
-    const [isSaving, setIsSaving] = useState(false);
-    
-    // For history view
-    const [historyTab, setHistoryTab] = useState<'bodyWeight' | 'exercises'>('bodyWeight');
-    const [historySelectedExercise, setHistorySelectedExercise] = useState('');
-
-    const exercisesWithLogs = useMemo(() => {
-        return Object.keys(clientData.progressLog || {}).filter(name => clientData.progressLog[name]?.length > 0);
-    }, [clientData.progressLog]);
-
-    useEffect(() => {
-        if (exercisesWithLogs.length > 0 && !historySelectedExercise) {
-            setHistorySelectedExercise(exercisesWithLogs[0]);
-        }
-    }, [exercisesWithLogs, historySelectedExercise]);
-
-
-    // Find today's routine day
-    useEffect(() => {
-        if (!clientData.routine) return;
-        const today = new Date().getDay(); // Sunday - 0, Monday - 1, etc.
-        const dayIndex = (today === 0) ? 6 : today - 1; // Assuming routine days are 0-indexed Mon-Sun
-        const routineDays = clientData.routine.phases.flatMap(p => p.routine.dias);
-        if (routineDays.length > dayIndex) {
-            setSelectedDayPlan(routineDays[dayIndex]);
-        } else if (routineDays.length > 0) {
-            setSelectedDayPlan(routineDays[0]); // Default to first day
-        }
-    }, [clientData.routine]);
-
-    const handleLogChange = (exerciseName: string, field: 'weight' | 'repetitions', value: string) => {
-        setLogEntries(prev => ({
-            ...prev,
-            [exerciseName]: {
-                ...prev[exerciseName],
-                date: selectedDate,
-                [field]: Number(value)
-            }
-        }));
-    };
-    
-    const handleSaveLog = async () => {
-        setIsSaving(true);
-        const newProgressLog = { ...(clientData.progressLog || {}) };
-        
-        for (const exName in logEntries) {
-            if (!newProgressLog[exName]) {
-                newProgressLog[exName] = [];
-            }
-            // Check for valid entry
-            if (logEntries[exName].weight > 0 && logEntries[exName].repetitions > 0) {
-                newProgressLog[exName].push({
-                    date: new Date(selectedDate).toISOString(),
-                    weight: logEntries[exName].weight,
-                    repetitions: logEntries[exName].repetitions,
-                });
-            }
-        }
-
-        const success = await apiClient.saveClientData(clientData.dni, { progressLog: newProgressLog });
-        if (success) {
-            setLogEntries({});
-            onDataUpdate();
-            alert("¡Progreso guardado!");
-        } else {
-            alert("No se pudo guardar el progreso.");
-        }
-        setIsSaving(false);
-    };
-
-    const sortedBodyWeightLog = useMemo(() => {
-        return [...(clientData.bodyWeightLog || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [clientData.bodyWeightLog]);
-
-     const sortedExerciseLog = useMemo(() => {
-        if (!historySelectedExercise || !clientData.progressLog?.[historySelectedExercise]) return [];
-        return [...clientData.progressLog[historySelectedExercise]].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [clientData.progressLog, historySelectedExercise]);
-
-
-    return (
-        <div className="client-progress-tracker animated-fade-in">
-            <nav className="progress-tabs-nav">
-                <button className={`progress-tab-button ${activeTab === 'log' ? 'active' : ''}`} onClick={() => setActiveTab('log')}>Registrar Progreso</button>
-                <button className={`progress-tab-button ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Ver Historial</button>
-            </nav>
-
-            {activeTab === 'log' && (
-                <div className="progress-log-section">
-                    <h3>Registrar Sesión del {new Date(selectedDate).toLocaleDateString()}</h3>
-                    {selectedDayPlan ? (
-                        <div className="log-form">
-                            {selectedDayPlan.ejercicios.map(ex => (
-                                <div key={ex.nombre} className="log-entry-row">
-                                    <span className="exercise-name-log">{ex.nombre}</span>
-                                    <div className="log-inputs">
-                                        <input 
-                                            type="number" 
-                                            placeholder="kg"
-                                            onChange={(e) => handleLogChange(ex.nombre, 'weight', e.target.value)} 
-                                        />
-                                        <input 
-                                            type="number" 
-                                            placeholder="reps"
-                                            onChange={(e) => handleLogChange(ex.nombre, 'repetitions', e.target.value)} 
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-                            <button onClick={handleSaveLog} className="cta-button" disabled={isSaving}>
-                                {isSaving ? 'Guardando...' : 'Guardar Sesión'}
-                            </button>
-                        </div>
-                    ) : (
-                        <p>No tenés una rutina asignada para registrar progreso.</p>
-                    )}
-                </div>
-            )}
-
-            {activeTab === 'history' && (
-                <div className="progress-history-section">
-                     <nav className="progress-tabs-nav sub-tabs">
-                        <button className={`progress-tab-button ${historyTab === 'bodyWeight' ? 'active' : ''}`} onClick={() => setHistoryTab('bodyWeight')}>Peso Corporal</button>
-                        <button className={`progress-tab-button ${historyTab === 'exercises' ? 'active' : ''}`} onClick={() => setHistoryTab('exercises')}>Ejercicios</button>
-                    </nav>
-
-                    {historyTab === 'bodyWeight' && (
-                        <div>
-                             <h4>Historial de Peso</h4>
-                            {sortedBodyWeightLog.length === 0 ? (
-                                <p>Aún no hay registros de peso.</p>
-                            ) : (
-                                <ul className="log-list">
-                                    {sortedBodyWeightLog.map(entry => (
-                                        <li key={entry.date} className="weight-log">
-                                            <span>{new Date(entry.date).toLocaleDateString()}</span>
-                                            <span><strong>{entry.weight} kg</strong></span>
-                                            {entry.imc && <span className={`bmi-category ${entry.imcCategoryClass}`}>IMC: {entry.imc}</span>}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-                    {historyTab === 'exercises' && (
-                         <div>
-                            {exercisesWithLogs.length === 0 ? (
-                                <p>Aún no has registrado progreso en ningún ejercicio.</p>
-                            ) : (
-                                <>
-                                    <select 
-                                        className="exercise-select-dropdown" 
-                                        value={historySelectedExercise} 
-                                        onChange={e => setHistorySelectedExercise(e.target.value)}
-                                    >
-                                        {exercisesWithLogs.map(name => <option key={name} value={name}>{name}</option>)}
-                                    </select>
-                                    
-                                    <h4>Historial de {historySelectedExercise}</h4>
-                                    <ul className="log-list">
-                                        {sortedExerciseLog.map(log => (
-                                            <li key={log.date}>
-                                                <span>{new Date(log.date).toLocaleDateString()}</span>
-                                                <span><strong>{log.weight} kg</strong></span>
-                                                <span><strong>{log.repetitions} reps</strong></span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const ClientContactForm: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const [subject, setSubject] = useState('');
-    const [message, setMessage] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSending(true);
-        setSendStatus('idle');
-
-        const requestData = {
-            clientId: clientData.dni,
-            clientName: clientData.profile.name,
-            gymId: clientData.gymId,
-            subject,
-            message,
-        };
-        
-        // @ts-ignore
-        const success = await apiClient.createRequest(requestData);
-        if (success) {
-            setSendStatus('success');
-            setSubject('');
-            setMessage('');
-        } else {
-            setSendStatus('error');
-        }
-        setIsSending(false);
-    };
-
-    return (
-        <div className="client-contact-form animated-fade-in">
-            <h2>Contactar a mi Entrenador</h2>
-            <p>Enviá un mensaje directo a tu entrenador con cualquier duda o consulta.</p>
-
-            <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                    <label htmlFor="subject">Asunto</label>
-                    <input 
-                        type="text" 
-                        id="subject"
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        required
-                    />
-                </div>
-                 <div className="form-group">
-                    <label htmlFor="message">Mensaje</label>
-                    <textarea 
-                        id="message" 
-                        rows={6}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        required
-                    ></textarea>
-                </div>
-                <button type="submit" className="cta-button" disabled={isSending}>
-                    {isSending ? 'Enviando...' : 'Enviar Mensaje'}
-                </button>
-            </form>
-            {sendStatus === 'success' && <p className="success-text" style={{marginTop: '1rem'}}>¡Mensaje enviado con éxito!</p>}
-            {sendStatus === 'error' && <p className="error-text" style={{marginTop: '1rem'}}>No se pudo enviar el mensaje. Por favor, intentá de nuevo.</p>}
-        </div>
-    );
-};
-
-const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
-    const defaultTab = (clientData.planType === 'nutrition') ? 'diet' : 'routine';
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'contact'>(defaultTab);
-    const [videoUrl, setVideoUrl] = useState<string | null>(null);
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
-    const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
-
-    useEffect(() => {
-        const fetchLibrary = async () => {
-            if (clientData.gymId) {
-                const library = await apiClient.getExerciseLibrary(clientData.gymId);
-                setExerciseLibrary(library);
-            }
-            setIsLoadingLibrary(false);
-        };
-        fetchLibrary();
-    }, [clientData.gymId]);
-    
-    // Find the video URL for a given exercise name
-    const findExerciseVideoUrl = (exerciseName: string): string | undefined => {
-        if (!exerciseLibrary) return undefined;
-        for (const group in exerciseLibrary) {
-            const exercise = exerciseLibrary[group].find(ex => ex.name === exerciseName);
-            if (exercise) return exercise.videoUrl;
-        }
-        return undefined;
-    };
-    
-    const handlePlayVideo = (url: string) => {
-        setVideoUrl(url);
-    };
-
-    const handleCloseVideo = () => {
-        setVideoUrl(null);
-    };
-
-    const renderContent = () => {
-        if (isLoadingLibrary) {
-            return <div className="loading-container"><div className="spinner"></div>Cargando...</div>;
-        }
-        
-        switch (activeTab) {
-            case 'routine':
-                return clientData.routine ? (
-                    <ClientRoutineView 
-                        routine={clientData.routine} 
-                        onPlayVideo={handlePlayVideo}
-                        findVideoUrl={findExerciseVideoUrl}
-                    />
-                ) : <div className="placeholder">No tenés una rutina asignada.</div>;
-            case 'diet': {
-                const plan = clientData.dietPlans?.[0]; // Assuming we show the first plan
-                return plan ? <ClientDietView dietPlan={plan} /> : <div className="placeholder">No tenés un plan de nutrición asignado.</div>;
-            }
-            case 'progress':
-                return <ClientProgressTracker clientData={clientData} onDataUpdate={onDataUpdate} findVideoUrl={findExerciseVideoUrl} />;
-            case 'contact':
-                return <ClientContactForm clientData={clientData} />;
-            default:
-                return null;
-        }
-    };
-    
-    const planType = clientData.planType || 'full';
-
-    return (
-        <div className="client-portal-container">
-            <nav className="main-tabs-nav client-tabs">
-                {(planType === 'full' || planType === 'routine') &&
-                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
-                }
-                {(planType === 'full' || planType === 'nutrition') &&
-                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
-                }
-                <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
-                <button className={`main-tab-button ${activeTab === 'contact' ? 'active' : ''}`} onClick={() => setActiveTab('contact')}>Contacto</button>
-            </nav>
-            <main className="client-portal-content">
-                {renderContent()}
-            </main>
-             {videoUrl && <VideoPlayerModal videoUrl={videoUrl} onClose={handleCloseVideo} />}
-        </div>
-    );
-};
-
-
-const ClientOnboardingView: React.FC<{
-    initialClientData: ClientData;
-    onOnboardingComplete: () => void;
-    onLogout: () => void;
-}> = ({ initialClientData, onOnboardingComplete, onLogout }) => {
-    const [step, setStep] = useState(1);
-    const [clientData, setClientData] = useState<ClientData>(initialClientData);
-    const gymId = initialClientData.gymId; // We need this for the routine generator
-
-    const handleProfileComplete = async () => {
-        // Save the profile first
-        const success = await apiClient.saveClientData(clientData.dni, { profile: clientData.profile });
-        if (success) {
-            setStep(2);
-        } else {
-            alert("No se pudo guardar tu perfil. Por favor, intenta de nuevo.");
-        }
-    };
-    
-    const handlePlanGenerationComplete = async () => {
-        // Here we save the final plan and mark onboarding as complete
-        const finalData: Partial<ClientData> = {
-            profile: clientData.profile,
-            routine: clientData.routine,
-            dietPlans: clientData.dietPlans,
-            planStatus: 'active', // Critical step to mark onboarding as done
-            routineGeneratedDate: new Date().toISOString()
-        };
-        const success = await apiClient.saveClientData(clientData.dni, finalData);
-        if (success) {
-            setStep(4); // "Complete" step
-        } else {
-            alert("No se pudo guardar tu plan. Por favor, intenta de nuevo.");
-        }
-    };
-
-    const renderStep = () => {
-        switch (step) {
-            case 1:
-                return (
-                    <div className="onboarding-step">
-                        <h2>Paso 1: Completa tu Perfil</h2>
-                        <p>Para crear un plan perfecto para vos, necesitamos conocerte un poco mejor.</p>
-                        <ProfileEditor 
-                            clientData={clientData} 
-                            setClientData={setClientData} 
-                            isClientOnboarding={true}
-                        />
-                        <button className="cta-button" onClick={handleProfileComplete} style={{ marginTop: '2rem' }}>
-                            Guardar Perfil y Continuar
-                        </button>
-                    </div>
-                );
-            case 2:
-                return (
-                    <div className="onboarding-step">
-                        <h2>Paso 2: Tu Rutina de Entrenamiento</h2>
-                        <p>Estamos listos para generar tu rutina personalizada. ¡Esto puede tardar un momento!</p>
-                        <RoutineGenerator
-                            clientData={clientData}
-                            setClientData={setClientData}
-                            gymId={gymId}
-                            isClientOnboarding={true}
-                        />
-                        <button 
-                            className="cta-button" 
-                            onClick={() => {
-                                if (clientData.planType === 'routine') {
-                                     handlePlanGenerationComplete();
-                                } else {
-                                     setStep(3)
-                                }
-                            }}
-                            disabled={!clientData.routine}
-                            style={{ marginTop: '2rem' }}
-                        >
-                            {clientData.planType === 'routine' ? 'Finalizar' : 'Continuar al Plan de Nutrición'}
-                        </button>
-                    </div>
-                );
-            case 3:
-                if (clientData.planType === 'routine') {
-                    // Should not happen if logic is correct, but as a safeguard
-                    handlePlanGenerationComplete();
-                    return null;
-                }
-                 return (
-                    <div className="onboarding-step">
-                        <h2>Paso 3: Tu Plan de Nutrición</h2>
-                        <p>Ahora, vamos a crear un plan de alimentación que acompañe tu entrenamiento.</p>
-                        <DietPlanGenerator
-                            clientData={clientData}
-                            setClientData={setClientData}
-                            isClientOnboarding={true}
-                        />
-                        <button 
-                            className="cta-button" 
-                            onClick={handlePlanGenerationComplete} 
-                            disabled={!clientData.dietPlans?.[0]}
-                            style={{ marginTop: '2rem' }}
-                        >
-                           Finalizar
-                        </button>
-                    </div>
-                );
-            case 4:
-                return (
-                     <div className="onboarding-step completed">
-                        <h2>¡Todo listo, {clientData.profile.name}!</h2>
-                        <p>Tu plan personalizado ha sido creado. Ya podés empezar a entrenar.</p>
-                        <button className="cta-button" onClick={onOnboardingComplete}>
-                            Ir a mi Panel
-                        </button>
-                    </div>
-                );
-            default:
-                return null;
-        }
-    };
-
-    return (
-        <div className="client-onboarding-view">
-             <header>
-                <h1>¡Bienvenido a Scorpion AI!</h1>
-                <button onClick={onLogout} className="logout-button">Salir</button>
-            </header>
-            <div className="onboarding-content">
-                {renderStep()}
-            </div>
-        </div>
-    );
-};
 
 const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
@@ -3652,14 +3016,12 @@ const ChatAssistant: React.FC<{
         try {
             const newChat = ai.chats.create({
                 model: 'gemini-2.5-flash',
-                config: {
-                    systemInstruction: systemInstruction,
-                }
+                config: { systemInstruction },
             });
             setChat(newChat);
         } catch (e) {
-            console.error("Error creating chat:", e);
-            setError("No se pudo iniciar el asistente de IA.");
+            console.error("Error creating chat session:", e);
+            setError("No se pudo iniciar el asistente de IA. Verifica la configuración.");
         }
     }, [ai, clientData]);
     
@@ -3667,166 +3029,1079 @@ const ChatAssistant: React.FC<{
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    const handleSendMessage = async () => {
-        if (!userInput.trim() && !image) return;
-        if (!canAsk) {
-            setError('Has alcanzado tu límite diario de preguntas a la IA.');
-            return;
-        }
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-        setIsLoading(true);
-        setError('');
-        
-        const userMessage = userInput.trim();
-        
-        const newUserMessage = { role: 'user' as const, text: userMessage, image: image?.b64 };
-        setMessages(prev => [...prev, newUserMessage]);
-        
-        try {
-            if (!chat) throw new Error("Chat not initialized.");
-            
-            let response;
-            if (image) {
-                 const imagePart = {
-                    inlineData: {
-                        mimeType: image.mimeType,
-                        data: image.b64,
-                    },
-                };
-                const textPart = { text: userMessage };
-                response = await chat.sendMessageStream({
-                    message: [textPart, imagePart]
-                });
-
-            } else {
-                 response = await chat.sendMessageStream({ message: userMessage });
-            }
-
-            let modelResponseText = '';
-            setMessages(prev => [...prev, { role: 'model', text: '' }]);
-            
-            for await (const chunk of response) {
-                modelResponseText += chunk.text;
-                setMessages(prev => {
-                    const newMessages = [...prev];
-                    newMessages[newMessages.length - 1].text = modelResponseText;
-                    return newMessages;
-                });
-            }
-            
-             // Update usage count
-            const newCount = usage + 1;
-            const newAiUsage = { date: today, count: newCount };
-            setClientData({ ...clientData, aiUsage: newAiUsage });
-            await apiClient.saveClientData(clientData.dni, { aiUsage: newAiUsage });
-
-        } catch (err: any) {
-            setError('Hubo un error al comunicarse con la IA. Intenta de nuevo.');
-            console.error(err);
-             setMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages[newMessages.length - 1].role === 'model' && newMessages[newMessages.length - 1].text === '') {
-                   return newMessages.slice(0, -1);
-                }
-                return newMessages;
-            });
-        } finally {
-            setIsLoading(false);
-            setUserInput('');
-            setImage(null);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = (reader.result as string).split(',')[1];
+            setImage({ b64: base64String, mimeType: file.type });
+        };
+        reader.readAsDataURL(file);
+        if(fileInputRef.current) fileInputRef.current.value = ''; // Reset file input
     };
     
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64String = (reader.result as string).split(',')[1];
-                setImage({ b64: base64String, mimeType: file.type });
-            };
-            reader.readAsDataURL(file);
+    const handleSendMessage = async () => {
+        if ((!userInput.trim() && !image) || isLoading || !canAsk) return;
+
+        const userMessageText = userInput;
+        const attachedImage = image; // Capture before clearing state
+        
+        const userMessageForDisplay: { role: 'user'; text: string; image?: string } = {
+            role: 'user',
+            text: userMessageText,
+            image: attachedImage ? `data:${attachedImage.mimeType};base64,${attachedImage.b64}` : undefined
+        };
+        
+        setMessages(prev => [...prev, userMessageForDisplay]);
+        setUserInput('');
+        setImage(null);
+        setIsLoading(true);
+        setError('');
+
+        try {
+            let responseText = '';
+
+            if (attachedImage) {
+                const calorieSystemInstruction = `Eres "Scorpion AI", un asistente de nutrición. Tu única tarea es analizar la imagen de la comida proporcionada y estimar las calorías y macronutrientes (proteínas, carbohidratos, grasas).
+                - **Respuesta:** Proporciona una respuesta clara y concisa. Primero, identifica la comida. Luego, da una estimación de las calorías y los macros en gramos.
+                - **Formato:** Usa una lista o un párrafo corto. Ejemplo: "Esto parece ser [Comida]. Estimación: Calorías: X, Proteínas: Yg, Carbs: Zg, Grasas: Ag."
+                - **Limitación:** No des consejos de salud ni de dieta. Solo analiza la imagen. Si no puedes identificar la comida, dilo claramente.`;
+
+                const parts = [
+                    { inlineData: { mimeType: attachedImage.mimeType, data: attachedImage.b64 } },
+                    { text: `Analiza esta comida. ${userMessageText}` }
+                ];
+
+                const response = await withRetry(() => 
+                    ai.models.generateContent({
+                        model: 'gemini-2.5-flash',
+                        contents: { parts },
+                        config: { systemInstruction: calorieSystemInstruction }
+                    })
+                );
+                responseText = response.text;
+                // Note: This special request does not get added to the main 'chat' history object
+                // to keep that conversation's context clean (as a fitness coach).
+            } else if (chat) {
+                const result: GenerateContentResponse = await withRetry(() => 
+                    chat.sendMessage({ message: userMessageText })
+                );
+                responseText = result.text;
+            } else {
+                 throw new Error("Chat not initialized.");
+            }
+
+            setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+
+            const newUsage = { date: today, count: usage + 1 };
+            const updatedClientData = { ...clientData, aiUsage: newUsage };
+            setClientData(updatedClientData);
+            await apiClient.saveClientData(clientData.dni, { aiUsage: newUsage });
+
+        } catch (err) {
+            console.error(err);
+            const errorMessage = "Lo siento, ocurrió un error al procesar tu pregunta. Por favor, inténtalo de nuevo.";
+            setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
+            setError(err instanceof Error ? err.message : "Error desconocido.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
         <div className="chat-fullscreen-container">
-             <div className="main-header" style={{ padding: '1rem', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div className="header-title-wrapper" style={{ flexGrow: 0, textAlign: 'left' }}>
-                    <h1 style={{ fontSize: '1.5rem', margin: '0 0 0.25rem 0' }}>Asistente IA</h1>
-                    <p style={{ margin: 0 }}>Preguntas hoy: {usage}/{limit}</p>
+             <div className="main-header" style={{ padding: '1rem', margin: 0, borderBottom: `1px solid var(--border-color)`, flexShrink: 0 }}>
+                <div className="header-title-wrapper">
+                    <h1>Asistente IA</h1>
+                    <p>Preguntas hoy: {usage}/{limit}</p>
                 </div>
-                 <button onClick={onClose} className="back-button" style={{ position: 'static' }}>Cerrar</button>
+                <div className="admin-header-nav">
+                    <button onClick={onClose} className="back-button">Cerrar</button>
+                </div>
             </div>
+
             <div className="chat-messages">
                 {messages.map((msg, index) => (
                     <div key={index} className={`chat-message ${msg.role}`}>
-                        <div className="avatar">
-                            {msg.role === 'user' ? (clientData.profile.name?.[0] || 'U') : 'AI'}
-                        </div>
+                        <div className="avatar">{msg.role === 'user' ? 'TÚ' : 'AI'}</div>
                         <div className="message-content">
-                            {msg.image && <img src={`data:image/jpeg;base64,${msg.image}`} alt="Contenido del usuario" />}
-                            <p>{msg.text}</p>
+                            {msg.image && <img src={msg.image} alt="Adjunto" />}
+                            {msg.text && <p>{msg.text}</p>}
                         </div>
                     </div>
                 ))}
-                {isLoading && (
-                     <div className="chat-message model">
+                 {isLoading && (
+                    <div className="chat-message model">
                         <div className="avatar">AI</div>
                         <div className="message-content">
-                            <div className="chat-typing-indicator"><span></span><span></span><span></span></div>
+                            <div className="chat-typing-indicator">
+                                <span></span><span></span><span></span>
+                            </div>
                         </div>
                     </div>
                 )}
-                 <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} />
             </div>
-             {error && <p className="error-text" style={{ padding: '0 1rem', textAlign: 'center' }}>{error}</p>}
-             <div className="chat-input-area">
-                 <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        ref={fileInputRef}
-                        onChange={handleImageUpload}
-                        style={{ display: 'none' }}
-                        id="chat-file-input"
-                    />
-                    <label htmlFor="chat-file-input" className="chat-action-btn" aria-label="Adjuntar imagen">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
-                    </label>
-                    
-                    {image && (
-                         <div className="chat-image-preview">
-                            <img src={`data:image/jpeg;base64,${image.b64}`} alt="Vista previa de imagen" />
-                            <button
-                                type="button"
-                                className="remove-image-btn"
-                                onClick={() => {
-                                    setImage(null);
-                                    if (fileInputRef.current) fileInputRef.current.value = '';
-                                }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-                    )}
 
-                    <input
-                        type="text"
-                        value={userInput}
-                        onChange={(e) => setUserInput(e.target.value)}
-                        placeholder={canAsk ? "Escribe tu pregunta..." : "Límite de preguntas alcanzado."}
-                        disabled={isLoading || !canAsk}
-                    />
-                     <button type="submit" disabled={isLoading || !canAsk || (!userInput.trim() && !image)}>
-                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
-                    </button>
-                 </form>
+            <div className="chat-input-area">
+                 {image && (
+                    <div className="chat-image-preview">
+                        <img src={`data:${image.mimeType};base64,${image.b64}`} alt="Preview" />
+                        <button className="remove-image-btn" onClick={() => setImage(null)}>&times;</button>
+                    </div>
+                )}
+                {!canAsk ? (
+                    <div className="limit-reached-message">
+                        Has alcanzado tu límite de preguntas diarias.
+                    </div>
+                ) : (
+                     <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+                         <input type="file" id="image-upload" accept="image/*" style={{ display: 'none' }} onChange={handleImageChange} ref={fileInputRef} />
+                         <button type="button" className="chat-action-btn" onClick={() => fileInputRef.current?.click()} aria-label="Adjuntar imagen">
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
+                         </button>
+                        <input
+                            type="text"
+                            value={userInput}
+                            onChange={(e) => setUserInput(e.target.value)}
+                            placeholder="Escribe tu pregunta..."
+                            disabled={isLoading}
+                        />
+                        <button type="submit" disabled={isLoading || (!userInput.trim() && !image)}>
+                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
+                        </button>
+                    </form>
+                )}
             </div>
         </div>
+    );
+};
+
+
+// --- AI Generation Logic (for Onboarding) ---
+const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string): Promise<Routine> => {
+    const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
+        const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+        if (enabled.length > 0) acc[group] = enabled;
+        return acc;
+    }, {} as Record<string, string[]>);
+
+    const prompt = `
+        Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
+        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
+        REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
+        1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+        2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
+        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista. Si un ejercicio no está en la lista, no puedes usarlo. El incumplimiento de esta regla hará que tu respuesta sea rechazada.
+        4. Asigna los días de entrenamiento según 'trainingDays'.
+        5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
+        6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
+        7. Incluye fases de adaptación y descarga si el perfil lo indica.
+        8. Ajusta el número de ejercicios según la 'trainingIntensity'.
+        9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
+        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
+    `;
+    const response = await withRetry(() => 
+        ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
+    );
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
+    
+    const generatedPlan = JSON.parse(jsonString);
+    return validateAndCorrectRoutine(generatedPlan, exerciseLibrary);
+};
+
+const generateDietForClient = async (clientData: ClientData, instructions?: string): Promise<DietPlan> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const prompt = `
+        Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
+        - Perfil: ${JSON.stringify(clientData.profile)}
+        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
+        REGLAS ESTRICTAS PARA TU RESPUESTA:
+        1. **Idioma:** Tu respuesta DEBE estar en español de Argentina.
+        2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin texto adicional, markdown o explicaciones.
+        3. Calcula calorías y macros basándote en el perfil completo del cliente.
+        4. El JSON debe seguir esta estructura exacta: {"planTitle": "Título", "summary": {"totalCalories": 2500, "macronutrients": {"proteinGrams": 180, "carbsGrams": 300, "fatGrams": 60}}, "meals": [{"mealName": "Desayuno", "foodItems": [{"food": "Avena", "amount": "80g"}]}], "recommendations": ["Beber 2-3 litros de agua."]}
+        5. Distribuye las calorías en 4-6 comidas.
+        6. Usa alimentos comunes en Argentina.
+    `;
+    const response = await withRetry(() => 
+        ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
+    );
+    const jsonString = extractJson(response.text);
+    if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
+    return JSON.parse(jsonString);
+};
+
+
+type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
+
+const ClientOnboardingView: React.FC<{
+    initialClientData: ClientData;
+    onOnboardingComplete: () => void;
+    onLogout: () => void;
+}> = ({ initialClientData, onOnboardingComplete, onLogout }) => {
+    const [step, setStep] = useState(initialClientData.termsAccepted ? 'profile' : 'terms');
+    const [clientData, setClientData] = useState<ClientData>(initialClientData);
+    const [isSaving, setIsSaving] = useState(false);
+    
+    const [generationState, setGenerationState] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
+    const [generationProgress, setGenerationProgress] = useState({
+        routine: 'pending' as GenerationStatus,
+        diet1: 'pending' as GenerationStatus,
+        diet2: 'pending' as GenerationStatus,
+    });
+    const [generationError, setGenerationError] = useState('');
+    const [additionalInstructions, setAdditionalInstructions] = useState('');
+    const planType = clientData.planType || 'full';
+
+    const isProfileComplete = useMemo(() => {
+        const { profile } = clientData;
+        return (
+            profile.name.trim() !== '' &&
+            profile.age.trim() !== '' &&
+            profile.weight.trim() !== '' &&
+            profile.height.trim() !== '' &&
+            profile.trainingDays.trim() !== '' &&
+            Number(profile.age) > 0 &&
+            Number(profile.weight) > 0 &&
+            Number(profile.height) > 0 &&
+            Number(profile.trainingDays) > 0
+        );
+    }, [clientData.profile]);
+
+    const handleAcceptTerms = async () => {
+        const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
+        if (success) {
+            setClientData({ ...clientData, termsAccepted: true });
+            setStep('profile');
+        } else {
+            alert("No se pudieron guardar los términos. Por favor, intente de nuevo.");
+        }
+    };
+    
+    const handleGenerateFullPlan = async () => {
+        setGenerationState('generating');
+        setGenerationError('');
+        setGenerationProgress({ routine: 'pending', diet1: 'pending', diet2: 'pending' });
+
+        try {
+            if (planType === 'full' || planType === 'routine') {
+                setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
+                const routine = await generateRoutineForClient(clientData, clientData.gymId, additionalInstructions);
+                setClientData(prev => ({ ...prev, routine }));
+                setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
+            }
+
+            if (planType === 'full' || planType === 'nutrition') {
+                // Set both diet statuses to 'loading' to show spinners simultaneously.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
+
+                // Generate both diet plans in parallel.
+                const [diet1, diet2] = await Promise.all([
+                    generateDietForClient(clientData, additionalInstructions),
+                    generateDietForClient(clientData, additionalInstructions)
+                ]);
+                
+                // Once both are complete, update the client data with the new plans.
+                setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
+                
+                // Set both diet statuses to 'done' to show success indicators.
+                setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
+            }
+
+            setGenerationState('success');
+
+        } catch (error) {
+            console.error("Plan generation failed:", error);
+            setGenerationError(error instanceof Error ? error.message : "Ocurrió un error desconocido.");
+            setGenerationState('error');
+            setGenerationProgress(prev => {
+                const newProgress = {...prev};
+                if (newProgress.routine === 'loading') newProgress.routine = 'error';
+                if (newProgress.diet1 === 'loading') newProgress.diet1 = 'error';
+                if (newProgress.diet2 === 'loading') newProgress.diet2 = 'error';
+                return newProgress;
+            });
+        }
+    };
+
+    const handleSaveAndStart = async () => {
+        if (generationState !== 'success') {
+            alert("Por favor, genera tu plan completo antes de comenzar.");
+            return;
+        }
+        setIsSaving(true);
+        const finalData: Partial<ClientData> = {
+            profile: clientData.profile,
+            routine: clientData.routine,
+            dietPlans: clientData.dietPlans,
+            routineGeneratedDate: new Date().toISOString(),
+            planStatus: 'active',
+        };
+
+        const success = await apiClient.saveClientData(clientData.dni, finalData);
+        if (success) {
+            onOnboardingComplete();
+        } else {
+            alert("Ocurrió un error al guardar tu plan. Por favor, intenta de nuevo.");
+        }
+        setIsSaving(false);
+    };
+
+    if (step === 'terms') {
+        return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
+    }
+
+    return (
+        <div className="onboarding-container">
+            <header className="onboarding-header">
+                <h1>¡Bienvenido a ScorpionGYM AI!</h1>
+                <p>Vamos a configurar tu primer plan.</p>
+            </header>
+            
+            <div className="onboarding-section">
+                <h2>Paso 1: Completa tu Perfil</h2>
+                <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
+            </div>
+            
+            <div className="onboarding-section">
+                <h2>Paso 2: Crea tu Plan Integral</h2>
+                 {generationState === 'idle' && (
+                     <div className="onboarding-generation-container">
+                        <p>Cuando tu perfil esté listo, la IA creará tu rutina y planes de nutrición personalizados.</p>
+                        <div className="admin-instructions-box">
+                            <label htmlFor="client-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
+                            <textarea
+                                id="client-instructions-gen"
+                                rows={3}
+                                value={additionalInstructions}
+                                onChange={(e) => setAdditionalInstructions(e.target.value)}
+                                placeholder="Ej: Tengo una lesión en la rodilla, evitar sentadillas. No me gusta el pescado."
+                            ></textarea>
+                        </div>
+                        <button className="cta-button" onClick={handleGenerateFullPlan} disabled={!isProfileComplete}>
+                            Generar Mi Plan Completo
+                        </button>
+                        {!isProfileComplete && (
+                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>
+                                Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
+                            </p>
+                        )}
+                    </div>
+                )}
+                
+                {(generationState === 'generating' || generationState === 'error' || generationState === 'success') && (
+                     <GenerationProgressIndicator 
+                        progress={generationProgress} 
+                        error={generationError}
+                        onRetry={handleGenerateFullPlan}
+                        planType={planType}
+                    />
+                )}
+            </div>
+            
+             <div className="onboarding-actions">
+                <button 
+                    className="cta-button" 
+                    onClick={handleSaveAndStart} 
+                    disabled={isSaving || generationState !== 'success'}
+                >
+                    {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const GenerationProgressIndicator: React.FC<{
+    progress: { routine: GenerationStatus; diet1: GenerationStatus; diet2: GenerationStatus; };
+    error: string;
+    onRetry: () => void;
+    planType: PlanType;
+}> = ({ progress, error, onRetry, planType }) => {
+    
+    const renderStatusIcon = (status: GenerationStatus) => {
+        switch (status) {
+            case 'loading': return <div className="spinner small"></div>;
+            case 'done': return <span className="status-icon success">✓</span>;
+            case 'error': return <span className="status-icon error">✗</span>;
+            case 'pending': return <span className="status-icon pending">●</span>;
+        }
+    };
+
+    return (
+        <div className="generation-progress-container">
+            <ul className="generation-progress-list">
+                {(planType === 'full' || planType === 'routine') && (
+                    <li className={`progress-item ${progress.routine}`}>
+                        {renderStatusIcon(progress.routine)}
+                        <span>Plan de Entrenamiento</span>
+                    </li>
+                )}
+                {(planType === 'full' || planType === 'nutrition') && (
+                    <>
+                        <li className={`progress-item ${progress.diet1}`}>
+                            {renderStatusIcon(progress.diet1)}
+                            <span>Plan de Nutrición 1</span>
+                        </li>
+                        <li className={`progress-item ${progress.diet2}`}>
+                            {renderStatusIcon(progress.diet2)}
+                            <span>Plan de Nutrición 2</span>
+                        </li>
+                    </>
+                )}
+            </ul>
+            {error && (
+                <div className="error-container" style={{padding: '1rem', marginTop: '1.5rem', minHeight: 'auto'}}>
+                    <p style={{margin: '0 0 1rem 0'}}>{error}</p>
+                    <button className="cta-button secondary" onClick={onRetry}>Intentar de Nuevo</button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Fix: Add missing RequestModal component definition.
+const RequestModal: React.FC<{
+    client: ClientData;
+    onClose: () => void;
+}> = ({ client, onClose }) => {
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setStatus('idle');
+        
+        const requestData = {
+            clientId: client.dni,
+            clientName: client.profile.name,
+            gymId: client.gymId,
+            subject,
+            message
+        };
+
+        const success = await apiClient.createRequest(requestData);
+        if (success) {
+            setStatus('success');
+            setTimeout(() => {
+                onClose();
+            }, 2000);
+        } else {
+            setStatus('error');
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content edit-modal" onClick={(e) => e.stopPropagation()}>
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Contactar al Entrenador</h3>
+
+                {status === 'success' ? (
+                    <div className="success-message" style={{textAlign: 'center', padding: '2rem'}}>
+                        <p>¡Tu solicitud ha sido enviada con éxito!</p>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label htmlFor="subject">Asunto</label>
+                            <input
+                                type="text"
+                                id="subject"
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                placeholder="Ej: Duda sobre ejercicio, cambiar rutina..."
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label htmlFor="message">Mensaje</label>
+                            <textarea
+                                id="message"
+                                rows={5}
+                                value={message}
+                                onChange={(e) => setMessage(e.target.value)}
+                                placeholder="Describe tu solicitud o pregunta en detalle."
+                                required
+                            ></textarea>
+                        </div>
+                        {status === 'error' && <p className="error-text">No se pudo enviar la solicitud. Inténtalo de nuevo.</p>}
+                        <div className="modal-actions" style={{marginTop: '1.5rem'}}>
+                            <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                            <button type="submit" className="cta-button" disabled={isSubmitting}>
+                                {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: string) => void; }> = ({ gymId, onPlayVideo }) => {
+    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            setIsLoading(true);
+            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
+            setLibrary(fetchedLibrary);
+            // Automatically open the first group
+            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
+                setActiveGroup(Object.keys(fetchedLibrary)[0]);
+            }
+            setIsLoading(false);
+        };
+        fetchLibrary();
+    }, [gymId]);
+
+    const toggleGroup = (group: string) => {
+        setActiveGroup(prev => (prev === group ? null : group));
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
+    }
+
+    if (!library || Object.keys(library).length === 0) {
+        return <div className="placeholder">No hay ejercicios en la biblioteca de este gimnasio.</div>;
+    }
+
+    return (
+        <div className="library-container animated-fade-in" style={{padding: 0, marginTop: 0}}>
+            <div className="plan-header" style={{textAlign: 'center'}}>
+                <h2>Biblioteca de Ejercicios</h2>
+                <p>Explora todos los ejercicios disponibles y mira sus videos de ejecución.</p>
+            </div>
+
+            <div className="accordion-phases">
+                {Object.entries(library).sort(([groupA], [groupB]) => groupA.localeCompare(groupB)).map(([group, exercises]) => (
+                    <div key={group} className="accordion-item">
+                        <button
+                            className={`accordion-header ${activeGroup === group ? 'active' : ''}`}
+                            onClick={() => toggleGroup(group)}
+                            aria-expanded={activeGroup === group}
+                        >
+                            <span>{group}</span>
+                            <span className="accordion-header-icon">+</span>
+                        </button>
+                        <div className={`accordion-content ${activeGroup === group ? 'open' : ''}`}>
+                            <ul className="exercise-list">
+                                {exercises.filter(ex => ex.isEnabled).map((exercise) => (
+                                    <li key={exercise.name} className="exercise-item">
+                                        <div className="exercise-name-wrapper">
+                                            <span className="exercise-name">{exercise.name}</span>
+                                            {exercise.videoUrl && (
+                                                <button onClick={() => onPlayVideo(exercise.videoUrl)} className="video-play-button" aria-label={`Reproducir video de ${exercise.name}`}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M10,16.5L16,12L10,7.5V16.5Z"></path></svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
+    const planType = clientData.planType || 'full';
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile' | 'library'>(planType === 'nutrition' ? 'diet' : 'routine');
+    const [showRequestModal, setShowRequestModal] = useState(false);
+    const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
+
+    const renderContent = () => {
+        switch(activeTab) {
+            case 'routine':
+                return clientData.routine 
+                    ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} onPlayVideo={setPlayingVideoUrl} /> 
+                    : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
+            case 'diet':
+                return clientData.dietPlans && (clientData.dietPlans[0] || clientData.dietPlans[1])
+                    ? <ClientDietTabsView dietPlans={clientData.dietPlans} /> 
+                    : <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
+            case 'progress':
+                return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
+            case 'library':
+                return <ClientExerciseLibraryView gymId={clientData.gymId} onPlayVideo={setPlayingVideoUrl} />;
+            case 'profile':
+                 return <ClientProfileView clientData={clientData} />;
+            default: return null;
+        }
+    }
+
+    return (
+        <div className="main-content" style={{width: '100%', maxWidth: '800px'}}>
+             <nav className="main-tabs-nav">
+                {(planType === 'full' || planType === 'routine') &&
+                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
+                }
+                {(planType === 'full' || planType === 'nutrition') &&
+                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
+                }
+                <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
+                <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Biblioteca</button>
+                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
+            </nav>
+            <div className="animated-fade-in">
+                {renderContent()}
+            </div>
+             {showRequestModal && (
+                <RequestModal 
+                    client={clientData} 
+                    onClose={() => setShowRequestModal(false)}
+                />
+            )}
+            {playingVideoUrl && <VideoPlayerModal videoUrl={playingVideoUrl} onClose={() => setPlayingVideoUrl(null)} />}
+        </div>
+    );
+}
+
+const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+    const activePlan = dietPlans[activePlanIndex];
+
+    return (
+        <div>
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
+                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
+            </div>
+            {activePlan ? (
+                <ClientDietView dietPlan={activePlan} />
+            ) : (
+                <div className="placeholder" style={{ marginTop: '2rem' }}>
+                    <p>Este plan de nutrición aún no ha sido generado por tu entrenador.</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
+     <div className="diet-plan-container animated-fade-in">
+        <div className="plan-header">
+            <h3>{dietPlan.planTitle}</h3>
+        </div>
+        <div className="diet-summary">
+            <div><strong>Calorías</strong><span>{dietPlan.summary.totalCalories} kcal</span></div>
+            <div><strong>Proteínas</strong><span>{dietPlan.summary.macronutrients.proteinGrams} g</span></div>
+            <div><strong>Carbohidratos</strong><span>{dietPlan.summary.macronutrients.carbsGrams} g</span></div>
+            <div><strong>Grasas</strong><span>{dietPlan.summary.macronutrients.fatGrams} g</span></div>
+        </div>
+        <div className="meals-grid">
+            {dietPlan.meals.map(meal => (
+                <div key={meal.mealName} className="meal-card">
+                    <h4>{meal.mealName}</h4>
+                    <ul>{meal.foodItems.map(item => (<li key={item.food}>{item.food} <span>{item.amount}</span></li>))}</ul>
+                </div>
+            ))}
+        </div>
+        <div className="recommendations-section">
+            <h4>Recomendaciones</h4>
+            <ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul>
+        </div>
+    </div>
+);
+
+const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+    const { profile, routine } = clientData;
+    const bmi = useMemo(() => calculateBMI(parseFloat(profile.weight), parseFloat(profile.height)), [profile.weight, profile.height]);
+    const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(profile.height)), [profile.height]);
+
+    const estimatedFinalWeight = useMemo(() => {
+        if (!routine?.totalDurationWeeks || !profile.weight || !profile.goal) {
+            return null;
+        }
+
+        const currentWeight = parseFloat(profile.weight);
+        const durationWeeks = routine.totalDurationWeeks;
+        let weightChangePerWeek = 0;
+
+        switch (profile.goal) {
+            case 'Pérdida de grasa':
+                weightChangePerWeek = -0.5; // kg/week
+                break;
+            case 'Hipertrofia':
+                weightChangePerWeek = 0.25; // kg/week
+                break;
+            default:
+                return null;
+        }
+
+        const finalWeight = currentWeight + (weightChangePerWeek * durationWeeks);
+        return finalWeight.toFixed(1);
+
+    }, [profile.weight, profile.goal, routine?.totalDurationWeeks]);
+
+
+    return (
+        <div className="client-profile-view animated-fade-in">
+            <h2>Mi Perfil</h2>
+            <div className="profile-info-grid">
+                <div className="info-card">
+                    <h3>Información Personal</h3>
+                    <ul>
+                        <li><strong>Nombre:</strong> <span>{profile.name}</span></li>
+                        <li><strong>Edad:</strong> <span>{profile.age} años</span></li>
+                        <li><strong>Género:</strong> <span>{profile.gender}</span></li>
+                    </ul>
+                </div>
+                <div className="info-card">
+                    <h3>Métricas de Salud</h3>
+                    <div className="health-metrics">
+                        <div className="metric-item">
+                            <span className="metric-label">Peso Actual</span>
+                            <span className="metric-value">{profile.weight} kg</span>
+                        </div>
+                        <div className="metric-item">
+                            <span className="metric-label">Altura</span>
+                            <span className="metric-value">{profile.height} cm</span>
+                        </div>
+                         <div className="metric-item">
+                            <span className="metric-label">IMC</span>
+                            <span className={`metric-value ${bmi.categoryClass}`}>{bmi.value}</span>
+                        </div>
+                    </div>
+                     {targetWeight !== 'N/A' && (
+                        <div className="target-weight-info">
+                            Peso saludable estimado: <strong>{targetWeight}</strong>
+                        </div>
+                    )}
+                </div>
+                <div className="info-card full-width">
+                    <h3>Objetivos y Preferencias</h3>
+                    <ul>
+                         <li><strong>Nivel:</strong> <span>{profile.level}</span></li>
+                         <li><strong>Objetivo:</strong> <span>{profile.goal}</span></li>
+                         <li><strong>Días de Entrenamiento:</strong> <span>{profile.trainingDays} por semana</span></li>
+                         <li><strong>Enfoque Corporal:</strong> <span>{profile.bodyFocusArea}</span></li>
+                         {profile.muscleFocus && profile.muscleFocus.toLowerCase() !== 'general' && (
+                            <li><strong>Músculo Prioritario:</strong> <span>{profile.muscleFocus}</span></li>
+                         )}
+                    </ul>
+                </div>
+            </div>
+             {estimatedFinalWeight && (
+                <div className="target-weight-info" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+                    Peso estimado al finalizar el plan: <strong>{estimatedFinalWeight} kg</strong>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+
+const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
+    const [isChecked, setIsChecked] = useState(false);
+    
+    const termsText = `
+Bienvenido a ScorpionGYM AI.
+
+Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
+
+1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
+
+2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
+
+3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
+
+4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
+
+5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
+
+Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
+    `;
+
+    return (
+        <div className="agreement-container">
+            <header>
+                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
+                 <h1>Términos y Condiciones</h1>
+            </header>
+            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
+            <div className="terms-box">
+                <p>{termsText}</p>
+            </div>
+            <div className="agreement-actions">
+                <div className="agreement-checkbox">
+                    <input 
+                        type="checkbox" 
+                        id="terms" 
+                        checked={isChecked} 
+                        onChange={() => setIsChecked(!isChecked)} 
+                    />
+                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
+                </div>
+                <div className="agreement-buttons">
+                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
+                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+// --- Client Portal: Routine Tracker ---
+
+const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void, onPlayVideo: (url: string) => void }> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
+    const { routine, routineGeneratedDate, gymId } = clientData;
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
+
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            const library = await apiClient.getExerciseLibrary(gymId);
+            setExerciseLibrary(library);
+        };
+        fetchLibrary();
+    }, [gymId]);
+
+    const expirationDateString = useMemo(() => {
+        if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
+        const generated = new Date(routineGeneratedDate);
+        const expiration = new Date(generated);
+        expiration.setDate(expiration.getDate() + routine.totalDurationWeeks * 7);
+        return expiration.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    }, [routineGeneratedDate, routine?.totalDurationWeeks]);
+
+
+    if (!routine) return null;
+
+    return (
+        <div className="plan-container animated-fade-in">
+             <div className="plan-header">
+                <h2>Mi Rutina: {routine.planName}</h2>
+                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+                {expirationDateString && <p className="expiration-date">Tu plan finaliza el: <strong>{expirationDateString}</strong></p>}
+            </div>
+
+            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
+                Enviar Mensaje o Nota al Entrenador
+            </button>
+            
+            <AccordionPhasesClient
+                phases={routine.phases}
+                activePhaseIndex={activePhaseIndex}
+                setActivePhaseIndex={setActivePhaseIndex}
+                clientData={clientData}
+                onProgressLogged={onProgressLogged}
+                exerciseLibrary={exerciseLibrary}
+                onPlayVideo={onPlayVideo}
+            />
+        </div>
+    );
+};
+
+const AccordionPhasesClient: React.FC<{
+    phases: Phase[];
+    activePhaseIndex: number;
+    setActivePhaseIndex: (index: number) => void;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+    exerciseLibrary: ExerciseLibrary | null;
+    onPlayVideo: (url: string) => void;
+}> = ({ phases, activePhaseIndex, setActivePhaseIndex, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
+    
+    const togglePhase = (index: number) => {
+        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
+    };
+
+    return (
+        <div className="accordion-phases">
+            {phases.map((phase, phaseIndex) => (
+                <div key={phaseIndex} className="accordion-item">
+                    <button 
+                        className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
+                        onClick={() => togglePhase(phaseIndex)}
+                        aria-expanded={activePhaseIndex === phaseIndex}
+                    >
+                        <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
+                         <span className="accordion-header-icon">+</span>
+                    </button>
+                    <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
+                        <PhaseContentClient 
+                            phase={phase}
+                            clientData={clientData}
+                            onProgressLogged={onProgressLogged}
+                            exerciseLibrary={exerciseLibrary}
+                            onPlayVideo={onPlayVideo}
+                        />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const PhaseContentClient: React.FC<{
+    phase: Phase;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+    exerciseLibrary: ExerciseLibrary | null;
+    onPlayVideo: (url: string) => void;
+}> = ({ phase, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
+
+    const dayPlan = phase.routine.dias[activeDayIndex];
+    if (!dayPlan) return <p>No hay días definidos.</p>;
+
+    // Helper to find video URL from library
+    const findVideoUrl = (exerciseName: string): string | undefined => {
+        if (!exerciseLibrary) return undefined;
+        for (const group in exerciseLibrary) {
+            const found = exerciseLibrary[group].find(ex => ex.name === exerciseName);
+            if (found) return found.videoUrl;
+        }
+        return undefined;
+    };
+
+    return (
+        <div>
+            <nav className="day-tabs-nav">
+                {phase.routine.dias.map((dia, index) => (
+                    <button
+                        key={index}
+                        className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`}
+                        onClick={() => setActiveDayIndex(index)}
+                    >
+                        {dia.dia}
+                    </button>
+                ))}
+            </nav>
+            <div className="day-card">
+                 <h3>
+                    {dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span>
+                </h3>
+                <ul className="exercise-list">
+                     {dayPlan.ejercicios.map((exercise, index) => (
+                        <li key={index} className="exercise-item">
+                            <ExerciseView 
+                                exercise={exercise} 
+                                videoUrl={findVideoUrl(exercise.nombre)}
+                                onPlayVideo={onPlayVideo}
+                             />
+                            <ProgressTracker 
+                                exerciseName={exercise.nombre} 
+                                clientData={clientData} 
+                                onProgressLogged={onProgressLogged}
+                            />
+                        </li>
+                    ))}
+                </ul>
+                {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
+            </div>
+        </div>
+    );
+};
+
+
+const ProgressTracker: React.FC<{
+    exerciseName: string;
+    clientData: ClientData;
+    onProgressLogged: () => void;
+}> = ({ exerciseName, clientData, onProgressLogged }) => {
+    const [weight, setWeight] = useState('');
+    const [repetitions, setRepetitions] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+
+    const lastLog = useMemo(() => {
+        const logs = clientData.progressLog?.[exerciseName];
+        if (logs && logs.length > 0) {
+            return logs[logs.length - 1];
+        }
+        return null;
+    }, [clientData.progressLog, exerciseName]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!weight || !repetitions) return;
+
+        setIsSaving(true);
+        
+        const newLogEntry: ProgressLogEntry = {
+            date: new Date().toISOString(),
+            weight: parseFloat(weight),
+            repetitions: parseInt(repetitions, 10),
+        };
+        
+        const updatedProgressLog = { ...clientData.progressLog };
+        if (!updatedProgressLog[exerciseName]) {
+            updatedProgressLog[exerciseName] = [];
+        }
+        updatedProgressLog[exerciseName].push(newLogEntry);
+        
+        const success = await apiClient.saveClientData(clientData.dni, { progressLog: updatedProgressLog });
+
+        if (success) {
+            setIsSaved(true);
+            setWeight('');
+            setRepetitions('');
+            onProgressLogged();
+            setTimeout(() => setIsSaved(false), 2000);
+        } else {
+            alert("Error al guardar el progreso.");
+        }
+        
+        setIsSaving(false);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="exercise-tracking">
+            <div>
+                <label htmlFor={`weight-${exerciseName}`}>Peso (kg)</label>
+                <input
+                    id={`weight-${exerciseName}`}
+                    type="number"
+                    step="0.5"
+                    placeholder={lastLog ? `Últ: ${lastLog.weight}` : "e.g., 20.5"}
+                    value={weight}
+                    onChange={e => setWeight(e.target.value)}
+                    className="form-group input"
+                />
+            </div>
+            <div>
+                <label htmlFor={`reps-${exerciseName}`}>Repeticiones</label>
+                <input
+                    id={`reps-${exerciseName}`}
+                    type="number"
+                    placeholder={lastLog ? `Últ: ${lastLog.repetitions}` : "e.g., 10"}
+                    value={repetitions}
+                    onChange={e => setRepetitions(e.target.value)}
+                    className="form-group input"
+                />
+            </div>
+            <button type="submit" disabled={isSaving || !weight || !repetitions} className={`cta-button secondary ${isSaved ? 'saved' : ''}`}>
+                {isSaving ? <span className="spinner small"></span> : (isSaved ? 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41-1.41L9,16.17z"></path></svg>
+                    : 
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
+                )}
+            </button>
+        </form>
     );
 };
 

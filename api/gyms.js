@@ -1,3 +1,4 @@
+
 import clientPromise from './util/mongodb.js';
 import bcrypt from 'bcryptjs';
 
@@ -22,9 +23,9 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password, dailyQuestionLimit, logoSvg, planType, role } = req.body;
-        if (!name || !username || !password || !role) {
-          return res.status(400).json({ message: 'Name, username, password, and role are required' });
+        const { name, username, password, dailyQuestionLimit, logoSvg, planType } = req.body;
+        if (!name || !username || !password) {
+          return res.status(400).json({ message: 'Name, username, and password are required' });
         }
         
         const existingUser = await gymsCollection.findOne({ username });
@@ -35,22 +36,20 @@ export default async function handler(req, res) {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const newUser = {
+        const newGym = {
           name,
           username,
           password: hashedPassword,
-          role,
-          // Trainer-specific fields
-          dailyQuestionLimit: role === 'trainer' ? (Number(dailyQuestionLimit) || 10) : undefined,
-          logoSvg: role === 'trainer' ? (logoSvg || null) : undefined,
-          planType: role === 'trainer' ? (planType || 'full') : undefined,
+          dailyQuestionLimit: Number(dailyQuestionLimit) || 10,
+          logoSvg: logoSvg || null,
+          planType: planType || 'full',
         };
         
-        const result = await gymsCollection.insertOne(newUser);
+        const result = await gymsCollection.insertOne(newGym);
         res.status(201).json({ success: true, insertedId: result.insertedId });
       } catch (e) {
         console.error("API /api/gyms [POST] Error:", e);
-        res.status(500).json({ error: 'Unable to create user' });
+        res.status(500).json({ error: 'Unable to create gym' });
       }
       break;
 

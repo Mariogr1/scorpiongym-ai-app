@@ -125,12 +125,10 @@ export interface ClientListItem {
     planStatus: 'pending' | 'active' | 'expired';
 }
 
-export interface StaffUser {
+export interface Gym {
     _id: string;
     name: string;
     username: string;
-    password?: string;
-    role?: 'trainer' | 'superadmin';
     dailyQuestionLimit?: number;
     logoSvg?: string;
     planType?: PlanType;
@@ -159,57 +157,57 @@ export const advancedTechniqueOptions: { value: string; label: string; descripti
 
 export const apiClient = {
   // --- Super Admin ---
-  async getStaffUsers(): Promise<StaffUser[]> {
+  async getGyms(): Promise<Gym[]> {
     try {
         const response = await fetch('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
         return await response.json();
     } catch (error) {
-        console.error("Failed to fetch users:", error);
+        console.error("Failed to fetch gyms:", error);
         return [];
     }
   },
   
-  async createStaffUser(data: Partial<StaffUser>): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
      try {
         const response = await fetch('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
         });
         return response.ok;
     } catch (error) {
-        console.error("Failed to create user:", error);
+        console.error("Failed to create gym:", error);
         return false;
     }
   },
   
-  async updateStaffUser(userId: string, data: Partial<StaffUser>): Promise<boolean> {
+  async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
      try {
-        const response = await fetch(`/api/gyms/${userId}`, {
+        const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to update user ${userId}:`, error);
+        console.error(`Failed to update gym ${gymId}:`, error);
         return false;
     }
   },
 
-  async deleteStaffUser(userId: string): Promise<boolean> {
+  async deleteGym(gymId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/gyms/${userId}`, { method: 'DELETE' });
+        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
-        console.error(`Failed to delete user ${userId}:`, error);
+        console.error(`Failed to delete gym ${gymId}:`, error);
         return false;
     }
   },
 
   // --- Gym/Coach Auth ---
-  async gymLogin(username: string, password: string): Promise<StaffUser | null> {
+  async gymLogin(username: string, password: string): Promise<Gym | null> {
     try {
         const response = await fetch('/api/auth/gym-login', {
             method: 'POST',
@@ -219,7 +217,7 @@ export const apiClient = {
         if (!response.ok) return null;
         return await response.json();
     } catch (error) {
-        console.error("Staff login failed:", error);
+        console.error("Gym login failed:", error);
         return null;
     }
   },
