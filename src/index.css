@@ -1669,6 +1669,24 @@ body {
     padding: 0 2rem;
 }
 
+.onboarding-generation-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.5rem;
+    width: 100%;
+    padding: 1rem 0;
+}
+.onboarding-generation-container > p {
+    text-align: center;
+    color: var(--text-secondary-color);
+}
+.onboarding-generation-container .admin-instructions-box {
+    max-width: none;
+    width: 100%;
+}
+
+
 /* --- Onboarding Generation Progress --- */
 .generation-progress-container {
     padding: 1rem 0;
@@ -2469,124 +2487,6 @@ input:checked + .slider:before {
     justify-content: flex-end;
 }
 
-/* --- NEW ACCOUNTING STYLES --- */
-.accounting-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-.summary-card {
-    background-color: var(--surface-color);
-    padding: 1.5rem;
-    border-radius: 10px;
-    border-left: 4px solid;
-}
-.summary-card span {
-    display: block;
-    color: var(--text-secondary-color);
-    margin-bottom: 0.5rem;
-}
-.summary-card strong {
-    font-size: 2rem;
-    font-weight: 700;
-}
-.summary-card.income, .summary-card.balance.income {
-    border-color: var(--success-color);
-    color: var(--success-color);
-}
-.summary-card.expense, .summary-card.balance.expense {
-    border-color: var(--error-color);
-    color: var(--error-color);
-}
-
-.add-transaction-container {
-    background-color: var(--surface-color);
-    padding: 2rem;
-    border-radius: 12px;
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-}
-.add-transaction-container h3 {
-    margin-bottom: 1.5rem;
-    font-size: 1.5rem;
-    color: var(--primary-color);
-}
-.add-transaction-form {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    align-items: flex-end;
-}
-.add-transaction-form .add-gym-actions {
-    grid-column: 1 / -1;
-}
-
-.transaction-list-container {
-    background-color: var(--surface-color);
-    padding: 2rem;
-    border-radius: 12px;
-}
-.transaction-list-container h3 {
-    margin-bottom: 1.5rem;
-}
-.transaction-list, .fixed-expense-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-.transaction-list .transaction-item, .fixed-expense-item {
-    display: grid;
-    grid-template-columns: 100px 2fr 1fr 1fr;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background-color: var(--background-color);
-    border-radius: 6px;
-    align-items: center;
-}
-.transaction-list .transaction-item.header, .fixed-expense-item.header {
-    background: none;
-    font-weight: 600;
-    color: var(--text-secondary-color);
-}
-.transaction-list .transaction-item .description {
-    font-weight: 500;
-}
-.transaction-list .transaction-item .amount {
-    font-weight: 600;
-    text-align: right;
-}
-.transaction-list .transaction-item.income .amount {
-    color: var(--success-color);
-}
-.transaction-list .transaction-item.expense .amount {
-    color: var(--error-color);
-}
-
-.fixed-expense-item {
-    grid-template-columns: 2fr 1fr 1fr;
-}
-.fixed-expense-item .amount {
-    text-align: right;
-    font-weight: 600;
-}
-.fixed-expense-item .action {
-    text-align: right;
-}
-.pay-button {
-    width: auto;
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
-}
-.fixed-expense-item.paid .pay-button {
-    background-color: var(--success-color);
-}
-.fixed-expense-item.paid .description {
-    text-decoration: line-through;
-    opacity: 0.7;
-}
-
 /* --- Responsive Design --- */
 
 @media (max-width: 900px) {
@@ -2757,6 +2657,7 @@ input:checked + .slider:before {
     .log-list li span::before {
         font-weight: 600;
         color: var(--text-secondary-color);
+        margin-right: 1rem;
     }
     .log-list li:not(.weight-log) span:nth-child(1)::before { content: 'Fecha:'; }
     .log-list li:not(.weight-log) span:nth-child(2)::before { content: 'Peso (kg):'; }
@@ -2765,32 +2666,7 @@ input:checked + .slider:before {
     .log-list li.weight-log span:nth-child(2)::before { content: 'Peso (kg):'; }
     .log-list li.weight-log span:nth-child(3)::before { content: 'IMC:'; }
 
-
     .agreement-buttons {
         flex-direction: column;
-    }
-
-    .add-transaction-form {
-        grid-template-columns: 1fr;
-    }
-    .transaction-list .transaction-item, .fixed-expense-item {
-        grid-template-columns: 1fr;
-        gap: 0.25rem;
-        padding: 1rem;
-        border-left: 4px solid var(--border-color);
-    }
-    .transaction-list .transaction-item.income { border-color: var(--success-color); }
-    .transaction-list .transaction-item.expense { border-color: var(--error-color); }
-
-     .transaction-list .transaction-item.header, .fixed-expense-item.header {
-        display: none;
-    }
-    .transaction-list .transaction-item .amount, .fixed-expense-item .amount {
-        text-align: left;
-        font-size: 1.2rem;
-    }
-    .fixed-expense-item .action {
-        text-align: left;
-        margin-top: 0.5rem;
     }
 }

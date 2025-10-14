@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     if (!gymId) {
         return res.status(400).json({ message: 'Gym ID is required' });
     }
-    if (!entity || !['transactions', 'accounts', 'employees', 'fixed-expenses'].includes(entity)) {
+    if (!entity || !['transactions', 'accounts', 'employees'].includes(entity)) {
         return res.status(400).json({ message: 'A valid entity is required' });
     }
 
@@ -34,8 +34,7 @@ export default async function handler(req, res) {
                 delete newData._id; // Ensure we don't try to insert an existing _id
 
                 const result = await collection.insertOne(newData);
-                const insertedDoc = { _id: result.insertedId, ...newData };
-                res.status(201).json(insertedDoc);
+                res.status(201).json({ success: true, insertedId: result.insertedId });
             } catch (e) {
                 console.error(`API /api/accounting [POST] for ${entity} Error:`, e);
                 res.status(500).json({ error: `Unable to create ${entity}` });
