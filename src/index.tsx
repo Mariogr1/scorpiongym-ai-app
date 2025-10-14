@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -720,8 +718,6 @@ const NewPasswordResetPage: React.FC<{
 };
 
 // --- Super Admin View ---
-
-// FIX: Added missing ConfirmationModal component.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -1143,7 +1139,6 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-// FIX: Added missing RequestsView and RequestSection components.
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -2759,7 +2754,6 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
 
         return (
              <div className="diet-plan-container">
-{/* FIX: Replaced missing component with its definition, which will be added later. */}
                 <ClientDietView dietPlan={plan} />
 
                 {!isClientOnboarding && (
@@ -2930,50 +2924,47 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 
 // --- Client View ---
-{/* FIX: Added missing ClientDietView component. */}
 const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
     return (
-        <div className="client-diet-view animated-fade-in">
-            <h2>{dietPlan.planTitle}</h2>
-            <div className="diet-summary-grid">
-                <div className="summary-card">
-                    <h4>Calorías Totales</h4>
-                    <p>{dietPlan.summary.totalCalories} kcal</p>
+        <div className="diet-plan-container animated-fade-in">
+             <div className="plan-header">
+                <h2>{dietPlan.planTitle}</h2>
+            </div>
+            <div className="diet-summary">
+                <div>
+                    <strong>Calorías</strong>
+                    <span>{dietPlan.summary.totalCalories} kcal</span>
                 </div>
-                <div className="summary-card">
-                    <h4>Proteínas</h4>
-                    <p>{dietPlan.summary.macronutrients.proteinGrams}g</p>
+                <div>
+                    <strong>Proteínas</strong>
+                    <span>{dietPlan.summary.macronutrients.proteinGrams}g</span>
                 </div>
-                <div className="summary-card">
-                    <h4>Carbohidratos</h4>
-                    <p>{dietPlan.summary.macronutrients.carbsGrams}g</p>
+                <div>
+                    <strong>Carbs</strong>
+                    <span>{dietPlan.summary.macronutrients.carbsGrams}g</span>
                 </div>
-                <div className="summary-card">
-                    <h4>Grasas</h4>
-                    <p>{dietPlan.summary.macronutrients.fatGrams}g</p>
+                <div>
+                    <strong>Grasas</strong>
+                    <span>{dietPlan.summary.macronutrients.fatGrams}g</span>
                 </div>
             </div>
-
-            <div className="meals-container">
-                <h3>Comidas del Día</h3>
+            <div className="meals-grid">
                 {dietPlan.meals.map((meal, index) => (
                     <div key={index} className="meal-card">
                         <h4>{meal.mealName}</h4>
                         <ul>
                             {meal.foodItems.map((item, itemIndex) => (
                                 <li key={itemIndex}>
-                                    <span>{item.food}</span>
-                                    <span>{item.amount}</span>
+                                    {item.food} <span>{item.amount}</span>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 ))}
             </div>
-
-            <div className="recommendations-container">
-                <h3>Recomendaciones</h3>
-                <ul>
+            <div className="recommendations-section">
+                <h4>Recomendaciones</h4>
+                 <ul>
                     {dietPlan.recommendations.map((rec, index) => (
                         <li key={index}>{rec}</li>
                     ))}
@@ -2983,7 +2974,6 @@ const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
     );
 };
 
-{/* FIX: Added missing ClientRoutineView components. */}
 const ClientPhaseContent: React.FC<{
     phase: Phase;
     onPlayVideo: (url: string) => void;
@@ -3074,8 +3064,6 @@ const ClientRoutineView: React.FC<{
     );
 };
 
-
-{/* FIX: Added missing ClientProgressTracker component. */}
 const ClientProgressTracker: React.FC<{ 
     clientData: ClientData;
     onDataUpdate: () => void;
@@ -3265,8 +3253,6 @@ const ClientProgressTracker: React.FC<{
     );
 };
 
-
-{/* FIX: Added missing ClientContactForm component. */}
 const ClientContactForm: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
@@ -3334,8 +3320,6 @@ const ClientContactForm: React.FC<{ clientData: ClientData }> = ({ clientData })
     );
 };
 
-
-{/* FIX: Added missing ClientPortalTabs component. */}
 const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const defaultTab = (clientData.planType === 'nutrition') ? 'diet' : 'routine';
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'contact'>(defaultTab);
@@ -3422,7 +3406,6 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => v
 };
 
 
-{/* FIX: Added missing ClientOnboardingView component. */}
 const ClientOnboardingView: React.FC<{
     initialClientData: ClientData;
     onOnboardingComplete: () => void;
@@ -3590,7 +3573,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
 
     // --- View Routing based on client status ---
     if (clientData.planStatus === 'pending') {
-{/* FIX: Added missing component definition above. */}
         return <ClientOnboardingView initialClientData={clientData} onOnboardingComplete={fetchClientData} onLogout={onLogout} />;
     }
     
@@ -3622,14 +3604,12 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                      <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
                 </div>
             ) : (
-// FIX: Added missing component definition above.
                 <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
             )}
         </div>
     );
 };
 
-{/* FIX: Added JSX return, corrected component type, and updated Gemini API usage. */}
 const ChatAssistant: React.FC<{
     clientData: ClientData;
     setClientData: (data: ClientData) => void;
@@ -3715,7 +3695,7 @@ const ChatAssistant: React.FC<{
                 };
                 const textPart = { text: userMessage };
                 response = await chat.sendMessageStream({
-                    message: { parts: [textPart, imagePart] }
+                    message: [textPart, imagePart]
                 });
 
             } else {
@@ -3773,65 +3753,83 @@ const ChatAssistant: React.FC<{
     };
 
     return (
-        <div className="chat-assistant-overlay">
-            <div className="chat-assistant-container">
-                <header className="chat-header">
-                    <h2>Asistente IA</h2>
-                    <p className="usage-counter">Preguntas hoy: {usage}/{limit}</p>
-                    <button onClick={onClose} className="close-chat-button">&times;</button>
-                </header>
-                <div className="chat-messages">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={`chat-message ${msg.role}`}>
-                            {msg.image && <img src={`data:image/jpeg;base64,${msg.image}`} alt="User upload" className="chat-image" />}
-                            <div className="message-content" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }}></div>
-                        </div>
-                    ))}
-                    {isLoading && (
-                        <div className="chat-message model">
-                            <div className="message-content typing-indicator">
-                                <span></span><span></span><span></span>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
+        <div className="chat-fullscreen-container">
+             <div className="main-header" style={{ padding: '1rem', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="header-title-wrapper" style={{ flexGrow: 0, textAlign: 'left' }}>
+                    <h1 style={{ fontSize: '1.5rem', margin: '0 0 0.25rem 0' }}>Asistente IA</h1>
+                    <p style={{ margin: 0 }}>Preguntas hoy: {usage}/{limit}</p>
                 </div>
-                {error && <p className="error-text chat-error">{error}</p>}
-                <div className="chat-input-area">
+                 <button onClick={onClose} className="back-button" style={{ position: 'static' }}>Cerrar</button>
+            </div>
+            <div className="chat-messages">
+                {messages.map((msg, index) => (
+                    <div key={index} className={`chat-message ${msg.role}`}>
+                        <div className="avatar">
+                            {msg.role === 'user' ? (clientData.profile.name?.[0] || 'U') : 'AI'}
+                        </div>
+                        <div className="message-content">
+                            {msg.image && <img src={`data:image/jpeg;base64,${msg.image}`} alt="Contenido del usuario" />}
+                            <p>{msg.text}</p>
+                        </div>
+                    </div>
+                ))}
+                {isLoading && (
+                     <div className="chat-message model">
+                        <div className="avatar">AI</div>
+                        <div className="message-content">
+                            <div className="chat-typing-indicator"><span></span><span></span><span></span></div>
+                        </div>
+                    </div>
+                )}
+                 <div ref={messagesEndRef} />
+            </div>
+             {error && <p className="error-text" style={{ padding: '0 1rem', textAlign: 'center' }}>{error}</p>}
+             <div className="chat-input-area">
+                 <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        style={{ display: 'none' }}
+                        id="chat-file-input"
+                    />
+                    <label htmlFor="chat-file-input" className="chat-action-btn" aria-label="Adjuntar imagen">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
+                    </label>
+                    
                     {image && (
-                         <div className="image-preview">
-                            <img src={`data:image/jpeg;base64,${image.b64}`} alt="Preview" />
-                            <button onClick={() => setImage(null)}>&times;</button>
+                         <div className="chat-image-preview">
+                            <img src={`data:image/jpeg;base64,${image.b64}`} alt="Vista previa de imagen" />
+                            <button
+                                type="button"
+                                className="remove-image-btn"
+                                onClick={() => {
+                                    setImage(null);
+                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                }}
+                            >
+                                &times;
+                            </button>
                         </div>
                     )}
-                    <input 
-                        type="file" 
-                        accept="image/*" 
-                        ref={fileInputRef}
-                        style={{ display: 'none' }} 
-                        onChange={handleImageUpload}
-                    />
-                    <button className="attach-button" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
-                        📎
-                    </button>
-                    <textarea
+
+                    <input
+                        type="text"
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
                         placeholder={canAsk ? "Escribe tu pregunta..." : "Límite de preguntas alcanzado."}
-                        rows={1}
                         disabled={isLoading || !canAsk}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage();
-                            }
-                        }}
                     />
-                    <button onClick={handleSendMessage} disabled={isLoading || !canAsk} className="send-button">
-                        ➤
+                     <button type="submit" disabled={isLoading || !canAsk || (!userInput.trim() && !image)}>
+                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" /></svg>
                     </button>
-                </div>
+                 </form>
             </div>
         </div>
     );
 };
+
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);

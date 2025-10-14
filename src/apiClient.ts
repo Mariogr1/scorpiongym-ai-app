@@ -129,7 +129,6 @@ export interface StaffUser {
     _id: string;
     name: string;
     username: string;
-    // FIX: Add optional 'password' property to allow password updates and user creation.
     password?: string;
     role?: 'trainer' | 'superadmin';
     dailyQuestionLimit?: number;
