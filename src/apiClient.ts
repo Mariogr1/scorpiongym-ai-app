@@ -161,7 +161,8 @@ export const apiClient = {
     try {
         const response = await fetch('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
-        return await response.json();
+        // FIX: Explicitly cast the result of response.json() to the correct type.
+        return (await response.json()) as Gym[];
     } catch (error) {
         console.error("Failed to fetch gyms:", error);
         return [];
@@ -215,7 +216,8 @@ export const apiClient = {
             body: JSON.stringify({ username, password }),
         });
         if (!response.ok) return null;
-        return await response.json();
+        // FIX: Explicitly cast the result of response.json() to the correct type.
+        return (await response.json()) as Gym;
     } catch (error) {
         console.error("Gym login failed:", error);
         return null;
@@ -242,7 +244,8 @@ export const apiClient = {
             if (response.status === 404) return null;
             throw new Error('Network response was not ok');
         }
-        return await response.json();
+        // FIX: Explicitly cast the result of response.json() to the correct type.
+        return (await response.json()) as ClientData;
     } catch (error) {
         console.error(`Failed to fetch client data for DNI ${dni}:`, error);
         return null;
@@ -337,8 +340,9 @@ export const apiClient = {
             body: JSON.stringify({ dni, code: accessCode }),
         });
         if (!response.ok) return { success: false };
+        // FIX: Explicitly cast the result of response.json() to the correct type.
         const data = await response.json();
-        return data; // e.g., { success: true } or { success: true, resetRequired: true }
+        return data as { success: boolean; resetRequired?: boolean; };
     } catch (error) {
         return { success: false };
     }
@@ -392,8 +396,8 @@ export const apiClient = {
     try {
         const response = await fetch(`/api/library?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
-        const library: ExerciseLibrary = await response.json();
-        return library;
+        // FIX: Explicitly cast the result of response.json() to the correct type.
+        return (await response.json()) as ExerciseLibrary;
     } catch (error) {
         console.error("Failed to fetch exercise library:", error);
         return {};
@@ -423,7 +427,8 @@ export const apiClient = {
     try {
       const response = await fetch(`/api/requests?gymId=${gymId}`);
       if (!response.ok) throw new Error('Network response was not ok');
-      return await response.json();
+      // FIX: Explicitly cast the result of response.json() to the correct type.
+      return (await response.json()) as Request[];
     } catch (error) {
       console.error("Failed to fetch requests:", error);
       return [];
@@ -434,7 +439,8 @@ export const apiClient = {
     try {
       const response = await fetch(`/api/requests?clientId=${clientId}`);
       if (!response.ok) throw new Error('Network response was not ok');
-      return await response.json();
+      // FIX: Explicitly cast the result of response.json() to the correct type.
+      return (await response.json()) as Request[];
     } catch (error) {
       console.error(`Failed to fetch requests for client ${clientId}:`, error);
       return [];

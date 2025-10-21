@@ -416,7 +416,7 @@ body {
   border-radius: 8px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color: 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 .file-input-label:hover {
   background-color: var(--secondary-button-hover);
@@ -1186,7 +1186,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color: 0.2s;
+  transition: background-color 0.2s;
 }
 
 .accordion-item:hover .accordion-header {
@@ -1320,7 +1320,7 @@ body {
     line-height: 1;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
 }
 .delete-exercise-btn:hover {
     background-color: var(--primary-color-hover);

@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -44,9 +45,10 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * @param baseDelay The initial delay in milliseconds.
  * @returns The result of the wrapped function.
  */
+// FIX: Rewrote `withRetry` to have a clearer structure and avoid potential type inference issues with control flow analysis.
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
     let attempt = 0;
-    while (attempt < maxRetries) {
+    while (true) {
         try {
             return await fn();
         } catch (err: any) {
@@ -64,9 +66,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, baseDelay = 10
             }
         }
     }
-    // This part is technically unreachable due to the throw in the catch block,
-    // but it's good practice for type safety and clarity.
-    throw new Error('Function failed after maximum retries.');
 }
 
 
@@ -2112,7 +2111,7 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 
                 ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
 
-                REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
+                REGLAS CRÍTICAS E INQUEBRABLES PARA TU RESPUESTA:
                 1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
                 2.  El JSON debe seguir esta estructura exacta:
                     {
@@ -3183,7 +3182,7 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         - Perfil: ${JSON.stringify(clientData.profile)}
         - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
         ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
-        REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
+        REGLAS CRÍTICAS E INQUEBRABLES PARA TU RESPUESTA:
         1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
         2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
         3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista. Si un ejercicio no está en la lista, no puedes usarlo. El incumplimiento de esta regla hará que tu respuesta sea rechazada.
