@@ -95,6 +95,20 @@ export interface ExerciseDefinition {
 
 export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
 
+export interface DayStructure {
+    dia: string;
+    grupoMuscular: string;
+}
+
+export interface RoutineTemplate {
+    _id: string;
+    gymId: string;
+    templateName: string;
+    description: string;
+    trainingDays: number;
+    structure: DayStructure[];
+}
+
 
 export interface ClientData {
     dni: string;
@@ -482,6 +496,57 @@ export const apiClient = {
     } catch (error) {
       console.error(`Failed to delete request ${requestId}:`, error);
       return false;
+    }
+  },
+
+  // --- Routine Templates ---
+  async getRoutineTemplates(gymId: string): Promise<RoutineTemplate[]> {
+    try {
+        const response = await fetch(`/api/routine-templates?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        return (await response.json()) as RoutineTemplate[];
+    } catch (error) {
+        console.error("Failed to fetch routine templates:", error);
+        return [];
+    }
+  },
+
+  async createRoutineTemplate(templateData: Omit<RoutineTemplate, '_id'>): Promise<RoutineTemplate | null> {
+    try {
+        const response = await fetch('/api/routine-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateData),
+        });
+        if (!response.ok) return null;
+        return (await response.json()) as RoutineTemplate;
+    } catch (error) {
+        console.error("Failed to create routine template:", error);
+        return null;
+    }
+  },
+
+  async updateRoutineTemplate(templateId: string, templateData: Partial<RoutineTemplate>): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/routine-templates/${templateId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateData),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to update routine template ${templateId}:`, error);
+        return false;
+    }
+  },
+
+  async deleteRoutineTemplate(templateId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/routine-templates/${templateId}`, { method: 'DELETE' });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to delete routine template ${templateId}:`, error);
+        return false;
     }
   },
 };
