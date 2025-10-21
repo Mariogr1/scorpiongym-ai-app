@@ -1170,7 +1170,7 @@ body {
   border-radius: 10px;
   background-color: var(--surface-color);
   overflow: hidden; /* Important for border-radius */
-  transition: background-color: 0.2s;
+  transition: background-color 0.2s;
 }
 
 .accordion-header {
@@ -2329,6 +2329,12 @@ input:checked + .slider:before {
   border-top: 1px solid var(--border-color);
   background-color: var(--surface-color);
   flex-shrink: 0;
+}
+
+.limit-reached-message {
+    padding: 0.75rem 1rem;
+    text-align: center;
+    color: var(--text-secondary-color);
 }
 
 .chat-input-area form {
