@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1447,7 +1445,6 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
     );
 };
 
-// FIX: Added missing component `RoutineTemplateModal`
 const RoutineTemplateModal: React.FC<{
     gymId: string;
     template: RoutineTemplate | null;
@@ -1462,12 +1459,15 @@ const RoutineTemplateModal: React.FC<{
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Adjust structure when trainingDays changes
-        const newStructure = Array.from({ length: trainingDays }, (_, i) => {
-            return structure[i] || { dia: `Día ${i + 1}`, grupoMuscular: '' };
+        const newLength = Number(trainingDays) || 0;
+        setStructure(prev => {
+            const newStructure = [...prev];
+            while (newStructure.length < newLength) {
+                newStructure.push({ dia: `Día ${newStructure.length + 1}`, grupoMuscular: '' });
+            }
+            return newStructure.slice(0, newLength);
         });
-        setStructure(newStructure);
-    }, [trainingDays, structure]);
+    }, [trainingDays]);
 
     const handleStructureChange = (index: number, value: string) => {
         const newStructure = [...structure];
@@ -1483,7 +1483,7 @@ const RoutineTemplateModal: React.FC<{
             return;
         }
         setIsSaving(true);
-        const templateData = { gymId, templateName, description, trainingDays, structure };
+        const templateData = { gymId, templateName, description, trainingDays: Number(trainingDays), structure };
         
         let success;
         if (template) {
@@ -1502,10 +1502,10 @@ const RoutineTemplateModal: React.FC<{
 
     return (
         <div className="modal-overlay">
-            <div className="modal-content edit-modal">
+            <div className="modal-content edit-modal" style={{maxWidth: '600px'}}>
                 <button className="close-button" onClick={onClose}>&times;</button>
                 <h3>{template ? 'Editar' : 'Crear'} Plantilla de Rutina</h3>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className="profile-form">
                     <div className="form-group">
                         <label>Nombre de la Plantilla</label>
                         <input type="text" value={templateName} onChange={(e) => setTemplateName(e.target.value)} required />
@@ -1519,10 +1519,10 @@ const RoutineTemplateModal: React.FC<{
                         <input type="number" min="1" max="7" value={trainingDays} onChange={(e) => setTrainingDays(Number(e.target.value))} required />
                     </div>
 
-                    <h4>Estructura de Días</h4>
-                    <div className="template-structure-editor">
+                    <h4 style={{ marginTop: '1rem', borderTop: `1px solid var(--border-color)`, paddingTop: '1rem' }}>Estructura de Días</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                         {structure.map((day, index) => (
-                            <div key={index} className="form-group-inline template-day-input">
+                            <div key={index} className="form-group">
                                 <label>{day.dia}</label>
                                 <input
                                     type="text"
@@ -1549,7 +1549,6 @@ const RoutineTemplateModal: React.FC<{
     );
 };
 
-// FIX: Added missing component `RoutineTemplateManager`
 const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void }> = ({ gymId, onBack }) => {
     const [templates, setTemplates] = useState<RoutineTemplate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -1598,7 +1597,7 @@ const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void }> = 
             <div className="main-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <h2>Plantillas de Rutina</h2>
                 <div>
-                     <button onClick={() => setShowAddModal(true)} className="cta-button" style={{marginRight: '1rem'}}>+ Crear Plantilla</button>
+                     <button onClick={() => setShowAddModal(true)} className="cta-button" style={{marginRight: '1rem', width: 'auto'}}>+ Crear Plantilla</button>
                     <button onClick={onBack} className="back-button">Volver</button>
                 </div>
             </div>
@@ -1627,19 +1626,20 @@ const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void }> = 
             )}
 
 
-            <div className="template-list">
+            <div className="gym-list">
                 {templates.length > 0 ? (
                     templates.map(template => (
-                         <div key={template._id} className="template-card">
-                            <div className="template-card-header">
+                         <div key={template._id} className="gym-card" style={{cursor: 'default', borderLeftColor: 'var(--success-color)'}}>
+                             <div className="gym-card-info">
                                 <h3>{template.templateName}</h3>
-                                <p>{template.trainingDays} días de entrenamiento</p>
-                            </div>
-                            <p className="template-description">{template.description || 'Sin descripción.'}</p>
-                            <div className="template-structure-preview">
-                                {template.structure.map(day => (
-                                    <span key={day.dia} className="day-chip">{day.dia}: {day.grupoMuscular}</span>
-                                ))}
+                                <p>{template.description || `${template.trainingDays} días de entrenamiento.`}</p>
+                                <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem'}}>
+                                     {template.structure.map(day => (
+                                        <span key={day.dia} className="client-card-access-code" style={{marginTop: 0, fontSize: '0.8rem'}}>
+                                            <strong>{day.dia}:</strong> {day.grupoMuscular}
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                             <div className="gym-card-actions">
                                 <button className="action-btn edit" onClick={() => setEditingTemplate(template)}>Editar</button>
@@ -1648,7 +1648,7 @@ const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void }> = 
                         </div>
                     ))
                 ) : (
-                    <div className="placeholder">No se han creado plantillas.</div>
+                    <div className="placeholder" style={{gridColumn: '1 / -1'}}>No se han creado plantillas.</div>
                 )}
             </div>
         </div>
@@ -2832,53 +2832,49 @@ const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) =>
     );
 };
 
-// FIX: Added missing component `ClientDietView`.
 const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
-    const { planTitle, summary, meals, recommendations } = dietPlan;
-
     return (
-        <div className="diet-plan-view animated-fade-in">
-            <h2>{planTitle}</h2>
-            <div className="diet-summary-card">
-                <div className="summary-item">
-                    <span className="summary-value">{summary.totalCalories}</span>
-                    <span className="summary-label">Calorías</span>
+        <div className="diet-plan-container animated-fade-in">
+            <div className="plan-header">
+                <h2>{dietPlan.planTitle}</h2>
+            </div>
+            <div className="diet-summary">
+                <div>
+                    <strong>Calorías</strong>
+                    <span>{dietPlan.summary.totalCalories}</span>
                 </div>
-                <div className="summary-item">
-                    <span className="summary-value">{summary.macronutrients.proteinGrams}g</span>
-                    <span className="summary-label">Proteínas</span>
+                <div>
+                    <strong>Proteínas</strong>
+                    <span>{dietPlan.summary.macronutrients.proteinGrams}g</span>
                 </div>
-                <div className="summary-item">
-                    <span className="summary-value">{summary.macronutrients.carbsGrams}g</span>
-                    <span className="summary-label">Carbs</span>
+                <div>
+                    <strong>Carbs</strong>
+                    <span>{dietPlan.summary.macronutrients.carbsGrams}g</span>
                 </div>
-                <div className="summary-item">
-                    <span className="summary-value">{summary.macronutrients.fatGrams}g</span>
-                    <span className="summary-label">Grasas</span>
+                <div>
+                    <strong>Grasas</strong>
+                    <span>{dietPlan.summary.macronutrients.fatGrams}g</span>
                 </div>
             </div>
-
-            <div className="diet-meals">
-                {meals.map((meal, index) => (
+            <div className="meals-grid">
+                {dietPlan.meals.map((meal, index) => (
                     <div key={index} className="meal-card">
                         <h3>{meal.mealName}</h3>
                         <ul>
                             {meal.foodItems.map((item, itemIndex) => (
                                 <li key={itemIndex}>
-                                    <span>{item.food}</span>
-                                    <span className="food-amount">{item.amount}</span>
+                                    {item.food} <span>{item.amount}</span>
                                 </li>
                             ))}
                         </ul>
                     </div>
                 ))}
             </div>
-            
-            {recommendations && recommendations.length > 0 && (
-                 <div className="recommendations-card">
-                    <h3>Recomendaciones</h3>
+            {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (
+                <div className="recommendations-section">
+                    <h4>Recomendaciones</h4>
                     <ul>
-                        {recommendations.map((rec, index) => (
+                        {dietPlan.recommendations.map((rec, index) => (
                             <li key={index}>{rec}</li>
                         ))}
                     </ul>
@@ -3177,7 +3173,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 // --- Client View ---
 
-// FIX: Added missing component `ClientMessageView`
 const ClientMessageView: React.FC<{ clientData: ClientData, onMessageSent: () => void }> = ({ clientData, onMessageSent }) => {
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
@@ -3226,9 +3221,9 @@ const ClientMessageView: React.FC<{ clientData: ClientData, onMessageSent: () =>
     };
 
     return (
-        <div className="client-messages-view animated-fade-in">
+        <div className="requests-view animated-fade-in">
             <h2>Enviar un Mensaje a tu Entrenador</h2>
-            <form onSubmit={handleSubmit} className="message-form">
+            <form onSubmit={handleSubmit} className="profile-form">
                 <div className="form-group">
                     <label htmlFor="subject">Asunto</label>
                     <input type="text" id="subject" value={subject} onChange={e => setSubject(e.target.value)} required />
@@ -3244,7 +3239,7 @@ const ClientMessageView: React.FC<{ clientData: ClientData, onMessageSent: () =>
                 </button>
             </form>
 
-            <div className="past-requests-section">
+            <div className="request-section" style={{ marginTop: '2rem' }}>
                 <h3>Mensajes Anteriores</h3>
                 {pastRequests.length > 0 ? (
                     <div className="request-list">
@@ -3266,7 +3261,6 @@ const ClientMessageView: React.FC<{ clientData: ClientData, onMessageSent: () =>
     );
 };
 
-// FIX: Added missing component `ClientPortalTabs`.
 const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>('routine');
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
@@ -3320,7 +3314,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => v
     };
 
     return (
-        <div className="client-portal-content">
+        <div className="client-view-container">
             <nav className="main-tabs-nav">
                 {(planType === 'full' || planType === 'routine') &&
                     <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Mi Rutina</button>
@@ -3331,11 +3325,11 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData; onDataUpdate: () => v
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Mi Progreso</button>
                 <button className={`main-tab-button ${activeTab === 'messages' ? 'active' : ''}`} onClick={() => setActiveTab('messages')}>Mensajes</button>
             </nav>
-            <main className="main-content">
+            <div className="main-content" style={{ backgroundColor: 'transparent', padding: '1rem 0' }}>
                  <div className="results-section">
                     {renderContent()}
                 </div>
-            </main>
+            </div>
              {videoUrl && <VideoPlayerModal videoUrl={videoUrl} onClose={() => setVideoUrl(null)} />}
         </div>
     );
@@ -3680,6 +3674,8 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
 
 type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
 
+// FIX: Replaced the entire ClientOnboardingView component to add the missing return statement and complete its logic,
+// and to correctly handle promise settlement results when generating diet plans, resolving type errors.
 const ClientOnboardingView: React.FC<{
     initialClientData: ClientData;
     onOnboardingComplete: () => void;
@@ -3728,154 +3724,212 @@ const ClientOnboardingView: React.FC<{
         setGenerationState('generating');
         setGenerationError('');
         setGenerationProgress({ routine: 'pending', diet1: 'pending', diet2: 'pending' });
+        
+        // Save the profile before generating
+        const profileSaveSuccess = await apiClient.saveClientData(clientData.dni, { profile: clientData.profile });
+        if (!profileSaveSuccess) {
+            setGenerationError('No se pudo guardar tu perfil antes de generar el plan. Inténtalo de nuevo.');
+            setGenerationState('error');
+            return;
+        }
 
         try {
+            let routinePromise: Promise<Routine | null> = Promise.resolve(null);
+            let diet1Promise: Promise<DietPlan | null> = Promise.resolve(null);
+            let diet2Promise: Promise<DietPlan | null> = Promise.resolve(null);
+            
             if (planType === 'full' || planType === 'routine') {
                 setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
-                const routine = await generateRoutineForClient(clientData, clientData.gymId, additionalInstructions);
-                setClientData(prev => ({ ...prev, routine }));
-                setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
+                routinePromise = generateRoutineForClient(clientData, clientData.gymId, additionalInstructions);
             }
-
             if (planType === 'full' || planType === 'nutrition') {
-                // Set both diet statuses to 'loading' to show spinners simultaneously.
                 setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
-
-                // Generate both diet plans in parallel.
-                const [diet1, diet2] = await Promise.all([
-                    generateDietForClient(clientData, additionalInstructions),
-                    generateDietForClient(clientData, additionalInstructions)
-                ]);
-                
-                // FIX: Added missing logic to complete the plan generation and state updates.
-                setClientData(prev => ({...prev, dietPlans: [diet1, diet2]}));
-                setGenerationProgress(prev => ({...prev, diet1: 'done', diet2: 'done'}));
+                diet1Promise = generateDietForClient(clientData, additionalInstructions);
+                diet2Promise = generateDietForClient(clientData, `Genera una segunda opción de plan de dieta, diferente a la primera, para el mismo cliente. ${additionalInstructions}`);
             }
 
+            const [routineResult, diet1Result, diet2Result] = await Promise.allSettled([routinePromise, diet1Promise, diet2Promise]);
+
+            const finalClientData = { ...clientData };
+            let hasError = false;
+
+            if (routineResult.status === 'fulfilled') {
+                finalClientData.routine = routineResult.value;
+                 setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
+            } else if (planType === 'full' || planType === 'routine') {
+                console.error("Routine generation failed:", routineResult.reason);
+                setGenerationProgress(prev => ({ ...prev, routine: 'error' }));
+                hasError = true;
+            }
+
+            if (diet1Result.status === 'fulfilled' && diet2Result.status === 'fulfilled') {
+                finalClientData.dietPlans = [diet1Result.value, diet2Result.value];
+                 setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
+            } else if (planType === 'full' || planType === 'nutrition') {
+                hasError = true;
+                setGenerationProgress(prev => ({ 
+                    ...prev, 
+                    diet1: diet1Result.status === 'fulfilled' ? 'done' : 'error',
+                    diet2: diet2Result.status === 'fulfilled' ? 'done' : 'error'
+                }));
+
+                if (diet1Result.status === 'rejected') {
+                    console.error("Diet Plan 1 Reason:", diet1Result.reason);
+                }
+                if (diet2Result.status === 'rejected') {
+                    console.error("Diet Plan 2 Reason:", diet2Result.reason);
+                }
+                
+                // Still save any plan that succeeded
+                if (diet1Result.status === 'fulfilled' || diet2Result.status === 'fulfilled') {
+                    finalClientData.dietPlans = [
+                        diet1Result.status === 'fulfilled' ? diet1Result.value : null,
+                        diet2Result.status === 'fulfilled' ? diet2Result.value : null,
+                    ];
+                }
+            }
+            
+            setClientData(finalClientData);
+
+            if (hasError) {
+                throw new Error("Una o más partes del plan no se pudieron generar. Revisa la consola para más detalles.");
+            }
+
+            // Save the complete data
+            const finalSaveSuccess = await apiClient.saveClientData(clientData.dni, finalClientData);
+            if (!finalSaveSuccess) {
+                 throw new Error('No se pudieron guardar los planes generados.');
+            }
+            
             setGenerationState('success');
-        } catch (err: any) {
-            console.error("Onboarding generation failed:", err);
-            setGenerationError(err.message || 'Ocurrió un error inesperado al generar tu plan.');
+
+        } catch (err) {
+            console.error("Full plan generation failed:", err);
+            setGenerationError(err instanceof Error ? err.message : "Error desconocido.");
             setGenerationState('error');
-            setGenerationProgress({ routine: 'error', diet1: 'error', diet2: 'error' });
         }
     };
 
-    const handleCompleteOnboarding = async () => {
+    const handleFinishOnboarding = async () => {
         setIsSaving(true);
-        const dataToSave = {
-            profile: clientData.profile,
-            routine: clientData.routine,
-            dietPlans: clientData.dietPlans,
-            planStatus: 'active' as 'active',
+        const success = await apiClient.saveClientData(clientData.dni, { 
+            planStatus: 'active',
             routineGeneratedDate: new Date().toISOString()
-        };
-        const success = await apiClient.saveClientData(clientData.dni, dataToSave);
+        });
         if (success) {
             onOnboardingComplete();
         } else {
-            alert('No se pudo finalizar el proceso. Por favor, contacta a tu entrenador.');
+            alert("No se pudo finalizar. Por favor, intenta de nuevo.");
             setIsSaving(false);
         }
     };
 
-    // FIX: Added missing return statement with JSX to render the component UI.
-    return (
-        <div className="client-onboarding-container">
-            <header className="onboarding-header">
-                <h1>Configuración de tu Perfil</h1>
-                <button onClick={onLogout} className="logout-button">Salir</button>
-            </header>
-            <div className="onboarding-steps">
-                {/* Step indicators could go here */}
-            </div>
-
-            <div className="onboarding-content">
-                {step === 'terms' && (
-                    <div className="onboarding-step animated-fade-in">
+    const renderStep = () => {
+        switch (step) {
+            case 'terms':
+                return (
+                    <div className="onboarding-step terms-step">
                         <h2>Términos y Condiciones</h2>
-                        <div className="terms-box">
-                            <p>Bienvenido a Scorpion AI. Al continuar, aceptas que esta aplicación utiliza inteligencia artificial para generar planes de entrenamiento y nutrición. Estos planes son sugerencias y no reemplazan el consejo de un profesional médico o de un entrenador certificado.</p>
-                            <p><strong>Importante:</strong> Consulta siempre a un médico antes de comenzar cualquier nuevo programa de ejercicios o dieta. El uso de esta aplicación es bajo tu propio riesgo.</p>
+                        <div className="terms-content">
+                            <p>Bienvenido a Scorpion AI. Antes de continuar, por favor lee y acepta nuestros términos de servicio.</p>
+                            <p><strong>Uso de la IA:</strong> Aceptas que las rutinas y planes de nutrición son generados por una inteligencia artificial y deben ser considerados como una sugerencia. No reemplazan el consejo de un profesional médico o un entrenador certificado.</p>
+                            <p><strong>Responsabilidad:</strong> Consulta a un médico antes de comenzar cualquier programa de ejercicio o dieta. Scorpion AI y tu gimnasio no se hacen responsables de lesiones o problemas de salud que puedan surgir.</p>
+                            <p><strong>Datos:</strong> Tus datos de perfil serán utilizados para personalizar tu experiencia y generar tus planes. No serán compartidos con terceros.</p>
                         </div>
-                        <button onClick={handleAcceptTerms} className="cta-button">Acepto los Términos</button>
+                        <button className="cta-button" onClick={handleAcceptTerms}>He leído y acepto los términos</button>
                     </div>
-                )}
-                {step === 'profile' && (
-                     <div className="onboarding-step animated-fade-in">
+                );
+            case 'profile':
+                return (
+                    <div className="onboarding-step profile-step">
                         <ProfileEditor 
-                            clientData={clientData} 
-                            setClientData={setClientData} 
+                            clientData={clientData}
+                            setClientData={setClientData}
                             isClientOnboarding={true}
                         />
                         <div className="onboarding-actions">
-                             <button 
-                                onClick={() => setStep('generation')} 
+                            <button 
                                 className="cta-button" 
-                                disabled={!isProfileComplete}>
-                                Continuar
+                                onClick={() => setStep('generation')}
+                                disabled={!isProfileComplete}
+                            >
+                                {isProfileComplete ? 'Continuar a Generar Plan' : 'Completa tu perfil para continuar'}
                             </button>
-                             {!isProfileComplete && <p className="error-text" style={{marginTop: '1rem'}}>Por favor, completa todos los campos obligatorios del perfil.</p>}
+                            {!isProfileComplete && <p className="error-text" style={{textAlign: 'center', marginTop: '1rem'}}>Asegúrate de rellenar nombre, edad, peso, altura y días de entrenamiento.</p>}
                         </div>
                     </div>
-                )}
-                {step === 'generation' && (
-                     <div className="onboarding-step animated-fade-in">
+                );
+            case 'generation':
+                return (
+                    <div className="onboarding-step generation-step">
+                        <h2>¡Casi listo! Genera tu Plan</h2>
+                        <p>Basado en tu perfil, la IA creará un plan de entrenamiento y nutrición personalizado para vos.</p>
+
+                         <div className="admin-instructions-box" style={{margin: '2rem 0'}}>
+                            <label htmlFor="client-instructions">Instrucciones Adicionales para la IA (Opcional)</label>
+                            <textarea
+                                id="client-instructions"
+                                rows={3}
+                                value={additionalInstructions}
+                                onChange={(e) => setAdditionalInstructions(e.target.value)}
+                                placeholder="Ej: Tengo una lesión leve en la rodilla, evitar sentadillas pesadas. Prefiero entrenar por la mañana."
+                            ></textarea>
+                        </div>
+
                         {generationState === 'idle' && (
-                            <div className="generation-container">
-                                <h2>¡Casi listo!</h2>
-                                <p>Ahora vamos a generar tu primer plan personalizado con IA.</p>
-                                <div className="admin-instructions-box" style={{maxWidth: '600px', margin: '2rem auto'}}>
-                                     <label htmlFor="client-instructions">¿Algo que debamos saber? (Opcional)</label>
-                                     <textarea
-                                        id="client-instructions"
-                                        rows={3}
-                                        value={additionalInstructions}
-                                        onChange={(e) => setAdditionalInstructions(e.target.value)}
-                                        placeholder="Ej: Tengo una lesión en la rodilla, prefiero no hacer sentadillas. / Soy vegetariano."
-                                    ></textarea>
-                                </div>
-                                <button onClick={handleGenerateFullPlan} className="cta-button">Generar mi Plan</button>
-                                <button onClick={() => setStep('profile')} className="back-button simple" style={{marginTop: '1rem'}}>Volver y editar perfil</button>
-                            </div>
+                            <button className="cta-button" onClick={handleGenerateFullPlan}>
+                                Generar Mi Plan Ahora
+                            </button>
                         )}
-                         {generationState === 'generating' && (
-                            <div className="loading-container">
+                        {generationState === 'generating' && (
+                            <div className="generation-progress-container">
                                 <div className="spinner"></div>
-                                <p>Estamos creando tu plan personalizado. Esto puede tardar unos momentos...</p>
-                                <div className="progress-checklist">
-                                     <div className={`progress-item status-${generationProgress.routine}`}>{(planType === 'full' || planType === 'routine') && 'Creando tu rutina...'}</div>
-                                     <div className={`progress-item status-${generationProgress.diet1}`}>{(planType === 'full' || planType === 'nutrition') && 'Diseñando tu plan de nutrición...'}</div>
-                                </div>
+                                <p>Generando tu plan... Esto puede tardar un momento.</p>
+                                <ul className="generation-checklist">
+                                    {(planType === 'full' || planType === 'routine') && <li className={generationProgress.routine}><span>Rutina de Entrenamiento</span></li>}
+                                    {(planType === 'full' || planType === 'nutrition') && <li className={generationProgress.diet1}><span>Plan de Nutrición 1</span></li>}
+                                    {(planType === 'full' || planType === 'nutrition') && <li className={generationProgress.diet2}><span>Plan de Nutrición 2 (Opción)</span></li>}
+                                </ul>
                             </div>
                         )}
                         {generationState === 'error' && (
-                             <div className="error-container">
-                                 <h2>Ocurrió un Error</h2>
-                                 <p>{generationError}</p>
-                                 <button onClick={handleGenerateFullPlan} className="cta-button">Intentar de Nuevo</button>
+                            <div className="error-container">
+                                <p><strong>Ocurrió un error:</strong> {generationError}</p>
+                                <button className="cta-button" onClick={handleGenerateFullPlan}>Intentar de Nuevo</button>
                             </div>
                         )}
-                         {generationState === 'success' && (
-                             <div className="generation-summary">
-                                 <h2>¡Tu Plan está Listo!</h2>
-                                 <p>Hemos generado un plan de entrenamiento y nutrición a tu medida. ¡Aquí tienes un vistazo!</p>
-                                 <div className="plan-previews">
-                                     {clientData.routine && <div className="preview-card"><h3>Rutina: {clientData.routine.planName}</h3><p>{clientData.routine.totalDurationWeeks} semanas</p></div>}
-                                     {clientData.dietPlans?.[0] && <div className="preview-card"><h3>Nutrición: {clientData.dietPlans[0].planTitle}</h3><p>{clientData.dietPlans[0].summary.totalCalories} Kcal</p></div>}
-                                 </div>
-                                 <button onClick={handleCompleteOnboarding} className="cta-button" disabled={isSaving}>
-                                    {isSaving ? 'Finalizando...' : 'Ver mi Plan y Finalizar'}
+                        {generationState === 'success' && (
+                             <div className="generation-success-container">
+                                <h3>¡Tu plan ha sido creado con éxito!</h3>
+                                <p>¡Todo listo para que comiences tu camino hacia tus objetivos!</p>
+                                <button className="cta-button" onClick={handleFinishOnboarding} disabled={isSaving}>
+                                    {isSaving ? 'Guardando...' : 'Ver mi Plan y Empezar'}
                                 </button>
-                             </div>
+                            </div>
                         )}
                     </div>
-                )}
-            </div>
+                );
+             default:
+                return null;
+        }
+    };
+    
+    return (
+         <div className="client-view-container onboarding-view">
+             <header>
+                <h1>Configuración Inicial</h1>
+                <button onClick={onLogout} className="logout-button">Salir</button>
+            </header>
+            <main className="onboarding-content">
+                {renderStep()}
+            </main>
         </div>
     );
 };
 
-
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);
