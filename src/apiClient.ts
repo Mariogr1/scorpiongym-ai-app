@@ -199,7 +199,7 @@ export const apiClient = {
   
   async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
      try {
-        const response = await fetch(`/api/gyms?id=${gymId}`, {
+        const response = await fetch(`/api/gyms/${gymId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -213,7 +213,7 @@ export const apiClient = {
 
   async deleteGym(gymId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/gyms?id=${gymId}`, { method: 'DELETE' });
+        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
         console.error(`Failed to delete gym ${gymId}:`, error);
@@ -253,7 +253,7 @@ export const apiClient = {
 
   async getClientData(dni: string): Promise<ClientData | null> {
     try {
-        const response = await fetch(`/api/clients?dni=${dni}`);
+        const response = await fetch(`/api/clients/${dni}`);
         if (!response.ok) {
             if (response.status === 404) return null;
             throw new Error('Network response was not ok');
@@ -268,7 +268,7 @@ export const apiClient = {
 
   async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients?dni=${dni}`, {
+        const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dataToSave),
@@ -305,7 +305,7 @@ export const apiClient = {
   async updateClientStatus(dnis: Set<string>, newStatus: 'active' | 'archived'): Promise<void> {
     try {
         const promises = Array.from(dnis).map(dni => 
-            fetch(`/api/clients?dni=${dni}`, {
+            fetch(`/api/clients/${dni}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus }),
@@ -320,7 +320,7 @@ export const apiClient = {
   async deleteClients(dnis: Set<string>): Promise<void> {
     try {
         const promises = Array.from(dnis).map(dni =>
-            fetch(`/api/clients?dni=${dni}`, { method: 'DELETE' })
+            fetch(`/api/clients/${dni}`, { method: 'DELETE' })
         );
         await Promise.all(promises);
     } catch (error) {
@@ -364,7 +364,7 @@ export const apiClient = {
 
   async enablePlanGeneration(dni: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients?dni=${dni}`, {
+        const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'reset_plan' }),
@@ -378,7 +378,7 @@ export const apiClient = {
   
    async requestPasswordReset(dni: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients?dni=${dni}`, {
+        const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'request_password_reset' }),
@@ -392,7 +392,7 @@ export const apiClient = {
 
   async setNewPassword(dni: string, password: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients?dni=${dni}`, {
+        const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'set_new_password', password: password }),
