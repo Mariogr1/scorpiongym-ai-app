@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1112,7 +1113,8 @@ const RequestSection: React.FC<{
     onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
     onDelete: (id: string) => void;
 }> = ({ title, requests, onUpdateStatus, onDelete }) => {
-    if (requests.length === 0) {
+    // FIX: Add Array.isArray check to prevent runtime error if 'requests' is not an array.
+    if (!Array.isArray(requests) || requests.length === 0) {
         return <div className="placeholder" style={{ marginTop: '2rem' }}>No hay solicitudes en esta categoría.</div>;
     }
     
@@ -2374,12 +2376,13 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                     - Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
             `;
             
-            const response: GenerateContentResponse = await withRetry(() => 
+            // FIX: Cast the result of the AI call to GenerateContentResponse to ensure type safety.
+            const response = (await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
-            );
+            )) as GenerateContentResponse;
             const text = response.text;
             
             const jsonString = extractJson(text);
@@ -2538,8 +2541,10 @@ const RoutinePlan: React.FC<{
     
     const handleAddExercise = (phaseIndex: number, dayIndex: number) => {
         const newRoutine = { ...routine };
+        // FIX: Cast the result of Object.values to ensure type safety when accessing properties.
+        const firstExercise = (Object.values(exerciseLibrary).flat()[0] as ExerciseDefinition | undefined);
         const newExercise: Exercise = {
-            nombre: Object.values(exerciseLibrary).flat()[0]?.name || '',
+            nombre: firstExercise?.name || '',
             series: '4',
             repeticiones: '10',
             descanso: '60s',
@@ -2590,7 +2595,8 @@ const AccordionPhases: React.FC<{
 
     return (
         <div className="accordion-phases">
-            {phases.map((phase, phaseIndex) => (
+            {/* FIX: Add Array.isArray check to prevent runtime error if 'phases' is not an array. */}
+            {Array.isArray(phases) && phases.map((phase, phaseIndex) => (
                 <div key={phaseIndex} className="accordion-item">
                     <button 
                         className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
@@ -2760,7 +2766,8 @@ const ExerciseItemEditor: React.FC<{
                 >
                     {Object.entries(exerciseLibrary).map(([group, exercises]) => (
                         <optgroup label={group} key={group}>
-                            {exercises.map(ex => (
+                            {/* FIX: Cast 'exercises' to its correct type to allow '.map' to be called safely. */}
+                            {(exercises as ExerciseDefinition[]).map(ex => (
                                 <option key={ex.name} value={ex.name}>{ex.name}</option>
                             ))}
                         </optgroup>
@@ -2907,12 +2914,13 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                 8.  Las recomendaciones deben ser generales y útiles (hidratación, timing de comidas, etc.).
             `;
             
-            const response: GenerateContentResponse = await withRetry(() => 
+            // FIX: Cast the result of the AI call to GenerateContentResponse to ensure type safety.
+            const response = (await withRetry(() => 
                 ai.models.generateContent({
                     model: 'gemini-2.5-flash',
                     contents: prompt,
                 })
-            );
+            )) as GenerateContentResponse;
             const text = response.text;
             
             const jsonString = extractJson(text);
@@ -3313,20 +3321,22 @@ const ChatAssistant: React.FC<{
                     { text: `Analiza esta comida. ${userMessageText}` }
                 ];
 
+                // FIX: Cast the result of the AI call to GenerateContentResponse to ensure type safety.
                 const response = await withRetry(() => 
                     ai.models.generateContent({
                         model: 'gemini-2.5-flash',
                         contents: { parts },
                         config: { systemInstruction: calorieSystemInstruction }
                     })
-                );
+                ) as GenerateContentResponse;
                 responseText = response.text;
                 // Note: This special request does not get added to the main 'chat' history object
                 // to keep that conversation's context clean (as a fitness coach).
             } else if (chat) {
-                const result: GenerateContentResponse = await withRetry(() => 
+                // FIX: Cast the result of the AI call to GenerateContentResponse to ensure type safety.
+                const result = await withRetry(() => 
                     chat.sendMessage({ message: userMessageText })
-                );
+                ) as GenerateContentResponse;
                 responseText = result.text;
             } else {
                  throw new Error("Chat not initialized.");
@@ -3446,9 +3456,9 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
         10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
     `;
-    const response = await withRetry(() => 
+    const response = (await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
-    );
+    )) as GenerateContentResponse;
     const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
     
@@ -3470,9 +3480,9 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
         5. Distribuye las calorías en 4-6 comidas.
         6. Usa alimentos comunes en Argentina.
     `;
-    const response = await withRetry(() => 
+    const response = (await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
-    );
+    )) as GenerateContentResponse;
     const jsonString = extractJson(response.text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
     return JSON.parse(jsonString);
@@ -3822,7 +3832,8 @@ const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: st
                         </button>
                         <div className={`accordion-content ${activeGroup === group ? 'open' : ''}`}>
                             <ul className="exercise-list">
-                                {exercises.filter(ex => ex.isEnabled).map((exercise) => (
+                                {/* FIX: Cast 'exercises' to its correct type to allow '.filter' and '.map' to be called safely. */}
+                                {(exercises as ExerciseDefinition[]).filter(ex => ex.isEnabled).map((exercise) => (
                                     <li key={exercise.name} className="exercise-item">
                                         <div className="exercise-name-wrapper">
                                             <span className="exercise-name">{exercise.name}</span>
