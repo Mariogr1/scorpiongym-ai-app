@@ -1321,7 +1321,7 @@ body {
     line-height: 1;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 0.2s;
+    transition: background-color: 0.2s;
 }
 .delete-exercise-btn:hover {
     background-color: var(--primary-color-hover);
