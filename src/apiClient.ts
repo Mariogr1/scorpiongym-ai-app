@@ -528,7 +528,7 @@ export const apiClient = {
 
   async updateRoutineTemplate(templateId: string, templateData: Partial<RoutineTemplate>): Promise<boolean> {
     try {
-        const response = await fetch(`/api/routine-templates?id=${templateId}`, {
+        const response = await fetch(`/api/routine-templates/${templateId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(templateData),
@@ -542,7 +542,7 @@ export const apiClient = {
 
   async deleteRoutineTemplate(templateId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/routine-templates?id=${templateId}`, { method: 'DELETE' });
+        const response = await fetch(`/api/routine-templates/${templateId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
         console.error(`Failed to delete routine template ${templateId}:`, error);
