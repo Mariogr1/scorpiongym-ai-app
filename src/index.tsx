@@ -1,4 +1,6 @@
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -25,7 +27,9 @@ import {
     Phase,
     DayPlan,
     Request as TrainerRequest, // Renamed to avoid conflict
-    PlanType
+    PlanType,
+    RoutineTemplate,
+    DayStructure
 } from './apiClient';
 
 
@@ -1457,6 +1461,278 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
     );
 };
 
+// FIX: Added missing RoutineTemplateManager component definition.
+const EditTemplateModal: React.FC<{ template: RoutineTemplate; onClose: () => void; onTemplateUpdated: () => void; }> = ({ template, onClose, onTemplateUpdated }) => {
+    const [templateName, setTemplateName] = useState(template.templateName);
+    const [description, setDescription] = useState(template.description);
+    const [trainingDays, setTrainingDays] = useState(template.trainingDays);
+    const [structure, setStructure] = useState<DayStructure[]>(template.structure);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setStructure(currentStructure => {
+            const newLength = Number(trainingDays) || 0;
+            const oldLength = currentStructure.length;
+            if (newLength > oldLength) {
+                return [
+                    ...currentStructure.slice(0, oldLength),
+                    ...Array.from({ length: newLength - oldLength }, (_, i) => ({
+                        dia: `Día ${oldLength + i + 1}`,
+                        grupoMuscular: '',
+                    }))
+                ];
+            }
+            return currentStructure.slice(0, newLength);
+        });
+    }, [trainingDays]);
+
+    const handleStructureChange = (index: number, value: string) => {
+        const updatedStructure = [...structure];
+        updatedStructure[index].grupoMuscular = value;
+        setStructure(updatedStructure);
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const dataToUpdate: Partial<RoutineTemplate> = {
+            templateName,
+            description,
+            trainingDays,
+            structure: structure.filter(s => s.grupoMuscular.trim() !== ''),
+        };
+
+        if (dataToUpdate.structure?.length !== trainingDays) {
+            alert("Por favor, completa los grupos musculares para todos los días.");
+            setIsSubmitting(false);
+            return;
+        }
+
+        const success = await apiClient.updateRoutineTemplate(template._id, dataToUpdate);
+        if (success) {
+            onTemplateUpdated();
+        } else {
+            alert("Error al actualizar la plantilla.");
+        }
+        setIsSubmitting(false);
+    };
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal">
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Editando: {template.templateName}</h3>
+                <form onSubmit={handleSubmit} className="add-gym-form">
+                    <div className="form-group">
+                        <label>Nombre de la Plantilla</label>
+                        <input type="text" value={templateName} onChange={(e) => setTemplateName(e.target.value)} required />
+                    </div>
+                    <div className="form-group">
+                        <label>Descripción</label>
+                        <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="(Opcional)" />
+                    </div>
+                    <div className="form-group">
+                        <label>Días de Entrenamiento</label>
+                        <input type="number" min="1" max="7" value={trainingDays} onChange={(e) => setTrainingDays(Number(e.target.value))} required />
+                    </div>
+                    {structure.map((day, index) => (
+                        <div className="form-group" key={index}>
+                            <label>Grupo Muscular {day.dia}</label>
+                            <input type="text" value={day.grupoMuscular} onChange={(e) => handleStructureChange(index, e.target.value)} required placeholder="Ej: Pecho y Tríceps" />
+                        </div>
+                    ))}
+                    <div className="modal-actions" style={{marginTop: '2rem'}}>
+                        <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                        <button type="submit" className="cta-button" disabled={isSubmitting}>
+                            {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void; }> = ({ gymId, onBack }) => {
+    const [templates, setTemplates] = useState<RoutineTemplate[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [editingTemplate, setEditingTemplate] = useState<RoutineTemplate | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState<RoutineTemplate | null>(null);
+
+    // Form state for new template
+    const [newTemplateName, setNewTemplateName] = useState('');
+    const [newDescription, setNewDescription] = useState('');
+    const [newTrainingDays, setNewTrainingDays] = useState(4);
+    const [newStructure, setNewStructure] = useState<DayStructure[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setNewStructure(currentStructure => {
+            const newLength = Number(newTrainingDays) || 0;
+            const oldLength = currentStructure.length;
+            if (newLength > oldLength) {
+                return [
+                    ...currentStructure.slice(0, oldLength),
+                    ...Array.from({ length: newLength - oldLength }, (_, i) => ({
+                        dia: `Día ${oldLength + i + 1}`,
+                        grupoMuscular: '',
+                    }))
+                ];
+            }
+            return currentStructure.slice(0, newLength);
+        });
+    }, [newTrainingDays]);
+    
+    const handleNewStructureChange = (index: number, value: string) => {
+        const updatedStructure = [...newStructure];
+        updatedStructure[index].grupoMuscular = value;
+        setNewStructure(updatedStructure);
+    };
+
+    const fetchTemplates = async () => {
+        setIsLoading(true);
+        const fetchedTemplates = await apiClient.getRoutineTemplates(gymId);
+        setTemplates(fetchedTemplates);
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchTemplates();
+    }, [gymId]);
+
+    const handleCreateTemplate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        const templateData = {
+            gymId,
+            templateName: newTemplateName,
+            description: newDescription,
+            trainingDays: newTrainingDays,
+            structure: newStructure.filter(s => s.grupoMuscular.trim() !== ''),
+        };
+        if (templateData.structure.length !== newTrainingDays) {
+            alert("Por favor, completa los grupos musculares para todos los días.");
+            setIsSubmitting(false);
+            return;
+        }
+
+        const newTemplate = await apiClient.createRoutineTemplate(templateData);
+        if (newTemplate) {
+            setNewTemplateName('');
+            setNewDescription('');
+            setNewTrainingDays(4);
+            fetchTemplates();
+        } else {
+            alert('Error al crear la plantilla.');
+        }
+        setIsSubmitting(false);
+    };
+
+    const handleDelete = async () => {
+        if (!showDeleteConfirm) return;
+        const success = await apiClient.deleteRoutineTemplate(showDeleteConfirm._id);
+        if (success) {
+            setShowDeleteConfirm(null);
+            fetchTemplates();
+        } else {
+            alert('Error al eliminar la plantilla.');
+        }
+    };
+
+    return (
+        <div className="library-container animated-fade-in">
+            <div className="main-header" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <h2>Plantillas de Rutina</h2>
+                 <button onClick={onBack} className="back-button" style={{marginRight: '1rem'}}>Volver</button>
+            </div>
+            <div className="library-instructions">
+                <p>Crea plantillas de rutina para que tus clientes puedan seleccionarlas al registrarse.</p>
+            </div>
+
+             <div className="add-gym-container" style={{padding: 0, marginTop: '2rem'}}>
+                <h3>Crear Nueva Plantilla</h3>
+                <form onSubmit={handleCreateTemplate} className="add-gym-form">
+                     <div className="form-group">
+                        <label>Nombre de la Plantilla</label>
+                        <input type="text" value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)} required placeholder="Ej: Hipertrofia 4 Días" />
+                    </div>
+                     <div className="form-group">
+                        <label>Descripción</label>
+                        <input type="text" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} placeholder="(Opcional) Ej: Enfocada en ganancia muscular" />
+                    </div>
+                     <div className="form-group">
+                        <label>Días de Entrenamiento</label>
+                        <input type="number" min="1" max="7" value={newTrainingDays} onChange={(e) => setNewTrainingDays(Number(e.target.value))} required />
+                    </div>
+
+                    {newStructure.map((day, index) => (
+                        <div className="form-group" key={index}>
+                            <label>Grupo Muscular {day.dia}</label>
+                            <input type="text" value={day.grupoMuscular} onChange={(e) => handleNewStructureChange(index, e.target.value)} required placeholder="Ej: Pecho y Tríceps" />
+                        </div>
+                    ))}
+                    
+                    <div className="add-gym-actions" style={{ gridColumn: '1 / -1' }}>
+                        <button type="submit" className="cta-button" disabled={isSubmitting}>
+                            {isSubmitting ? 'Creando...' : 'Crear Plantilla'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {isLoading ? (
+                <div className="loading-container"><div className="spinner"></div>Cargando plantillas...</div>
+            ) : (
+                <div className="template-list-container">
+                    <h3>Plantillas Existentes</h3>
+                    {templates.length === 0 ? (
+                        <p className="placeholder">No has creado ninguna plantilla todavía.</p>
+                    ) : (
+                        templates.map(template => (
+                            <div key={template._id} className="template-list-item">
+                                <div className="template-info">
+                                    <h4>{template.templateName}</h4>
+                                    <p>{template.description || 'Sin descripción'}</p>
+                                    <div className="template-structure">
+                                        {template.structure.map(day => (
+                                            <span key={day.dia} className="structure-tag">{day.dia}: {day.grupoMuscular}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="template-actions">
+                                    <button className="action-btn edit" onClick={() => setEditingTemplate(template)}>Editar</button>
+                                    <button className="action-btn delete" onClick={() => setShowDeleteConfirm(template)}>Eliminar</button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {editingTemplate && (
+                <EditTemplateModal 
+                    template={editingTemplate} 
+                    onClose={() => setEditingTemplate(null)} 
+                    onTemplateUpdated={() => {
+                        setEditingTemplate(null);
+                        fetchTemplates();
+                    }} 
+                />
+            )}
+
+            {showDeleteConfirm && (
+                <ConfirmationModal
+                    message={`¿Seguro que quieres eliminar la plantilla "${showDeleteConfirm.templateName}"?`}
+                    onConfirm={handleDelete}
+                    onCancel={() => setShowDeleteConfirm(null)}
+                    confirmText="Eliminar"
+                    confirmClass="delete"
+                />
+            )}
+        </div>
+    );
+};
+
 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
@@ -1473,7 +1749,7 @@ const AdminDashboard: React.FC<{
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests'>('clients');
+    const [adminView, setAdminView] = useState<'clients' | 'library' | 'requests' | 'templates'>('clients');
     const [showQrModal, setShowQrModal] = useState(false);
 
     const fetchAllData = async () => {
@@ -1553,6 +1829,8 @@ const AdminDashboard: React.FC<{
                 return <ExerciseLibraryManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
             case 'requests':
                 return <RequestsView requests={requests} onUpdateRequest={fetchRequests} />;
+            case 'templates':
+                return <RoutineTemplateManager gymId={gym._id} onBack={() => setAdminView('clients')} />;
             case 'clients':
             default:
                 return (
@@ -1643,6 +1921,7 @@ const AdminDashboard: React.FC<{
                         {newRequestCount > 0 && <span className="notification-badge">{newRequestCount}</span>}
                     </button>
                     <button className="header-nav-button" onClick={() => setAdminView('library')}>Biblioteca</button>
+                    <button className="header-nav-button" onClick={() => setAdminView('templates')}>Plantillas</button>
                     <button className="header-nav-button share-app-button" onClick={() => setShowQrModal(true)}>Compartir App</button>
                     {isImpersonating ? (
                         <button onClick={onBackToSuperAdmin} className="back-button">Volver</button>
@@ -3182,7 +3461,7 @@ const ChatAssistant: React.FC<{
 
 
 // --- AI Generation Logic (for Onboarding) ---
-const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string): Promise<Routine> => {
+const generateRoutineForClient = async (clientData: ClientData, gymId: string, instructions?: string, template?: RoutineTemplate): Promise<Routine> => {
     const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
@@ -3191,23 +3470,32 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         return acc;
     }, {} as Record<string, string[]>);
 
-    const prompt = `
+    const basePrompt = `
         Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
         - Perfil: ${JSON.stringify(clientData.profile)}
         - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
-        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
+        ${instructions ? `Instrucciones Adicionales: "${instructions}"` : ''}
+
         REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
         1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
         2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
-        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista. Si un ejercicio no está en la lista, no puedes usarlo. El incumplimiento de esta regla hará que tu respuesta sea rechazada.
-        4. Asigna los días de entrenamiento según 'trainingDays'.
-        5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
-        6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
-        7. Incluye fases de adaptación y descarga si el perfil lo indica.
-        8. Ajusta el número de ejercicios según la 'trainingIntensity'.
-        9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
-        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
+        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista.
+        4. La suma de 'durationWeeks' de todas las fases debe ser igual a 'totalDurationWeeks'.
+        5. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
+        6. Incluye fases de adaptación y descarga si el perfil lo indica.
+        7. Ajusta el número de ejercicios por día según la 'trainingIntensity'.
     `;
+    
+    const templatePrompt = template ? `
+        8. DEBES seguir la siguiente estructura de días y grupos musculares proporcionada por la plantilla: ${JSON.stringify(template.structure)}. El número de días de entrenamiento es ${template.trainingDays}. El nombre del plan debe ser similar a "${template.templateName}".
+    ` : `
+        8. Asigna los días de entrenamiento según 'trainingDays'.
+        9. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares, siguiendo la lógica de la regla 10.
+        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split).
+    `;
+
+    const prompt = basePrompt + templatePrompt;
+    
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
@@ -3243,12 +3531,81 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
 
 type GenerationStatus = 'pending' | 'loading' | 'done' | 'error';
 
+// FIX: Added missing PlanSelectionView component.
+const PlanSelectionView: React.FC<{
+    onSelectCustom: () => void;
+    onSelectTemplate: () => void;
+}> = ({ onSelectCustom, onSelectTemplate }) => {
+    return (
+        <div className="plan-selection-view">
+            <div className="plan-option-card" onClick={onSelectCustom}>
+                <h3><span role="img" aria-label="brain">🧠</span> Plan Personalizado con IA</h3>
+                <p>Completa tu perfil en detalle y deja que nuestra inteligencia artificial cree un plan único y adaptado para vos.</p>
+            </div>
+            <div className="plan-option-card" onClick={onSelectTemplate}>
+                <h3><span role="img" aria-label="clipboard">📋</span> Usar Plantilla del Entrenador</h3>
+                <p>Elige una rutina predefinida por tu entrenador para un comienzo rápido y estructurado.</p>
+            </div>
+        </div>
+    );
+};
+
+// FIX: Added missing TemplateSelectionView component.
+const TemplateSelectionView: React.FC<{
+    gymId: string;
+    onTemplateSelected: (template: RoutineTemplate) => void;
+    onBack: () => void;
+}> = ({ gymId, onTemplateSelected, onBack }) => {
+    const [templates, setTemplates] = useState<RoutineTemplate[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            setIsLoading(true);
+            const fetchedTemplates = await apiClient.getRoutineTemplates(gymId);
+            setTemplates(fetchedTemplates);
+            setIsLoading(false);
+        };
+        fetchTemplates();
+    }, [gymId]);
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div>Cargando plantillas...</div>;
+    }
+
+    return (
+        <div className="template-selection-view animated-fade-in">
+            {templates.length === 0 ? (
+                <div className="placeholder" style={{textAlign: 'center'}}>
+                    <p>Tu entrenador aún no ha creado ninguna plantilla.</p>
+                    <p>Por favor, vuelve y selecciona la opción de plan personalizado.</p>
+                </div>
+
+            ) : (
+                <div className="template-list">
+                    {templates.map(template => (
+                        <div key={template._id} className="template-card" onClick={() => onTemplateSelected(template)}>
+                            <h4>{template.templateName}</h4>
+                            <p>{template.description}</p>
+                            <span className="days-badge">{template.trainingDays} días/semana</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+             <div className="onboarding-actions">
+                <button onClick={onBack} className="back-button simple" style={{ marginTop: '1rem' }}>Volver</button>
+            </div>
+        </div>
+    );
+};
+
+
 const ClientOnboardingView: React.FC<{
     initialClientData: ClientData;
     onOnboardingComplete: () => void;
     onLogout: () => void;
 }> = ({ initialClientData, onOnboardingComplete, onLogout }) => {
-    const [step, setStep] = useState(initialClientData.termsAccepted ? 'profile' : 'terms');
+    const [step, setStep] = useState(initialClientData.termsAccepted ? 'planChoice' : 'terms');
     const [clientData, setClientData] = useState<ClientData>(initialClientData);
     const [isSaving, setIsSaving] = useState(false);
     
@@ -3261,6 +3618,7 @@ const ClientOnboardingView: React.FC<{
     const [generationError, setGenerationError] = useState('');
     const [additionalInstructions, setAdditionalInstructions] = useState('');
     const planType = clientData.planType || 'full';
+    const [selectedTemplate, setSelectedTemplate] = useState<RoutineTemplate | null>(null);
 
     const isProfileComplete = useMemo(() => {
         const { profile } = clientData;
@@ -3281,7 +3639,7 @@ const ClientOnboardingView: React.FC<{
         const success = await apiClient.saveClientData(clientData.dni, { termsAccepted: true });
         if (success) {
             setClientData({ ...clientData, termsAccepted: true });
-            setStep('profile');
+            setStep('planChoice');
         } else {
             alert("No se pudieron guardar los términos. Por favor, intente de nuevo.");
         }
@@ -3295,25 +3653,18 @@ const ClientOnboardingView: React.FC<{
         try {
             if (planType === 'full' || planType === 'routine') {
                 setGenerationProgress(prev => ({ ...prev, routine: 'loading' }));
-                const routine = await generateRoutineForClient(clientData, clientData.gymId, additionalInstructions);
+                const routine = await generateRoutineForClient(clientData, clientData.gymId, additionalInstructions, selectedTemplate ?? undefined);
                 setClientData(prev => ({ ...prev, routine }));
                 setGenerationProgress(prev => ({ ...prev, routine: 'done' }));
             }
 
             if (planType === 'full' || planType === 'nutrition') {
-                // Set both diet statuses to 'loading' to show spinners simultaneously.
                 setGenerationProgress(prev => ({ ...prev, diet1: 'loading', diet2: 'loading' }));
-
-                // Generate both diet plans in parallel.
                 const [diet1, diet2] = await Promise.all([
                     generateDietForClient(clientData, additionalInstructions),
                     generateDietForClient(clientData, additionalInstructions)
                 ]);
-                
-                // Once both are complete, update the client data with the new plans.
                 setClientData(prev => ({ ...prev, dietPlans: [diet1, diet2] }));
-                
-                // Set both diet statuses to 'done' to show success indicators.
                 setGenerationProgress(prev => ({ ...prev, diet1: 'done', diet2: 'done' }));
             }
 
@@ -3359,66 +3710,129 @@ const ClientOnboardingView: React.FC<{
     if (step === 'terms') {
         return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
     }
+    
+    if (step === 'planChoice') {
+        return (
+            <div className="onboarding-container">
+                 <header className="onboarding-header">
+                    <h1>Crea tu Plan</h1>
+                    <p>Elige cómo quieres comenzar.</p>
+                </header>
+                <PlanSelectionView
+                    onSelectCustom={() => setStep('profile')}
+                    onSelectTemplate={() => setStep('templateChoice')}
+                />
+            </div>
+        );
+    }
+    
+    if (step === 'templateChoice') {
+        return (
+             <div className="onboarding-container">
+                 <header className="onboarding-header">
+                    <h1>Elige una Plantilla</h1>
+                    <p>Selecciona una rutina predefinida por tu entrenador.</p>
+                </header>
+                <TemplateSelectionView 
+                    gymId={clientData.gymId}
+                    onTemplateSelected={(template) => {
+                        setSelectedTemplate(template);
+                        // Update client's training days to match template
+                        setClientData(prev => ({
+                            ...prev,
+                            profile: {
+                                ...prev.profile,
+                                trainingDays: template.trainingDays.toString(),
+                            }
+                        }));
+                        setStep('generation');
+                    }}
+                    onBack={() => setStep('planChoice')}
+                />
+            </div>
+        );
+    }
 
-    return (
-        <div className="onboarding-container">
-            <header className="onboarding-header">
-                <h1>¡Bienvenido a ScorpionGYM AI!</h1>
-                <p>Vamos a configurar tu primer plan.</p>
-            </header>
-            
-            <div className="onboarding-section">
-                <h2>Paso 1: Completa tu Perfil</h2>
-                <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
+    if (step === 'profile') {
+        return (
+             <div className="onboarding-container">
+                <header className="onboarding-header">
+                    <h1>Paso 1: Completa tu Perfil</h1>
+                    <p>Estos datos son esenciales para que la IA cree tu plan personalizado.</p>
+                </header>
+                <div className="onboarding-section">
+                    <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding />
+                </div>
+                <div className="onboarding-actions">
+                    <button 
+                        className="cta-button" 
+                        onClick={() => setStep('generation')}
+                        disabled={!isProfileComplete}
+                    >
+                        Continuar
+                    </button>
+                    {!isProfileComplete && (
+                         <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>
+                            Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
+                        </p>
+                    )}
+                     <button onClick={() => setStep('planChoice')} className="back-button simple" style={{ marginTop: '1rem' }}>Volver</button>
+                </div>
             </div>
-            
-            <div className="onboarding-section">
-                <h2>Paso 2: Crea tu Plan Integral</h2>
-                 {generationState === 'idle' && (
-                     <div className="onboarding-generation-container">
-                        <p>Cuando tu perfil esté listo, la IA creará tu rutina y planes de nutrición personalizados.</p>
-                        <div className="admin-instructions-box">
-                            <label htmlFor="client-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
-                            <textarea
-                                id="client-instructions-gen"
-                                rows={3}
-                                value={additionalInstructions}
-                                onChange={(e) => setAdditionalInstructions(e.target.value)}
-                                placeholder="Ej: Tengo una lesión en la rodilla, evitar sentadillas. No me gusta el pescado."
-                            ></textarea>
+        )
+    }
+    
+     if (step === 'generation') {
+        return (
+            <div className="onboarding-container">
+                 <header className="onboarding-header">
+                    <h1>Paso 2: Crea tu Plan Integral</h1>
+                </header>
+                 <div className="onboarding-section">
+                     {generationState === 'idle' && (
+                         <div className="onboarding-generation-container">
+                            <p>¡Todo listo! La IA creará tu plan ahora.</p>
+                             <div className="admin-instructions-box">
+                                <label htmlFor="client-instructions-gen">Notas para la IA (Opcional)</label>
+                                <textarea
+                                    id="client-instructions-gen"
+                                    rows={3}
+                                    value={additionalInstructions}
+                                    onChange={(e) => setAdditionalInstructions(e.target.value)}
+                                    placeholder="Ej: Tengo una lesión en la rodilla, evitar sentadillas. No me gusta el pescado."
+                                ></textarea>
+                            </div>
+                            <button className="cta-button" onClick={handleGenerateFullPlan}>
+                                Generar Mi Plan
+                            </button>
                         </div>
-                        <button className="cta-button" onClick={handleGenerateFullPlan} disabled={!isProfileComplete}>
-                            Generar Mi Plan Completo
-                        </button>
-                        {!isProfileComplete && (
-                             <p style={{ color: 'var(--text-secondary-color)', fontSize: '0.9rem', marginTop: '0.5rem', textAlign: 'center' }}>
-                                Por favor, completa los campos de nombre, edad, peso, altura y días de entrenamiento para continuar.
-                            </p>
-                        )}
-                    </div>
-                )}
+                    )}
+                    
+                    {(generationState === 'generating' || generationState === 'error' || generationState === 'success') && (
+                         <GenerationProgressIndicator 
+                            progress={generationProgress} 
+                            error={generationError}
+                            onRetry={handleGenerateFullPlan}
+                            planType={planType}
+                        />
+                    )}
+                </div>
                 
-                {(generationState === 'generating' || generationState === 'error' || generationState === 'success') && (
-                     <GenerationProgressIndicator 
-                        progress={generationProgress} 
-                        error={generationError}
-                        onRetry={handleGenerateFullPlan}
-                        planType={planType}
-                    />
-                )}
+                 <div className="onboarding-actions">
+                    <button 
+                        className="cta-button" 
+                        onClick={handleSaveAndStart} 
+                        disabled={isSaving || generationState !== 'success'}
+                    >
+                        {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
+                    </button>
+                </div>
             </div>
-            
-             <div className="onboarding-actions">
-                <button 
-                    className="cta-button" 
-                    onClick={handleSaveAndStart} 
-                    disabled={isSaving || generationState !== 'success'}
-                >
-                    {isSaving ? "Guardando..." : "Guardar y Empezar mi Plan"}
-                </button>
-            </div>
-        </div>
-    );
+        )
+    }
+
+    // Fallback just in case
+    return <AgreementView onAccept={handleAcceptTerms} onLogout={onLogout} />;
 };
 
 const GenerationProgressIndicator: React.FC<{
