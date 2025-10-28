@@ -1,5 +1,4 @@
 
-
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
 import bcrypt from 'bcryptjs';
@@ -80,19 +79,6 @@ export default async function handler(req, res) {
                         { $set: { password: hashedPassword, passwordResetRequired: false, accessCode: null } }
                     );
                     return res.status(200).json({ success: true, message: 'Password updated successfully.' });
-                
-                // FIX: Add handler for AI usage accounting
-                case 'increment_ai_usage':
-                    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-                    const currentUsage = clientExists.aiUsage;
-                    let newCount = 1;
-
-                    if (currentUsage && currentUsage.date === today) {
-                        newCount = currentUsage.count + 1;
-                    }
-                    
-                    await collection.updateOne({ dni: dni }, { $set: { aiUsage: { date: today, count: newCount } } });
-                    return res.status(200).json({ success: true, message: 'AI usage updated.' });
             }
         }
 
