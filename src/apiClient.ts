@@ -266,9 +266,7 @@ export const apiClient = {
     }
   },
 
-  // FIX: Update function signature to allow an 'action' property.
-  // This allows passing commands to the backend API without adding 'action' to the ClientData model.
-  async saveClientData(dni: string, dataToSave: Partial<ClientData> & { action?: string }): Promise<boolean> {
+  async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<boolean> {
     try {
         const response = await fetch(`/api/clients/${dni}`, {
             method: 'PUT',
