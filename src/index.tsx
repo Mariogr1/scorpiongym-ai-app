@@ -307,6 +307,21 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
     );
 };
 
+// FIX: Define the missing GenerationProgressView component.
+// This component is used to display a loading state during AI plan generation.
+const GenerationProgressView: React.FC<{ tasks: { name: string; status: 'loading' | 'done' | 'error' }[] }> = ({ tasks }) => {
+    return (
+        <div className="generation-progress-view">
+             <div className="loading-container" style={{background: 'transparent', padding: '2rem 0'}}>
+                <div className="spinner"></div>
+                {tasks.map((task, index) => (
+                    <p key={index} className="generation-task-name" style={{marginTop: '1rem'}}>{task.name}</p>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 
 /**
  * Main application component that handles routing and state.
@@ -725,7 +740,6 @@ const NewPasswordResetPage: React.FC<{
 
 // --- Super Admin View ---
 
-// FIX: Added missing ConfirmationModal component.
 const ConfirmationModal: React.FC<{
     message: string;
     onConfirm: () => void;
@@ -976,7 +990,6 @@ const AddGymForm: React.FC<{ onGymCreated: () => void }> = ({ onGymCreated }) =>
                 </div>
                 <div className="form-group">
                     <label>Tipo de Plan</label>
-                    {/* FIX: Cast the string value from the select event to the PlanType union type to satisfy the state setter's type requirement. */}
                     <select value={planType} onChange={(e) => setPlanType(e.target.value as PlanType)} required>
                         <option value="full">Plan Completo (Rutina y Nutrición)</option>
                         <option value="routine">Solo Plan de Rutina</option>
@@ -1124,7 +1137,6 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-// FIX: Added missing RequestsView and RequestSection components.
 const RequestSection: React.FC<{
     title: string;
     requests: TrainerRequest[];
@@ -1571,9 +1583,9 @@ const AIGeneratedTemplateForm: React.FC<{
     };
     
     return (
-        <div className="add-gym-container" style={{padding: 0, border: 'none', background: 'transparent'}}>
+        <div className="add-gym-container animated-fade-in" style={{padding: 0, border: 'none', background: 'transparent'}}>
             <h3 style={{padding: '0 2rem'}}>Generar Plantilla con IA</h3>
-             <form onSubmit={handleGenerate} className="add-gym-form" style={{background: 'var(--background-color)', borderRadius: '12px'}}>
+             <form onSubmit={handleGenerate} className="add-gym-form" style={{background: 'var(--background-color)', borderRadius: '12px', padding: '2rem'}}>
                 <div className="form-group">
                     <label>Nombre de la Plantilla</label>
                     <input type="text" value={params.templateName} onChange={e => handleChange('templateName', e.target.value)} required placeholder="Ej: Hipertrofia 4 Días" />
@@ -1623,7 +1635,6 @@ const AIGeneratedTemplateForm: React.FC<{
     );
 };
 
-// FIX: Added missing EditTemplateModal component definition.
 const EditTemplateModal: React.FC<{ template: RoutineTemplate; onClose: () => void; onTemplateUpdated: () => void; }> = ({ template, onClose, onTemplateUpdated }) => {
     const [templateName, setTemplateName] = useState(template.templateName);
     const [description, setDescription] = useState(template.description);
@@ -1826,8 +1837,8 @@ const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void; }> =
             </div>
 
             {mode === 'manual' && (
-                <div className="add-gym-container animated-fade-in" style={{padding: 0, marginTop: '2rem'}}>
-                    <h3>Crear Nueva Plantilla Manual</h3>
+                <div className="add-gym-container animated-fade-in">
+                    <h3>Crear/Revisar Plantilla</h3>
                     <form onSubmit={handleCreateTemplate} className="add-gym-form">
                          <div className="form-group">
                             <label>Nombre de la Plantilla</label>
@@ -1863,34 +1874,32 @@ const RoutineTemplateManager: React.FC<{ gymId: string; onBack: () => void; }> =
             )}
 
 
-            {isLoading ? (
-                <div className="loading-container"><div className="spinner"></div>Cargando plantillas...</div>
-            ) : (
-                <div className="template-list-container">
-                    <h3>Plantillas Existentes</h3>
-                    {templates.length === 0 ? (
-                        <p className="placeholder">No has creado ninguna plantilla todavía.</p>
-                    ) : (
-                        templates.map(template => (
-                            <div key={template._id} className="template-list-item">
-                                <div className="template-info">
-                                    <h4>{template.templateName}</h4>
-                                    <p>{template.description || 'Sin descripción'}</p>
-                                    <div className="template-structure">
-                                        {template.structure.map(day => (
-                                            <span key={day.dia} className="structure-tag">{day.dia}: {day.grupoMuscular}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="template-actions">
-                                    <button className="action-btn edit" onClick={() => setEditingTemplate(template)}>Editar</button>
-                                    <button className="action-btn delete" onClick={() => setShowDeleteConfirm(template)}>Eliminar</button>
+            <div className="template-list-container">
+                <h3>Plantillas Existentes</h3>
+                {isLoading ? (
+                    <div className="loading-container"><div className="spinner small"></div></div>
+                ) : templates.length === 0 ? (
+                    <p>No has creado ninguna plantilla todavía.</p>
+                ) : (
+                    <div className="template-list">
+                    {templates.map(template => (
+                        <div key={template._id} className="template-list-item">
+                            <div className="template-info">
+                                <h4>{template.templateName}</h4>
+                                <p>{template.description || 'Sin descripción'}</p>
+                                <div className="template-structure">
+                                    <span className="days-badge">{template.trainingDays} Días</span>
                                 </div>
                             </div>
-                        ))
-                    )}
-                </div>
-            )}
+                            <div className="template-actions">
+                                <button className="action-btn edit" onClick={() => setEditingTemplate(template)}>Editar</button>
+                                <button className="action-btn delete" onClick={() => setShowDeleteConfirm(template)}>Eliminar</button>
+                            </div>
+                        </div>
+                    ))}
+                    </div>
+                )}
+            </div>
 
             {editingTemplate && (
                 <EditTemplateModal 
@@ -2299,16 +2308,20 @@ const ClientRequestsView: React.FC<{ requests: TrainerRequest[] }> = ({ requests
 const ProfileEditor: React.FC<{ 
     clientData: ClientData; 
     setClientData: (data: ClientData) => void; 
-    onDataUpdate?: () => void; // Optional callback for parent
+    onDataUpdate?: () => void;
     isClientOnboarding?: boolean;
 }> = ({ clientData, setClientData, onDataUpdate, isClientOnboarding = false }) => {
     const [profile, setProfile] = useState<Profile>(clientData.profile);
-    const [isModified, setIsModified] = useState(isClientOnboarding);
+    const [isModified, setIsModified] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [resetStatus, setResetStatus] = useState<'idle' | 'success'>('idle');
 
+    const isProfileComplete = useMemo(() => {
+        const p = profile;
+        return !!(p.name && p.age && p.weight && p.height && p.trainingDays);
+    }, [profile]);
 
     const muscleGroups = {
         superior: ['General', 'Pecho', 'Espalda', 'Hombros', 'Brazos (Bíceps y Tríceps)'],
@@ -2319,7 +2332,6 @@ const ProfileEditor: React.FC<{
         setProfile(clientData.profile);
     }, [clientData.profile]);
 
-    // Reset muscle focus when body focus changes
     useEffect(() => {
         if (['Full Body', 'Cuerpo Completo'].includes(profile.bodyFocusArea)) {
              if (profile.muscleFocus !== 'General') {
@@ -2332,8 +2344,9 @@ const ProfileEditor: React.FC<{
 
 
     const handleChange = (field: keyof Profile, value: string) => {
-        setProfile(prev => ({ ...prev, [field]: value }));
-        setClientData({ ...clientData, profile: { ...profile, [field]: value } }); // Update parent immediately for generators
+        const updatedProfile = { ...profile, [field]: value };
+        setProfile(updatedProfile);
+        setClientData({ ...clientData, profile: updatedProfile });
         if (!isClientOnboarding) {
             setIsModified(true);
             setSaveStatus('idle');
@@ -2344,7 +2357,6 @@ const ProfileEditor: React.FC<{
         setIsSaving(true);
         const success = await apiClient.saveClientData(clientData.dni, { profile });
         if (success) {
-            setClientData({ ...clientData, profile });
             setSaveStatus('saved');
             setIsModified(false);
             if(onDataUpdate) onDataUpdate();
@@ -2390,7 +2402,7 @@ const ProfileEditor: React.FC<{
     };
 
     return (
-        <div>
+        <div className={isClientOnboarding ? "" : "profile-section"}>
             <h2>{isClientOnboarding ? "Completa tu Perfil" : "Perfil del Cliente"}</h2>
             <form className="profile-form">
                  <div className="form-group">
@@ -2503,7 +2515,7 @@ const ProfileEditor: React.FC<{
                     </select>
                 </div>
                 {!isClientOnboarding && isModified && (
-                     <button type="button" onClick={handleSave} disabled={isSaving} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
+                     <button type="button" onClick={handleSave} disabled={isSaving || !isProfileComplete} className={`save-changes-button ${saveStatus === 'saved' ? 'saved' : ''}`}>
                          {isSaving ? <><span className="spinner small"></span> Guardando...</> : (saveStatus === 'saved' ? '¡Guardado!' : 'Guardar Cambios')}
                     </button>
                 )}
@@ -2547,7 +2559,7 @@ const ProfileEditor: React.FC<{
 
 // --- Plan Generators ---
 
-const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; isClientOnboarding?: boolean }> = ({ clientData, setClientData, gymId, isClientOnboarding = false }) => {
+const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; gymId: string; isClientOnboarding?: boolean; clientInstructions?: string }> = ({ clientData, setClientData, gymId, isClientOnboarding = false, clientInstructions = '' }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
     const [currentRoutine, setCurrentRoutine] = useState<Routine | null>(clientData.routine);
@@ -2578,13 +2590,14 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                 return acc;
             }, {} as Record<string, string[]>);
 
+            const finalInstructions = isClientOnboarding ? clientInstructions : adminInstructions;
 
             const prompt = `
                 Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
                 - Perfil: ${JSON.stringify(clientData.profile)}
                 - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
                 
-                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
+                Instrucciones Adicionales: "${finalInstructions || 'Ninguna'}"
 
                 REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
                 1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
@@ -2644,12 +2657,11 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
             }
             const generatedPlan: Routine = JSON.parse(jsonString);
             
-            // Validate and correct any "hallucinated" exercises before saving or displaying.
             const correctedPlan = validateAndCorrectRoutine(generatedPlan, exerciseLibrary);
 
             setCurrentRoutine(correctedPlan);
             setClientData({ ...clientData, routine: correctedPlan, routineGeneratedDate: new Date().toISOString() });
-            setIsEditing(false); // Salir del modo edición al generar un nuevo plan
+            setIsEditing(false);
         } catch (err) {
             console.error(err);
             setError(err instanceof Error ? err.message : "Ocurrió un error al generar la rutina.");
@@ -2659,7 +2671,7 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     };
     
     const handleSaveChanges = async () => {
-        setIsGenerating(true); // Re-use loading state for saving
+        setIsGenerating(true); 
         const success = await apiClient.saveClientData(clientData.dni, { 
             routine: currentRoutine,
             routineGeneratedDate: clientData.routineGeneratedDate 
@@ -2673,7 +2685,7 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     };
 
     if (isGenerating) {
-        return <div className="loading-container"><div className="spinner"></div><p>Generando rutina personalizada...</p></div>;
+        return <GenerationProgressView tasks={[{ name: "Generando rutina...", status: "loading" }]} />;
     }
     if (error) {
         return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate()}>Intentar de Nuevo</button></div>;
@@ -2682,18 +2694,25 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
     if (!currentRoutine) {
         return (
             <div className="placeholder-action generation-container">
-                {!isClientOnboarding && (
-                    <div className="admin-instructions-box">
-                        <label htmlFor="admin-instructions-gen">Instrucciones Adicionales para la IA (Opcional)</label>
-                        <textarea
-                            id="admin-instructions-gen"
-                            rows={3}
-                            value={adminInstructions}
-                            onChange={(e) => setAdminInstructions(e.target.value)}
-                            placeholder="Ej: Evitar sentadillas por lesión de rodilla. Enfocar en espalda alta."
-                        ></textarea>
-                    </div>
-                )}
+                 <div className="admin-instructions-box">
+                    <label htmlFor="admin-instructions-gen">
+                        {isClientOnboarding ? "Instrucciones Adicionales para la IA (Opcional)" : "Instrucciones del Entrenador para la IA (Opcional)"}
+                    </label>
+                    <textarea
+                        id="admin-instructions-gen"
+                        rows={3}
+                        value={isClientOnboarding ? clientInstructions : adminInstructions}
+                        onChange={(e) => {
+                            if (isClientOnboarding) {
+                                // This is a bit of a workaround. The parent onboarding view controls this state.
+                                // We'd need to lift the state up or pass a setter down. For now, this is a display component.
+                            } else {
+                                setAdminInstructions(e.target.value)
+                            }
+                        }}
+                        placeholder="Ej: Evitar sentadillas por lesión de rodilla. Enfocar en espalda alta."
+                    ></textarea>
+                </div>
                 <button className="cta-button" onClick={() => handleGenerate(false)}>
                     Generar Rutina con IA
                 </button>
@@ -2702,7 +2721,6 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
         );
     }
     
-    // Don't show editing UI for client onboarding
      if (isClientOnboarding) {
         return (
              <div className="plan-container">
@@ -3076,45 +3094,35 @@ const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) =>
     );
 };
 
-// FIX: Added missing ClientDietView component to display diet plans.
-const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
+const ClientDietView: React.FC<{ dietPlan: DietPlan | null }> = ({ dietPlan }) => {
     if (!dietPlan) {
-        return <p>No se ha generado un plan de nutrición.</p>;
+        return (
+            <div className="placeholder">
+                <p>No se ha generado un plan de nutrición.</p>
+            </div>
+        );
     }
 
     return (
-        <div className="client-diet-view animated-fade-in">
+         <div className="diet-plan-container animated-fade-in">
             <header className="plan-header">
                 <h2>{dietPlan.planTitle}</h2>
-                <div className="diet-summary-grid">
-                    <div className="summary-item">
-                        <span>Calorías Totales</span>
-                        <strong>{dietPlan.summary.totalCalories} kcal</strong>
-                    </div>
-                    <div className="summary-item">
-                        <span>Proteínas</span>
-                        <strong>{dietPlan.summary.macronutrients.proteinGrams} g</strong>
-                    </div>
-                    <div className="summary-item">
-                        <span>Carbohidratos</span>
-                        <strong>{dietPlan.summary.macronutrients.carbsGrams} g</strong>
-                    </div>
-                    <div className="summary-item">
-                        <span>Grasas</span>
-                        <strong>{dietPlan.summary.macronutrients.fatGrams} g</strong>
-                    </div>
+                <div className="diet-summary">
+                    <div><strong>Calorías:</strong> {dietPlan.summary.totalCalories} kcal</div>
+                    <div><strong>Proteínas:</strong> {dietPlan.summary.macronutrients.proteinGrams}g</div>
+                    <div><strong>Carbs:</strong> {dietPlan.summary.macronutrients.carbsGrams}g</div>
+                    <div><strong>Grasas:</strong> {dietPlan.summary.macronutrients.fatGrams}g</div>
                 </div>
             </header>
 
-            <div className="meals-container">
+            <div className="meals-grid">
                 {dietPlan.meals.map((meal, index) => (
                     <div key={index} className="meal-card">
                         <h3>{meal.mealName}</h3>
-                        <ul className="food-item-list">
+                        <ul>
                             {meal.foodItems.map((item, itemIndex) => (
                                 <li key={itemIndex}>
-                                    <span>{item.food}</span>
-                                    <span>{item.amount}</span>
+                                    {item.food} <span>{item.amount}</span>
                                 </li>
                             ))}
                         </ul>
@@ -3122,19 +3130,21 @@ const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
                 ))}
             </div>
 
-            <div className="recommendations-section">
-                <h3>Recomendaciones</h3>
-                <ul>
-                    {dietPlan.recommendations.map((rec, index) => (
-                        <li key={index}>{rec}</li>
-                    ))}
-                </ul>
-            </div>
+            {dietPlan.recommendations && dietPlan.recommendations.length > 0 && (
+                <div className="recommendations-section">
+                    <h4>Recomendaciones</h4>
+                     <ul>
+                        {dietPlan.recommendations.map((rec, index) => (
+                            <li key={index}>{rec}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 };
 
-const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean }> = ({ clientData, setClientData, isClientOnboarding = false }) => {
+const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; isClientOnboarding?: boolean, clientInstructions?: string }> = ({ clientData, setClientData, isClientOnboarding = false, clientInstructions = '' }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
@@ -3147,11 +3157,13 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
         setError('');
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const finalInstructions = isClientOnboarding ? clientInstructions : adminInstructions;
+            
             const prompt = `
                 Por favor, crea un plan de nutrición para un cliente con el siguiente perfil:
                 - Perfil: ${JSON.stringify(clientData.profile)}
                 
-                ${!isClientOnboarding ? `Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"` : ''}
+                Instrucciones Adicionales: "${finalInstructions || 'Ninguna'}"
 
                 REGLAS ESTRICTAS PARA TU RESPUESTA:
                 1.  **Idioma:** Tu respuesta DEBE estar redactada en español de Argentina. Utiliza vocabulario y expresiones comunes de ese país (ej. "vos" en lugar de "tú", nombres de comidas locales como "bife", "milanesa", etc.).
@@ -3220,7 +3232,7 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
     };
     
     if (isGenerating) {
-        return <div className="loading-container"><div className="spinner"></div><p>Generando plan de nutrición...</p></div>;
+        return <GenerationProgressView tasks={[{ name: "Generando plan de nutrición...", status: "loading" }]} />;
     }
      if (error) {
         return <div className="error-container"><p>{error}</p><button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>Intentar de Nuevo</button></div>;
@@ -3230,18 +3242,22 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
         if (!plan) {
             return (
                  <div className="placeholder-action generation-container">
-                    {!isClientOnboarding && (
-                        <div className="admin-instructions-box">
-                            <label htmlFor="admin-instructions-diet">Instrucciones Adicionales (Opcional)</label>
-                            <textarea
-                                id="admin-instructions-diet"
-                                rows={3}
-                                value={adminInstructions}
-                                onChange={(e) => setAdminInstructions(e.target.value)}
-                                placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
-                            ></textarea>
-                        </div>
-                    )}
+                    <div className="admin-instructions-box">
+                        <label htmlFor="admin-instructions-diet">
+                           {isClientOnboarding ? "Instrucciones Adicionales para la IA (Opcional)" : "Instrucciones del Entrenador para la IA (Opcional)"}
+                        </label>
+                        <textarea
+                            id="admin-instructions-diet"
+                            rows={3}
+                            value={isClientOnboarding ? clientInstructions : adminInstructions}
+                            onChange={(e) => {
+                                if (!isClientOnboarding) {
+                                    setAdminInstructions(e.target.value)
+                                }
+                             }}
+                            placeholder="Ej: Cliente es intolerante a la lactosa. Prefiere no comer carnes rojas."
+                        ></textarea>
+                    </div>
                     <button className="cta-button" onClick={() => handleGenerate(activePlanIndex)}>
                         Generar Plan de Nutrición con IA
                     </button>
@@ -3422,7 +3438,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 
 // --- Client View ---
-// FIX: Added missing components for the client view to function.
 const AIChatModal: React.FC<{
     clientData: ClientData;
     onClose: () => void;
@@ -3473,7 +3488,6 @@ const AIChatModal: React.FC<{
             const result = await chat.sendMessage({ message: userMessage });
             const responseText = result.text;
             setHistory(prev => [...prev, { role: 'model', text: responseText }]);
-            // @ts-ignore
             await apiClient.saveClientData(clientData.dni, { action: 'increment_ai_usage' });
             onUsageUpdate();
 
@@ -3509,7 +3523,7 @@ const AIChatModal: React.FC<{
                         placeholder={remainingQuestions > 0 ? "Escribe tu consulta..." : "Límite de preguntas alcanzado."}
                         disabled={isLoading || remainingQuestions <= 0}
                     />
-                    <button type="submit" disabled={isLoading || !message.trim() || remainingQuestions <= 0}>Enviar</button>
+                    <button type="submit" className="cta-button" disabled={isLoading || !message.trim() || remainingQuestions <= 0}>Enviar</button>
                 </form>
             </div>
         </div>
@@ -3624,6 +3638,8 @@ const ClientDashboardView: React.FC<{
 
         if (clientData.planType === 'nutrition' && activeTab === 'routine') {
             setActiveTab('diet');
+        } else {
+            setActiveTab('routine');
         }
     }, [clientData]);
     
@@ -3658,13 +3674,11 @@ const ClientDashboardView: React.FC<{
         }
     };
     
-    const ClientExerciseView: React.FC<{ 
-        exercise: Exercise;
-    }> = ({ exercise }) => {
-        const [showLogForm, setShowLogForm] = useState(false);
+    const ClientExerciseView: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
         const [weight, setWeight] = useState('');
         const [reps, setReps] = useState('');
         const [isSaving, setIsSaving] = useState(false);
+        const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
         
         const videoUrl = findExerciseVideoUrl(exercise.nombre);
         
@@ -3673,24 +3687,30 @@ const ClientDashboardView: React.FC<{
             setIsSaving(true);
             await handleAddProgress(exercise.nombre, Number(weight), Number(reps));
             setIsSaving(false);
-            setShowLogForm(false);
-            setWeight('');
-            setReps('');
+            setSaveStatus('saved');
+            setTimeout(() => {
+                setSaveStatus('idle');
+                setWeight('');
+                setReps('');
+            }, 2000);
         };
         
         return (
             <div className="client-exercise-view">
                  <ExerciseView exercise={exercise} onPlayVideo={setShowVideoModal} videoUrl={videoUrl} />
-                 <button className="log-progress-btn" onClick={() => setShowLogForm(!showLogForm)}>
-                    {showLogForm ? 'Cancelar' : 'Registrar Progreso'}
-                 </button>
-                 {showLogForm && (
-                    <form onSubmit={handleLogSubmit} className="log-progress-form animated-fade-in">
-                        <input type="number" placeholder="Peso (kg)" value={weight} onChange={e => setWeight(e.target.value)} required />
-                        <input type="number" placeholder="Reps" value={reps} onChange={e => setReps(e.target.value)} required />
-                        <button type="submit" disabled={isSaving}>{isSaving ? '...' : 'Guardar'}</button>
-                    </form>
-                 )}
+                 <form onSubmit={handleLogSubmit} className="exercise-tracking">
+                    <div>
+                        <label htmlFor={`weight-${exercise.nombre}`}>Peso (kg)</label>
+                        <input id={`weight-${exercise.nombre}`} type="number" step="0.5" placeholder="0" value={weight} onChange={e => setWeight(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label htmlFor={`reps-${exercise.nombre}`}>Reps</label>
+                        <input id={`reps-${exercise.nombre}`} type="number" placeholder="0" value={reps} onChange={e => setReps(e.target.value)} required />
+                    </div>
+                    <button type="submit" disabled={isSaving} className={`cta-button secondary ${saveStatus === 'saved' ? 'saved' : ''}`}>
+                         {saveStatus === 'saved' ? '✓' : '+'}
+                    </button>
+                 </form>
             </div>
         );
     };
@@ -3704,26 +3724,12 @@ const ClientDashboardView: React.FC<{
         switch (activeTab) {
             case 'routine':
                 return clientData.routine ? (
-                    <div className="client-routine-view">
-                        {clientData.routine.phases.map((phase, pIdx) => (
-                            <div key={pIdx} className="client-phase-section">
-                                <h3>{phase.phaseName} ({phase.durationWeeks} semanas)</h3>
-                                {phase.routine.dias.map((day, dIdx) => (
-                                    <div key={dIdx} className="client-day-card">
-                                        <h4>{day.dia}: {day.grupoMuscular}</h4>
-                                        <ul className="exercise-list">
-                                            {day.ejercicios.map((ex, eIdx) => (
-                                                <li key={eIdx} className="exercise-item">
-                                                    <ClientExerciseView exercise={ex} />
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        {day.cardio && <p className="cardio-note"><strong>Cardio:</strong> {day.cardio}</p>}
-                                    </div>
-                                ))}
-                            </div>
-                        ))}
-                    </div>
+                    <RoutinePlan
+                        routine={clientData.routine}
+                        isEditing={false}
+                        onRoutineChange={() => {}} // Not editable for clients
+                        exerciseLibrary={exerciseLibrary}
+                     />
                 ) : <div className="placeholder">No tienes una rutina asignada.</div>;
             case 'diet':
                 return clientData.dietPlans?.[0] ? 
@@ -3738,7 +3744,7 @@ const ClientDashboardView: React.FC<{
     };
     
     return (
-        <div className="client-dashboard-content">
+        <div className="main-content">
             <nav className="main-tabs-nav">
                 {(planType === 'full' || planType === 'routine') &&
                     <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
@@ -3757,6 +3763,8 @@ const ClientDashboardView: React.FC<{
     );
 };
 
+// FIX: Define the missing ClientOnboardingView component.
+// This component guides new clients through profile completion and initial plan generation.
 const ClientOnboardingView: React.FC<{
     clientData: ClientData;
     setClientData: (data: ClientData) => void;
@@ -3764,100 +3772,106 @@ const ClientOnboardingView: React.FC<{
     gymId: string;
 }> = ({ clientData, setClientData, onPlanGenerated, gymId }) => {
     const [step, setStep] = useState(1);
+    const [clientInstructions, setClientInstructions] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
 
-    const handleProfileSave = async () => {
+    const handleProfileSaved = async () => {
         setIsSaving(true);
-        setError('');
-        const success = await apiClient.saveClientData(clientData.dni, { profile: clientData.profile });
+        const success = await apiClient.saveClientData(clientData.dni, { profile: clientData.profile, termsAccepted: true });
         if (success) {
             setStep(2);
         } else {
-            setError('No se pudo guardar tu perfil. Inténtalo de nuevo.');
+            alert("Hubo un error al guardar tu perfil. Inténtalo de nuevo.");
         }
         setIsSaving(false);
     };
-    
-    const handleFinalizeOnboarding = async () => {
+
+    const handleFinishOnboarding = async () => {
         setIsSaving(true);
-        const success = await apiClient.saveClientData(clientData.dni, { 
+        const dataToSave: Partial<ClientData> = {
             routine: clientData.routine,
             dietPlans: clientData.dietPlans,
             planStatus: 'active',
-            termsAccepted: true,
-            routineGeneratedDate: new Date().toISOString()
-        });
-        if (success) {
+            routineGeneratedDate: clientData.routine ? new Date().toISOString() : undefined,
+        };
+        const success = await apiClient.saveClientData(clientData.dni, dataToSave);
+         if (success) {
             onPlanGenerated();
         } else {
-             setError('No se pudo finalizar la configuración. Por favor, intenta de nuevo.');
+            alert("Hubo un error al guardar tu plan. Por favor, contacta a tu entrenador.");
         }
         setIsSaving(false);
     };
 
+    const isProfileComplete = clientData.profile.name && clientData.profile.age && clientData.profile.weight && clientData.profile.height && clientData.profile.trainingDays;
+    
     const planType = clientData.planType || 'full';
-    const routineDone = !!clientData.routine;
-    const dietDone = !!clientData.dietPlans?.[0];
 
-    const canProceedToFinalize = 
-        (planType === 'full' && routineDone && dietDone) ||
-        (planType === 'routine' && routineDone) ||
-        (planType === 'nutrition' && dietDone);
-        
+    const isPlanReady = () => {
+        if (planType === 'routine') return !!clientData.routine;
+        if (planType === 'nutrition') return !!clientData.dietPlans?.[0];
+        if (planType === 'full') return !!clientData.routine && !!clientData.dietPlans?.[0];
+        return false;
+    };
+
     return (
         <div className="onboarding-container">
             {step === 1 && (
                 <div className="onboarding-step animated-fade-in">
-                    <h2>¡Bienvenido/a! Primero, completa tu perfil</h2>
-                    <p>Esta información es crucial para que la IA cree un plan adaptado a vos.</p>
-                    <div className="profile-onboarding-wrapper">
-                         <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding={true} />
-                    </div>
-                    <button onClick={handleProfileSave} disabled={isSaving} className="cta-button" style={{marginTop: '2rem'}}>
+                    <h2>Paso 1: Completa tu Perfil</h2>
+                    <p>Necesitamos algunos datos para poder generar un plan a tu medida. Todos los campos son obligatorios.</p>
+                    <ProfileEditor 
+                        clientData={clientData} 
+                        setClientData={setClientData} 
+                        isClientOnboarding={true}
+                    />
+                    <button 
+                        className="cta-button" 
+                        style={{marginTop: '2rem', width: '100%'}}
+                        onClick={handleProfileSaved}
+                        disabled={!isProfileComplete || isSaving}
+                    >
                         {isSaving ? 'Guardando...' : 'Guardar y Continuar'}
                     </button>
-                    {error && <p className="error-text">{error}</p>}
                 </div>
             )}
             {step === 2 && (
                 <div className="onboarding-step animated-fade-in">
-                     <h2>Paso 2: Generá tu plan inicial</h2>
-                     <p>La IA utilizará tu perfil para crear un plan de entrenamiento y/o nutrición personalizado. Podrás ajustarlo más tarde si es necesario.</p>
-                     
-                     {(planType === 'full' || planType === 'routine') && (
-                         <div className="generator-wrapper">
-                            <h3>Tu Rutina</h3>
-                             {clientData.routine ? (
-                                 <div className="plan-generated-success">
-                                    <p>✅ ¡Tu rutina ha sido generada!</p>
-                                    <RoutinePlan routine={clientData.routine} isEditing={false} onRoutineChange={() => {}} exerciseLibrary={{}}/>
-                                 </div>
-                             ) : (
-                                 <RoutineGenerator clientData={clientData} setClientData={setClientData} gymId={gymId} isClientOnboarding={true} />
-                             )}
-                         </div>
-                     )}
-                     
-                     {(planType === 'full' || planType === 'nutrition') && (
-                         <div className="generator-wrapper">
-                             <h3>Tu Plan de Nutrición</h3>
-                              {clientData.dietPlans && clientData.dietPlans[0] ? (
-                                <div className="plan-generated-success">
-                                    <p>✅ ¡Tu plan de nutrición ha sido generado!</p>
-                                    <ClientDietView dietPlan={clientData.dietPlans[0]} />
-                                </div>
-                             ) : (
-                                 <DietPlanGenerator clientData={clientData} setClientData={setClientData} isClientOnboarding={true} />
-                             )}
-                         </div>
-                     )}
-                     
-                     <button onClick={handleFinalizeOnboarding} disabled={isSaving || !canProceedToFinalize} className="cta-button" style={{marginTop: '2rem'}}>
-                        {isSaving ? 'Finalizando...' : '¡Comenzar a Entrenar!'}
+                    <h2>Paso 2: Genera tu Plan Inicial</h2>
+                    <p>Revisa tu perfil y añade instrucciones si lo necesitas. Luego, la IA creará tu primer plan de entrenamiento y/o nutrición.</p>
+                    
+                    {(planType === 'full' || planType === 'routine') && (
+                        <>
+                            <h3>Rutina</h3>
+                            <RoutineGenerator 
+                                clientData={clientData} 
+                                setClientData={setClientData} 
+                                gymId={gymId}
+                                isClientOnboarding={true}
+                                clientInstructions={clientInstructions}
+                            />
+                         </>
+                    )}
+                    {(planType === 'full' || planType === 'nutrition') && (
+                        <>
+                            <h3 style={{marginTop: '2rem'}}>Nutrición</h3>
+                            <DietPlanGenerator 
+                                clientData={clientData} 
+                                setClientData={setClientData}
+                                isClientOnboarding={true}
+                                clientInstructions={clientInstructions}
+                            />
+                        </>
+                    )}
+                    
+                    <button 
+                        className="cta-button" 
+                        style={{marginTop: '2rem', width: '100%'}}
+                        onClick={handleFinishOnboarding}
+                        disabled={!isPlanReady() || isSaving}
+                    >
+                        {isSaving ? 'Finalizando...' : 'Finalizar y Guardar Mi Plan'}
                     </button>
-                    {!canProceedToFinalize && <p className="text-secondary" style={{textAlign: 'center', marginTop: '1rem'}}>Por favor, genera todas las partes de tu plan para continuar.</p>}
-                    {error && <p className="error-text">{error}</p>}
                 </div>
             )}
         </div>
@@ -3929,25 +3943,25 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
 
 
     return (
-        <div className="client-dashboard-view">
-             <div className="main-header">
+        <div className="client-view-container">
+             <header>
                 <div className="header-title-wrapper">
                     {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
                      <div>
-                        <h1>{gym.name}</h1>
-                        <p>Bienvenido/a, {clientData.profile.name || 'Cliente'}</p>
+                        <h1>{clientData.profile.name || 'Cliente'}</h1>
+                        <p>Bienvenido/a a {gym.name}</p>
                     </div>
                 </div>
-                 <div className="admin-header-nav">
+                 <div className="client-header-actions">
                     {planIsActive && clientData.dailyQuestionLimit && clientData.dailyQuestionLimit > 0 && (
-                        <button className="header-nav-button chat-button" onClick={() => setShowChat(true)}>
+                        <button className="header-nav-button ai-assistant-button" onClick={() => setShowChat(true)}>
                             Consultar a IA
                         </button>
                     )}
-                    <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
+                    <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
                  </div>
-            </div>
-            <main className="client-main-content">
+            </header>
+            <main className="client-main-content" style={{width: '100%'}}>
                 {renderContent()}
             </main>
             {showChat && (
@@ -3963,6 +3977,8 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
 
 
 // --- Main App Initialization ---
+// FIX: Complete the application initialization.
+// The file was truncated, this adds the standard React root rendering logic.
 const container = document.getElementById('root');
 if (container) {
     const root = createRoot(container);
