@@ -1,8 +1,4 @@
 
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3549,45 +3545,52 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
     const bmi = calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
     const targetWeight = calculateTargetWeight(parseFloat(profile.height));
 
-    const profileData = [
-        { label: 'Nombre', value: profile.name },
-        { label: 'Edad', value: profile.age },
-        { label: 'Peso', value: `${profile.weight} kg` },
-        { label: 'Altura', value: `${profile.height} cm` },
-        { label: 'Género', value: profile.gender },
-        { label: 'Nivel de Experiencia', value: profile.level },
-        { label: 'Objetivo Principal', value: profile.goal },
-        { label: 'Días de Entrenamiento', value: `${profile.trainingDays} por semana` },
-        { label: 'Intensidad', value: profile.trainingIntensity },
-        { label: 'Enfoque Corporal', value: profile.bodyFocusArea },
-    ];
-
     return (
         <div className="client-profile-view animated-fade-in">
-             <div className="plan-header" style={{textAlign: 'center'}}>
+            <div className="plan-header" style={{textAlign: 'center', marginBottom: '2rem'}}>
                 <h2>Mi Perfil</h2>
-                <p>Esta es la información que la IA utiliza para generar tus planes.</p>
             </div>
-            <div className="profile-card-container">
-                <div className="profile-details-grid">
-                    {profileData.map(item => (
-                        <div key={item.label} className="profile-detail-item">
-                            <span className="label">{item.label}</span>
-                            <span className="value">{item.value || '-'}</span>
-                        </div>
-                    ))}
+
+            <div className="profile-card">
+                <h3>Información Personal</h3>
+                <div className="profile-card-content">
+                    <div className="profile-item"><span className="label">Nombre:</span> <span className="value">{profile.name}</span></div>
+                    <div className="profile-item"><span className="label">Edad:</span> <span className="value">{profile.age} años</span></div>
+                    <div className="profile-item"><span className="label">Género:</span> <span className="value">{profile.gender}</span></div>
                 </div>
-                <div className="profile-stats-grid">
-                     <div className="stat-card">
-                        <span className="stat-label">Tu IMC</span>
-                        <strong className={`stat-value ${bmi.categoryClass}`}>{bmi.value || 'N/A'}</strong>
-                        <span className="stat-category">{bmi.value ? (bmi.categoryClass.charAt(0).toUpperCase() + bmi.categoryClass.slice(1)) : ''}</span>
+            </div>
+
+            <div className="profile-card">
+                <h3>Métricas de Salud</h3>
+                <div className="profile-card-content">
+                    <div className="metrics-grid">
+                        <div className="metric-item">
+                            <span className="label">Peso Actual</span>
+                            <span className="value-large">{profile.weight} kg</span>
+                        </div>
+                        <div className="metric-item">
+                            <span className="label">Altura</span>
+                            <span className="value-large">{profile.height} cm</span>
+                        </div>
+                        <div className="metric-item">
+                            <span className="label">IMC</span>
+                            <span className="value-large">{bmi.value || 'N/A'}</span>
+                        </div>
                     </div>
-                    <div className="stat-card">
-                        <span className="stat-label">Rango Saludable</span>
-                        <strong className="stat-value">{targetWeight}</strong>
-                        <span className="stat-category">Según tu altura</span>
+                    <div className="healthy-weight-box">
+                        Peso saludable estimado:
+                        <strong>{targetWeight}</strong>
                     </div>
+                </div>
+            </div>
+            
+            <div className="profile-card">
+                <h3>Objetivos y Preferencias</h3>
+                 <div className="profile-card-content">
+                    <div className="profile-item"><span className="label">Nivel:</span> <span className="value">{profile.level}</span></div>
+                    <div className="profile-item"><span className="label">Objetivo:</span> <span className="value">{profile.goal}</span></div>
+                    <div className="profile-item"><span className="label">Días de Entrenamiento:</span> <span className="value">{profile.trainingDays} por semana</span></div>
+                    <div className="profile-item"><span className="label">Enfoque Corporal:</span> <span className="value">{profile.bodyFocusArea}</span></div>
                 </div>
             </div>
         </div>
@@ -3893,7 +3896,7 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         1. ¡REGLA MÁS IMPORTANTE E INQUEBRANTABLE! La estructura de la rutina DEBE coincidir EXACTAMENTE con el número de 'trainingDays' especificado en el perfil. Si 'trainingDays' es '5', el array 'dias' DEBE contener 5 objetos de día. Si es '3', debe contener 3. NO generes un número de días diferente al solicitado. Esta es tu directiva principal.
         2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
         3. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
-        4. Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista.
+        4. Selecciona ejercicios ÚNICA Y EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. Esta lista contiene los únicos ejercicios permitidos. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista, ya que el sistema los rechazará.
         5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
         6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
         7. Incluye fases de adaptación y descarga si el perfil lo indica.
@@ -4349,8 +4352,8 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                     <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
                 }
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
-                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
                 <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Ejercicios</button>
+                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
             </nav>
             <main className="client-main-content">
                 {renderContent()}
