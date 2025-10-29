@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -626,15 +627,6 @@ const ClientRegistrationPage: React.FC<{
                         onChange={(e) => setSelectedGymId(e.target.value)}
                         required
                         disabled={isLoading || gyms.length === 0}
-                        style={{
-                            width: '100%',
-                            padding: '0.8rem 1rem',
-                            backgroundColor: 'var(--background-color)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px',
-                            color: 'var(--text-color)',
-                            fontSize: '1rem'
-                        }}
                     >
                         {gyms.length === 0 ? (
                             <option>Cargando gimnasios...</option>
@@ -3009,6 +3001,63 @@ const ExerciseView: React.FC<{ exercise: Exercise, onPlayVideo: (url: string) =>
     );
 };
 
+// FIX: Added ClientDietView component, as it was missing.
+const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
+    if (!dietPlan) {
+        return <div className="placeholder">No hay plan de nutrición disponible.</div>;
+    }
+
+    const { planTitle, summary, meals, recommendations } = dietPlan;
+
+    return (
+        <div className="diet-plan animated-fade-in">
+            <div className="plan-header">
+                <h2>{planTitle}</h2>
+                <div className="diet-summary">
+                    <div className="summary-item">
+                        <span>Calorías</span>
+                        <strong>{summary.totalCalories}</strong>
+                    </div>
+                    <div className="summary-item">
+                        <span>Proteínas</span>
+                        <strong>{summary.macronutrients.proteinGrams}g</strong>
+                    </div>
+                    <div className="summary-item">
+                        <span>Carbs</span>
+                        <strong>{summary.macronutrients.carbsGrams}g</strong>
+                    </div>
+                    <div className="summary-item">
+                        <span>Grasas</span>
+                        <strong>{summary.macronutrients.fatGrams}g</strong>
+                    </div>
+                </div>
+            </div>
+            <div className="meals-container">
+                {meals.map((meal, index) => (
+                    <div key={index} className="meal-card">
+                        <h3>{meal.mealName}</h3>
+                        <ul>
+                            {meal.foodItems.map((item, itemIndex) => (
+                                <li key={itemIndex}>
+                                    <span>{item.food}</span>
+                                    <span>{item.amount}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+            <div className="recommendations">
+                <h3>Recomendaciones</h3>
+                <ul>
+                    {recommendations.map((rec, index) => (
+                        <li key={index}>{rec}</li>
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+};
 
 const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data: ClientData) => void; }> = ({ clientData, setClientData }) => {
     const [isGenerating, setIsGenerating] = useState(false);
@@ -3289,6 +3338,251 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 
 // --- Client View ---
+
+// FIX: Added ExerciseTracker component, as it was missing.
+const ExerciseTracker: React.FC<{
+    clientData: ClientData;
+    onProgressLogged: () => void;
+    onRequestChange: () => void;
+    onPlayVideo: (url: string) => void;
+}> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
+    const [exerciseLogs, setExerciseLogs] = useState<Record<string, { weight: string; reps: string }>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const exerciseLibrary = useRef<ExerciseLibrary | null>(null);
+    
+    useEffect(() => {
+        const fetchLibrary = async () => {
+            exerciseLibrary.current = await apiClient.getExerciseLibrary(clientData.gymId);
+        };
+        fetchLibrary();
+    }, [clientData.gymId]);
+
+    const routine = clientData.routine;
+    if (!routine) return null;
+
+    const currentPhase = routine.phases[activePhaseIndex];
+    const currentDay = currentPhase?.routine.dias[activeDayIndex];
+    
+    const handleLogChange = (exerciseName: string, setIndex: number, field: 'weight' | 'reps', value: string) => {
+        const logKey = `${exerciseName}-${setIndex}`;
+        setExerciseLogs(prev => ({
+            ...prev,
+            [logKey]: {
+                ...prev[logKey] || {},
+                [field]: value,
+            }
+        }));
+    };
+
+    const handleLogSet = async (exerciseName: string, setIndex: number) => {
+        const logKey = `${exerciseName}-${setIndex}`;
+        const log = exerciseLogs[logKey];
+        if (!log || !log.weight || !log.reps) {
+            alert("Por favor, completa el peso y las repeticiones.");
+            return;
+        }
+
+        setIsSaving(true);
+
+        const newEntry: ProgressLogEntry = {
+            date: new Date().toISOString(),
+            weight: parseFloat(log.weight),
+            repetitions: parseInt(log.reps, 10),
+        };
+
+        const newProgressLog = { ...(clientData.progressLog || {}) };
+        if (!newProgressLog[exerciseName]) {
+            newProgressLog[exerciseName] = [];
+        }
+        newProgressLog[exerciseName].push(newEntry);
+        
+        const success = await apiClient.saveClientData(clientData.dni, { progressLog: newProgressLog });
+        if (success) {
+            onProgressLogged(); // This will refetch clientData
+        } else {
+            alert("No se pudo guardar el progreso.");
+        }
+        setIsSaving(false);
+    };
+    
+    const findExerciseVideoUrl = (exerciseName: string) => {
+        if (!exerciseLibrary.current) return undefined;
+        for (const group of Object.values(exerciseLibrary.current)) {
+            const exercise = (group as ExerciseDefinition[]).find(ex => ex.name === exerciseName);
+            if (exercise) return exercise.videoUrl;
+        }
+        return undefined;
+    };
+
+    return (
+        <div className="exercise-tracker animated-fade-in">
+            <div className="plan-header">
+                <h2>{routine.planName}</h2>
+                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+            </div>
+            
+            <div className="accordion-phases">
+                {routine.phases.map((phase, phaseIndex) => (
+                    <div key={phaseIndex} className="accordion-item">
+                        <button 
+                            className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
+                            onClick={() => setActivePhaseIndex(phaseIndex)}
+                        >
+                            <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
+                             <span className="accordion-header-icon">+</span>
+                        </button>
+                        <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
+                             <nav className="day-tabs-nav">
+                                {phase.routine.dias.map((dia, dayIdx) => (
+                                    <button
+                                        key={dayIdx}
+                                        className={`day-tab-button ${activeDayIndex === dayIdx ? 'active' : ''}`}
+                                        onClick={() => setActiveDayIndex(dayIdx)}
+                                    >
+                                        {dia.dia}
+                                    </button>
+                                ))}
+                            </nav>
+                            
+                            {currentDay && (
+                                <div className="day-card">
+                                    <h3>{currentDay?.dia}: <span className="muscle-group">{currentDay?.grupoMuscular}</span></h3>
+                                    <ul className="exercise-list">
+                                        {currentDay?.ejercicios.map((exercise, exIndex) => (
+                                            <li key={exIndex} className="exercise-item-client">
+                                                <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} videoUrl={findExerciseVideoUrl(exercise.nombre)} />
+                                                <div className="log-sets">
+                                                    {Array.from({ length: Number(exercise.series) || 0 }).map((_, setIndex) => {
+                                                        const logKey = `${exercise.nombre}-${setIndex}`;
+                                                        const logData = exerciseLogs[logKey] || { weight: '', reps: '' };
+                                                        return (
+                                                            <div key={setIndex} className="log-set-row">
+                                                                <span className="set-number">Serie {setIndex + 1}</span>
+                                                                <input 
+                                                                    type="number" 
+                                                                    placeholder="kg" 
+                                                                    value={logData.weight} 
+                                                                    onChange={(e) => handleLogChange(exercise.nombre, setIndex, 'weight', e.target.value)}
+                                                                />
+                                                                <input 
+                                                                    type="number" 
+                                                                    placeholder="reps" 
+                                                                    value={logData.reps}
+                                                                    onChange={(e) => handleLogChange(exercise.nombre, setIndex, 'reps', e.target.value)}
+                                                                />
+                                                                <button className="log-button" onClick={() => handleLogSet(exercise.nombre, setIndex)} disabled={isSaving}>✓</button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {currentDay?.cardio && <p className="cardio-note"><strong>Cardio:</strong> {currentDay.cardio}</p>}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
+                ¿Necesitas un cambio? Contacta a tu entrenador
+            </button>
+        </div>
+    );
+};
+
+// FIX: Added ClientDietTabsView component, as it was missing.
+const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+
+    const plan1 = dietPlans[0];
+    const plan2 = dietPlans[1];
+
+    const currentPlan = activePlanIndex === 0 ? plan1 : plan2;
+
+    return (
+        <div className="multi-plan-container animated-fade-in">
+            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
+                <button 
+                    onClick={() => setActivePlanIndex(0)} 
+                    className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}
+                    disabled={!plan1}
+                >
+                    Plan 1
+                </button>
+                <button 
+                    onClick={() => setActivePlanIndex(1)} 
+                    className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}
+                    disabled={!plan2}
+                >
+                    Plan 2
+                </button>
+            </div>
+            <div className="animated-fade-in">
+                 {currentPlan ? (
+                    <ClientDietView dietPlan={currentPlan} />
+                 ) : (
+                    <div className="placeholder">Este plan de nutrición no ha sido generado.</div>
+                 )}
+            </div>
+        </div>
+    );
+};
+
+// FIX: Added ClientProfileView component, as it was missing.
+const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+    const { profile } = clientData;
+    const bmi = calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
+    const targetWeight = calculateTargetWeight(parseFloat(profile.height));
+
+    const profileData = [
+        { label: 'Nombre', value: profile.name },
+        { label: 'Edad', value: profile.age },
+        { label: 'Peso', value: `${profile.weight} kg` },
+        { label: 'Altura', value: `${profile.height} cm` },
+        { label: 'Género', value: profile.gender },
+        { label: 'Nivel de Experiencia', value: profile.level },
+        { label: 'Objetivo Principal', value: profile.goal },
+        { label: 'Días de Entrenamiento', value: `${profile.trainingDays} por semana` },
+        { label: 'Intensidad', value: profile.trainingIntensity },
+        { label: 'Enfoque Corporal', value: profile.bodyFocusArea },
+    ];
+
+    return (
+        <div className="client-profile-view animated-fade-in">
+             <div className="plan-header" style={{textAlign: 'center'}}>
+                <h2>Mi Perfil</h2>
+                <p>Esta es la información que la IA utiliza para generar tus planes.</p>
+            </div>
+            <div className="profile-card-container">
+                <div className="profile-details-grid">
+                    {profileData.map(item => (
+                        <div key={item.label} className="profile-detail-item">
+                            <span className="label">{item.label}</span>
+                            <span className="value">{item.value || '-'}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="profile-stats-grid">
+                     <div className="stat-card">
+                        <span className="stat-label">Tu IMC</span>
+                        <strong className={`stat-value ${bmi.categoryClass}`}>{bmi.value || 'N/A'}</strong>
+                        <span className="stat-category">{bmi.value ? (bmi.categoryClass.charAt(0).toUpperCase() + bmi.categoryClass.slice(1)) : ''}</span>
+                    </div>
+                    <div className="stat-card">
+                        <span className="stat-label">Rango Saludable</span>
+                        <strong className="stat-value">{targetWeight}</strong>
+                        <span className="stat-category">Según tu altura</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
@@ -4036,7 +4330,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
     }
 
     return (
-        <div className="main-content" style={{width: '100%', maxWidth: '800px'}}>
+        <div className="main-content">
              <nav className="main-tabs-nav">
                 {(planType === 'full' || planType === 'routine') &&
                     <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
@@ -4044,453 +4338,550 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                 {(planType === 'full' || planType === 'nutrition') &&
                     <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
                 }
-                <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
-                <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Biblioteca</button>
-                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
-            </nav>
-            <div className="animated-fade-in">
-                {renderContent()}
-            </div>
-             {showRequestModal && (
-                <RequestModal 
-                    client={clientData} 
-                    onClose={() => setShowRequestModal(false)}
-                />
-            )}
-            {playingVideoUrl && <VideoPlayerModal videoUrl={playingVideoUrl} onClose={() => setPlayingVideoUrl(null)} />}
-        </div>
-    );
+                <button className={`main-tab---- START OF FILE src/apiClient.ts ---
+
+// --- Type Definitions ---
+export type PlanType = 'full' | 'routine' | 'nutrition';
+export interface Profile {
+    name: string;
+    age: string;
+    weight: string;
+    height: string;
+    gender: 'Masculino' | 'Femenino' | 'Prefiero no decirlo';
+    level: 'Principiante' | 'Intermedio' | 'Avanzado';
+    goal: 'Hipertrofia' | 'Pérdida de grasa' | 'Mantenimiento' | 'Resistencia';
+    trainingDays: string;
+    activityFactor: 'Sedentario' | 'Ligero' | 'Activo' | 'Muy Activo';
+    useAdvancedTechniques: 'Sí' | 'No';
+    bodyFocusArea: 'Full Body' | 'Cuerpo Completo' | 'Tren Superior' | 'Tren Inferior';
+    muscleFocus: string; // e.g., 'General', 'Cuádriceps', 'Pecho'
+    includeAdaptationPhase: 'Sí' | 'No';
+    includeDeloadPhase: 'Sí' | 'No';
+    trainingIntensity: 'Baja' | 'Moderada' | 'Alta' | 'Extrema';
 }
 
-const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
-    const [activePlanIndex, setActivePlanIndex] = useState(0);
-    const activePlan = dietPlans[activePlanIndex];
+export interface Exercise {
+    nombre: string;
+    series: string;
+    repeticiones: string;
+    descanso: string;
+    tecnicaAvanzada?: string;
+    videoUrl?: string;
+}
 
-    return (
-        <div>
-            <div className="view-toggle" style={{ justifyContent: 'center', marginBottom: '2rem' }}>
-                <button onClick={() => setActivePlanIndex(0)} className={`view-toggle-button ${activePlanIndex === 0 ? 'active' : ''}`}>Plan 1</button>
-                <button onClick={() => setActivePlanIndex(1)} className={`view-toggle-button ${activePlanIndex === 1 ? 'active' : ''}`}>Plan 2</button>
-            </div>
-            {activePlan ? (
-                <ClientDietView dietPlan={activePlan} />
-            ) : (
-                <div className="placeholder" style={{ marginTop: '2rem' }}>
-                    <p>Este plan de nutrición aún no ha sido generado por tu entrenador.</p>
-                </div>
-            )}
-        </div>
-    );
-};
+export interface DayPlan {
+    dia: string;
+    grupoMuscular: string;
+    ejercicios: Exercise[];
+    cardio: string;
+}
 
+export interface Phase {
+    phaseName: string;
+    durationWeeks: number;
+    routine: {
+        dias: DayPlan[];
+    };
+}
 
-const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => (
-     <div className="diet-plan-container animated-fade-in">
-        <div className="plan-header">
-            <h3>{dietPlan.planTitle}</h3>
-        </div>
-        <div className="diet-summary">
-            <div><strong>Calorías</strong><span>{dietPlan.summary.totalCalories} kcal</span></div>
-            <div><strong>Proteínas</strong><span>{dietPlan.summary.macronutrients.proteinGrams} g</span></div>
-            <div><strong>Carbohidratos</strong><span>{dietPlan.summary.macronutrients.carbsGrams} g</span></div>
-            <div><strong>Grasas</strong><span>{dietPlan.summary.macronutrients.fatGrams} g</span></div>
-        </div>
-        <div className="meals-grid">
-            {dietPlan.meals.map(meal => (
-                <div key={meal.mealName} className="meal-card">
-                    <h4>{meal.mealName}</h4>
-                    <ul>{meal.foodItems.map(item => (<li key={item.food}>{item.food} <span>{item.amount}</span></li>))}</ul>
-                </div>
-            ))}
-        </div>
-        <div className="recommendations-section">
-            <h4>Recomendaciones</h4>
-            <ul>{dietPlan.recommendations.map((rec, i) => (<li key={i}>{rec}</li>))}</ul>
-        </div>
-    </div>
-);
-
-const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const { profile, routine } = clientData;
-    const bmi = useMemo(() => calculateBMI(parseFloat(profile.weight), parseFloat(profile.height)), [profile.weight, profile.height]);
-    const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(profile.height)), [profile.height]);
-
-    const estimatedFinalWeight = useMemo(() => {
-        if (!routine?.totalDurationWeeks || !profile.weight || !profile.goal) {
-            return null;
-        }
-
-        const currentWeight = parseFloat(profile.weight);
-        const durationWeeks = routine.totalDurationWeeks;
-        let weightChangePerWeek = 0;
-
-        switch (profile.goal) {
-            case 'Pérdida de grasa':
-                weightChangePerWeek = -0.5; // kg/week
-                break;
-            case 'Hipertrofia':
-                weightChangePerWeek = 0.25; // kg/week
-                break;
-            default:
-                return null;
-        }
-
-        const finalWeight = currentWeight + (weightChangePerWeek * durationWeeks);
-        return finalWeight.toFixed(1);
-
-    }, [profile.weight, profile.goal, routine?.totalDurationWeeks]);
-
-
-    return (
-        <div className="client-profile-view animated-fade-in">
-            <h2>Mi Perfil</h2>
-            <div className="profile-info-grid">
-                <div className="info-card">
-                    <h3>Información Personal</h3>
-                    <ul>
-                        <li><strong>Nombre:</strong> <span>{profile.name}</span></li>
-                        <li><strong>Edad:</strong> <span>{profile.age} años</span></li>
-                        <li><strong>Género:</strong> <span>{profile.gender}</span></li>
-                    </ul>
-                </div>
-                <div className="info-card">
-                    <h3>Métricas de Salud</h3>
-                    <div className="health-metrics">
-                        <div className="metric-item">
-                            <span className="metric-label">Peso Actual</span>
-                            <span className="metric-value">{profile.weight} kg</span>
-                        </div>
-                        <div className="metric-item">
-                            <span className="metric-label">Altura</span>
-                            <span className="metric-value">{profile.height} cm</span>
-                        </div>
-                         <div className="metric-item">
-                            <span className="metric-label">IMC</span>
-                            <span className={`metric-value ${bmi.categoryClass}`}>{bmi.value}</span>
-                        </div>
-                    </div>
-                     {targetWeight !== 'N/A' && (
-                        <div className="target-weight-info">
-                            Peso saludable estimado: <strong>{targetWeight}</strong>
-                        </div>
-                    )}
-                </div>
-                <div className="info-card full-width">
-                    <h3>Objetivos y Preferencias</h3>
-                    <ul>
-                         <li><strong>Nivel:</strong> <span>{profile.level}</span></li>
-                         <li><strong>Objetivo:</strong> <span>{profile.goal}</span></li>
-                         <li><strong>Días de Entrenamiento:</strong> <span>{profile.trainingDays} por semana</span></li>
-                         <li><strong>Enfoque Corporal:</strong> <span>{profile.bodyFocusArea}</span></li>
-                         {profile.muscleFocus && profile.muscleFocus.toLowerCase() !== 'general' && (
-                            <li><strong>Músculo Prioritario:</strong> <span>{profile.muscleFocus}</span></li>
-                         )}
-                    </ul>
-                </div>
-            </div>
-             {estimatedFinalWeight && (
-                <div className="target-weight-info" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-                    Peso estimado al finalizar el plan: <strong>{estimatedFinalWeight} kg</strong>
-                </div>
-            )}
-        </div>
-    );
-};
-
-
-
-const AgreementView: React.FC<{ onAccept: () => void; onLogout: () => void }> = ({ onAccept, onLogout }) => {
-    const [isChecked, setIsChecked] = useState(false);
-    
-    const termsText = `
-Bienvenido a ScorpionGYM AI.
-
-Al utilizar esta aplicación, usted ("el Cliente") acepta los siguientes términos y condiciones:
-
-1.  **Propósito de la Aplicación:** Esta aplicación utiliza inteligencia artificial para generar rutinas de entrenamiento y planes de nutrición personalizados basados en la información que usted proporciona. Estos planes son sugerencias y no constituyen un consejo médico.
-
-2.  **Consulta Médica:** Antes de comenzar cualquier programa de ejercicios o plan de nutrición, es su responsabilidad consultar con un profesional de la salud (médico, fisioterapeuta, etc.) para asegurarse de que es apto para realizar dichas actividades. Usted asume todos los riesgos de lesiones o problemas de salud que puedan surgir.
-
-3.  **Uso de Datos:** La información de su perfil (edad, peso, objetivos, etc.) será utilizada por la IA para generar sus planes. Nos comprometemos a proteger su privacidad y a no compartir sus datos personales con terceros no autorizados.
-
-4.  **Responsabilidad:** ScorpionGYM y sus entrenadores no se hacen responsables de ninguna lesión, enfermedad o condición médica que pueda resultar del seguimiento de los planes generados por la aplicación. La ejecución correcta de los ejercicios y el seguimiento de la dieta son su responsabilidad.
-
-5.  **Resultados no Garantizados:** Los resultados del entrenamiento y la nutrición varían de persona a persona. No garantizamos resultados específicos. La consistencia, el esfuerzo y otros factores de estilo de vida influyen significativamente en el progreso.
-
-Al marcar la casilla y hacer clic en "Aceptar", usted confirma que ha leído, entendido y aceptado estos términos y condiciones.
-    `;
-
-    return (
-        <div className="agreement-container">
-            <header>
-                 <img src="/logo.svg" alt="Scorpion AI Logo" className="app-logo" width="80" height="80"/>
-                 <h1>Términos y Condiciones</h1>
-            </header>
-            <p style={{marginBottom: '1rem'}}>Por favor, lee y acepta los términos para continuar.</p>
-            <div className="terms-box">
-                <p>{termsText}</p>
-            </div>
-            <div className="agreement-actions">
-                <div className="agreement-checkbox">
-                    <input 
-                        type="checkbox" 
-                        id="terms" 
-                        checked={isChecked} 
-                        onChange={() => setIsChecked(!isChecked)} 
-                    />
-                    <label htmlFor="terms">He leído y acepto los términos y condiciones.</label>
-                </div>
-                <div className="agreement-buttons">
-                    <button onClick={onLogout} className="cta-button secondary">Salir</button>
-                    <button onClick={onAccept} disabled={!isChecked} className="cta-button">Aceptar y Continuar</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-// --- Client Portal: Routine Tracker ---
-
-const ExerciseTracker: React.FC<{ clientData: ClientData, onProgressLogged: () => void, onRequestChange: () => void, onPlayVideo: (url: string) => void }> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
-    const { routine, routineGeneratedDate, gymId } = clientData;
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
-
-    useEffect(() => {
-        const fetchLibrary = async () => {
-            const library = await apiClient.getExerciseLibrary(gymId);
-            setExerciseLibrary(library);
-        };
-        fetchLibrary();
-    }, [gymId]);
-
-    const expirationDateString = useMemo(() => {
-        if (!routineGeneratedDate || !routine?.totalDurationWeeks) return null;
-        const generated = new Date(routineGeneratedDate);
-        const expiration = new Date(generated);
-        expiration.setDate(expiration.getDate() + routine.totalDurationWeeks * 7);
-        return expiration.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-    }, [routineGeneratedDate, routine?.totalDurationWeeks]);
-
-
-    if (!routine) return null;
-
-    return (
-        <div className="plan-container animated-fade-in">
-             <div className="plan-header">
-                <h2>Mi Rutina: {routine.planName}</h2>
-                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
-                {expirationDateString && <p className="expiration-date">Tu plan finaliza el: <strong>{expirationDateString}</strong></p>}
-            </div>
-
-            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
-                Enviar Mensaje o Nota al Entrenador
-            </button>
-            
-            <AccordionPhasesClient
-                phases={routine.phases}
-                activePhaseIndex={activePhaseIndex}
-                setActivePhaseIndex={setActivePhaseIndex}
-                clientData={clientData}
-                onProgressLogged={onProgressLogged}
-                exerciseLibrary={exerciseLibrary}
-                onPlayVideo={onPlayVideo}
-            />
-        </div>
-    );
-};
-
-const AccordionPhasesClient: React.FC<{
+export interface Routine {
+    planName: string;
+    totalDurationWeeks: number;
     phases: Phase[];
-    activePhaseIndex: number;
-    setActivePhaseIndex: (index: number) => void;
-    clientData: ClientData;
-    onProgressLogged: () => void;
-    exerciseLibrary: ExerciseLibrary | null;
-    onPlayVideo: (url: string) => void;
-}> = ({ phases, activePhaseIndex, setActivePhaseIndex, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
-    
-    const togglePhase = (index: number) => {
-        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
-    };
+}
 
-    return (
-        <div className="accordion-phases">
-            {phases.map((phase, phaseIndex) => (
-                <div key={phaseIndex} className="accordion-item">
-                    <button 
-                        className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
-                        onClick={() => togglePhase(phaseIndex)}
-                        aria-expanded={activePhaseIndex === phaseIndex}
-                    >
-                        <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
-                         <span className="accordion-header-icon">+</span>
-                    </button>
-                    <div className={`accordion-content ${activePhaseIndex === phaseIndex ? 'open' : ''}`}>
-                        <PhaseContentClient 
-                            phase={phase}
-                            clientData={clientData}
-                            onProgressLogged={onProgressLogged}
-                            exerciseLibrary={exerciseLibrary}
-                            onPlayVideo={onPlayVideo}
-                        />
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-};
+export interface FoodItem {
+    food: string;
+    amount: string;
+}
 
-const PhaseContentClient: React.FC<{
-    phase: Phase;
-    clientData: ClientData;
-    onProgressLogged: () => void;
-    exerciseLibrary: ExerciseLibrary | null;
-    onPlayVideo: (url: string) => void;
-}> = ({ phase, clientData, onProgressLogged, exerciseLibrary, onPlayVideo }) => {
-    const [activeDayIndex, setActiveDayIndex] = useState(0);
+export interface Meal {
+    mealName: string;
+    foodItems: FoodItem[];
+}
 
-    const dayPlan = phase.routine.dias[activeDayIndex];
-    if (!dayPlan) return <p>No hay días definidos.</p>;
-
-    // Helper to find video URL from library
-    const findVideoUrl = (exerciseName: string): string | undefined => {
-        if (!exerciseLibrary) return undefined;
-        for (const group in exerciseLibrary) {
-            const found = (exerciseLibrary[group] as ExerciseDefinition[]).find(ex => ex.name === exerciseName);
-            if (found) return found.videoUrl;
-        }
-        return undefined;
-    };
-
-    return (
-        <div>
-            <nav className="day-tabs-nav">
-                {phase.routine.dias.map((dia, index) => (
-                    <button
-                        key={index}
-                        className={`day-tab-button ${activeDayIndex === index ? 'active' : ''}`}
-                        onClick={() => setActiveDayIndex(index)}
-                    >
-                        {dia.dia}
-                    </button>
-                ))}
-            </nav>
-            <div className="day-card">
-                 <h3>
-                    {dayPlan.dia}: <span className="muscle-group">{dayPlan.grupoMuscular}</span>
-                </h3>
-                <ul className="exercise-list">
-                     {dayPlan.ejercicios.map((exercise, index) => (
-                        <li key={index} className="exercise-item">
-                            <ExerciseView 
-                                exercise={exercise} 
-                                videoUrl={findVideoUrl(exercise.nombre)}
-                                onPlayVideo={onPlayVideo}
-                             />
-                            <ProgressTracker 
-                                exerciseName={exercise.nombre} 
-                                clientData={clientData} 
-                                onProgressLogged={onProgressLogged}
-                            />
-                        </li>
-                    ))}
-                </ul>
-                {dayPlan.cardio && <p className="cardio-note"><strong>Cardio:</strong> {dayPlan.cardio}</p>}
-            </div>
-        </div>
-    );
-};
-
-
-const ProgressTracker: React.FC<{
-    exerciseName: string;
-    clientData: ClientData;
-    onProgressLogged: () => void;
-}> = ({ exerciseName, clientData, onProgressLogged }) => {
-    const [weight, setWeight] = useState('');
-    const [repetitions, setRepetitions] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [isSaved, setIsSaved] = useState(false);
-
-    const lastLog = useMemo(() => {
-        const logs = clientData.progressLog?.[exerciseName];
-        if (logs && logs.length > 0) {
-            return logs[logs.length - 1];
-        }
-        return null;
-    }, [clientData.progressLog, exerciseName]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!weight || !repetitions) return;
-
-        setIsSaving(true);
-        
-        const newLogEntry: ProgressLogEntry = {
-            date: new Date().toISOString(),
-            weight: parseFloat(weight),
-            repetitions: parseInt(repetitions, 10),
+export interface DietPlan {
+    planTitle: string;
+    summary: {
+        totalCalories: number;
+        macronutrients: {
+            proteinGrams: number;
+            carbsGrams: number;
+            fatGrams: number;
         };
-        
-        const updatedProgressLog = { ...clientData.progressLog };
-        if (!updatedProgressLog[exerciseName]) {
-            updatedProgressLog[exerciseName] = [];
-        }
-        updatedProgressLog[exerciseName].push(newLogEntry);
-        
-        const success = await apiClient.saveClientData(clientData.dni, { progressLog: updatedProgressLog });
-
-        if (success) {
-            setIsSaved(true);
-            setWeight('');
-            setRepetitions('');
-            onProgressLogged();
-            setTimeout(() => setIsSaved(false), 2000);
-        } else {
-            alert("Error al guardar el progreso.");
-        }
-        
-        setIsSaving(false);
     };
+    meals: Meal[];
+    recommendations: string[];
+}
 
-    return (
-        <form onSubmit={handleSubmit} className="exercise-tracking">
-            <div>
-                <label htmlFor={`weight-${exerciseName}`}>Peso (kg)</label>
-                <input
-                    id={`weight-${exerciseName}`}
-                    type="number"
-                    step="0.5"
-                    placeholder={lastLog ? `Últ: ${lastLog.weight}` : "e.g., 20.5"}
-                    value={weight}
-                    onChange={e => setWeight(e.target.value)}
-                    className="form-group input"
-                />
-            </div>
-            <div>
-                <label htmlFor={`reps-${exerciseName}`}>Repeticiones</label>
-                <input
-                    id={`reps-${exerciseName}`}
-                    type="number"
-                    placeholder={lastLog ? `Últ: ${lastLog.repetitions}` : "e.g., 10"}
-                    value={repetitions}
-                    onChange={e => setRepetitions(e.target.value)}
-                    className="form-group input"
-                />
-            </div>
-            <button type="submit" disabled={isSaving || !weight || !repetitions} className={`cta-button secondary ${isSaved ? 'saved' : ''}`}>
-                {isSaving ? <span className="spinner small"></span> : (isSaved ? 
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41-1.41L9,16.17z"></path></svg>
-                    : 
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" /></svg>
-                )}
-            </button>
-        </form>
-    );
+export interface ProgressLogEntry {
+    date: string; // Should be a full ISO string
+    weight: number;
+    repetitions: number;
+}
+
+export type ProgressLog = Record<string, ProgressLogEntry[]>;
+
+export interface BodyWeightEntry {
+    date: string; // Should be a full ISO string
+    weight: number;
+    imc?: number;
+    imcCategoryClass?: string;
+}
+
+export interface ExerciseDefinition {
+    name: string;
+    isEnabled: boolean;
+    videoUrl: string;
+}
+
+export type ExerciseLibrary = Record<string, ExerciseDefinition[]>;
+
+export interface DayStructure {
+    dia: string;
+    grupoMuscular: string;
+}
+
+export interface RoutineTemplate {
+    _id: string;
+    gymId: string;
+    templateName: string;
+    description: string;
+    gender: 'Male' | 'Female' | 'Unisex';
+    routine: Routine;
+}
+
+
+export interface ClientData {
+    dni: string;
+    gymId: string;
+    profile: Profile;
+    routine: Routine | null;
+    routineGeneratedDate?: string;
+    dietPlans: (DietPlan | null)[];
+    progressLog: ProgressLog;
+    bodyWeightLog?: BodyWeightEntry[];
+    termsAccepted?: boolean;
+    accessCode: string | null;
+    password?: string;
+    passwordResetRequired?: boolean;
+    status?: 'active' | 'archived';
+    planStatus: 'pending' | 'active' | 'expired';
+    dailyQuestionLimit?: number; // Added from Gym
+    planType?: PlanType;
+    aiUsage?: { date: string; count: number }; // Added to track usage
+}
+
+export interface ClientListItem {
+    dni: string;
+    profile: Partial<Profile>;
+    planName: string;
+    status: 'active' | 'archived';
+    accessCode: string | null;
+    planStatus: 'pending' | 'active' | 'expired';
+}
+
+export interface Gym {
+    _id: string;
+    name: string;
+    username: string;
+    dailyQuestionLimit?: number;
+    logoSvg?: string;
+    planType?: PlanType;
+}
+
+export interface Request {
+    _id: string;
+    clientId: string;
+    clientName: string;
+    gymId: string;
+    subject: string;
+    message: string;
+    status: 'new' | 'read' | 'resolved';
+    createdAt: string;
+}
+
+// --- Constants ---
+
+export const advancedTechniqueOptions: { value: string; label: string; description: string; }[] = [
+      { value: '', label: 'Ninguna', description: 'Sin técnica avanzada.' },
+      { value: 'Drop Set', label: 'Drop Set (2 descensos)', description: 'Al fallo, bajá el peso un 20-25% y seguí sin descanso. Repetilo 2 veces.' },
+      { value: 'Rest-Pause', label: 'Rest-Pause (3 pausas)', description: 'Al fallo, descansá 15s y sacá más reps. Repetilo 3 veces. Es una sola serie.' },
+      { value: 'Myo-reps', label: 'Myo-reps (3 pasadas)', description: 'Tras una serie de activación al fallo, descansá 20-30s. Luego realizá 3 pasadas de 3-5 reps con el mismo peso, descansando solo 10-15s entre ellas.' },
+      { value: 'Excéntricas', label: 'Excéntricas (Negativas)', description: 'Enfocate en la fase de bajada del peso, de forma lenta y controlada durante 4 a 6 segundos.' }
+];
+
+export const apiClient = {
+  // --- Super Admin ---
+  async getGyms(): Promise<Gym[]> {
+    try {
+        const response = await fetch('/api/gyms');
+        if (!response.ok) throw new Error('Network response was not ok');
+        return (await response.json()) as Gym[];
+    } catch (error) {
+        console.error("Failed to fetch gyms:", error);
+        return [];
+    }
+  },
+  
+  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
+     try {
+        const response = await fetch('/api/gyms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error("Failed to create gym:", error);
+        return false;
+    }
+  },
+  
+  async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
+     try {
+        const response = await fetch(`/api/gyms/${gymId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to update gym ${gymId}:`, error);
+        return false;
+    }
+  },
+
+  async deleteGym(gymId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to delete gym ${gymId}:`, error);
+        return false;
+    }
+  },
+
+  // --- Gym/Coach Auth ---
+  async gymLogin(username: string, password: string): Promise<Gym | null> {
+    try {
+        const response = await fetch('/api/auth/gym-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        if (!response.ok) return null;
+        return (await response.json()) as Gym;
+    } catch (error) {
+        console.error("Gym login failed:", error);
+        return null;
+    }
+  },
+
+  // --- Client Management (Scoped by Gym) ---
+  async getClients(gymId: string): Promise<ClientListItem[]> {
+    try {
+        const response = await fetch(`/api/clients?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const clients: ClientListItem[] = await response.json();
+        return clients.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
+    } catch (error) {
+        console.error("Failed to fetch clients:", error);
+        return [];
+    }
+  },
+
+  async getClientData(dni: string): Promise<ClientData | null> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`);
+        if (!response.ok) {
+            if (response.status === 404) return null;
+            throw new Error('Network response was not ok');
+        }
+        return (await response.json()) as ClientData;
+    } catch (error) {
+        console.error(`Failed to fetch client data for DNI ${dni}:`, error);
+        return null;
+    }
+  },
+
+  async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSave),
+        });
+        if (!response.ok) {
+            console.error(`Failed to save client data for DNI ${dni}, server responded with error:`, await response.text());
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error(`Failed to save client data for DNI ${dni}:`, error);
+        return false;
+    }
+  },
+
+  async createClient(dni: string, gymId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const response = await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, gymId }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, message: errorData.message || 'Failed to create client' };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to create client with DNI ${dni}:`, error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
+  },
+  
+  async updateClientStatus(dnis: Set<string>, newStatus: 'active' | 'archived'): Promise<void> {
+    try {
+        const promises = Array.from(dnis).map(dni => 
+            fetch(`/api/clients/${dni}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+            })
+        );
+        await Promise.all(promises);
+    } catch (error) {
+        console.error(`Failed to update status for clients:`, error);
+    }
+  },
+
+  async deleteClients(dnis: Set<string>): Promise<void> {
+    try {
+        const promises = Array.from(dnis).map(dni =>
+            fetch(`/api/clients/${dni}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+    } catch (error) {
+        console.error(`Failed to delete clients:`, error);
+    }
+  },
+
+  async registerClient(dni: string, name: string, password: string, gymId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const response = await fetch('/api/auth/client-register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, name, password, gymId }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, message: errorData.message || 'Failed to register client' };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error(`Failed to register client with DNI ${dni}:`, error);
+        return { success: false, message: 'An unexpected error occurred.' };
+    }
+  },
+
+  async loginClient(dni: string, accessCode: string): Promise<{ success: boolean; resetRequired?: boolean; }> {
+     try {
+        const response = await fetch(`/api/auth/client-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, code: accessCode }),
+        });
+        if (!response.ok) return { success: false };
+        const data = await response.json();
+        return data as { success: boolean; resetRequired?: boolean; };
+    } catch (error) {
+        return { success: false };
+    }
+  },
+
+  async enablePlanGeneration(dni: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reset_plan' }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to enable plan generation for client ${dni}:`, error);
+        return false;
+    }
+  },
+  
+   async requestPasswordReset(dni: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'request_password_reset' }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to request password reset for client ${dni}:`, error);
+        return false;
+    }
+  },
+
+  async setNewPassword(dni: string, password: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/clients/${dni}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set_new_password', password: password }),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to set new password for client ${dni}:`, error);
+        return false;
+    }
+  },
+
+
+  // Exercise Library Management (Scoped by Gym)
+  async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {
+    try {
+        const response = await fetch(`/api/library?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        return (await response.json()) as ExerciseLibrary;
+    } catch (error) {
+        console.error("Failed to fetch exercise library:", error);
+        return {};
+    }
+  },
+
+  async saveExerciseLibrary(library: ExerciseLibrary, gymId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/library?gymId=${gymId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(library),
+        });
+        if (!response.ok) {
+            console.error('Failed to save exercise library, server responded with error:', await response.text());
+            return false;
+        }
+        return true;
+    } catch (error) {
+        console.error(`Failed to save exercise library:`, error);
+        return false;
+    }
+  },
+
+  // --- Trainer Request System ---
+  async getRequests(gymId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?gymId=${gymId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return (await response.json()) as Request[];
+    } catch (error) {
+      console.error("Failed to fetch requests:", error);
+      return [];
+    }
+  },
+
+  async getRequestsByClient(clientId: string): Promise<Request[]> {
+    try {
+      const response = await fetch(`/api/requests?clientId=${clientId}`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return (await response.json()) as Request[];
+    } catch (error) {
+      console.error(`Failed to fetch requests for client ${clientId}:`, error);
+      return [];
+    }
+  },
+
+  async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
+    try {
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error("Failed to create request:", error);
+      return false;
+    }
+  },
+
+  async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to update request ${requestId}:`, error);
+      return false;
+    }
+  },
+
+  async deleteRequest(requestId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
+      return response.ok;
+    } catch (error) {
+      console.error(`Failed to delete request ${requestId}:`, error);
+      return false;
+    }
+  },
+
+  // --- Routine Templates ---
+  async getRoutineTemplates(gymId: string): Promise<RoutineTemplate[]> {
+    try {
+        const response = await fetch(`/api/routine-templates?gymId=${gymId}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        return (await response.json()) as RoutineTemplate[];
+    } catch (error) {
+        console.error("Failed to fetch routine templates:", error);
+        return [];
+    }
+  },
+
+  async createRoutineTemplate(templateData: Omit<RoutineTemplate, '_id'>): Promise<RoutineTemplate | null> {
+    try {
+        const response = await fetch('/api/routine-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateData),
+        });
+        if (!response.ok) return null;
+        return (await response.json()) as RoutineTemplate;
+    } catch (error) {
+        console.error("Failed to create routine template:", error);
+        return null;
+    }
+  },
+
+  async updateRoutineTemplate(templateId: string, templateData: Partial<RoutineTemplate>): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/routine-templates/${templateId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateData),
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to update routine template ${templateId}:`, error);
+        return false;
+    }
+  },
+
+  async deleteRoutineTemplate(templateId: string): Promise<boolean> {
+    try {
+        const response = await fetch(`/api/routine-templates/${templateId}`, { method: 'DELETE' });
+        return response.ok;
+    } catch (error) {
+        console.error(`Failed to delete routine template ${templateId}:`, error);
+        return false;
+    }
+  },
 };
-
-
-const root = createRoot(document.getElementById("root")!);
-root.render(<App />);

@@ -942,7 +942,6 @@ body {
     padding: 1rem 2rem 2rem 2rem;
     border-radius: 12px;
     width: 100%;
-    max-width: 900px;
 }
 .actions-bar {
     display: flex;
