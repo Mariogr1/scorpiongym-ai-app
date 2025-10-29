@@ -1627,6 +1627,15 @@ const TemplateEditor: React.FC<{
     const [generationError, setGenerationError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
+    
+    const [generationParams, setGenerationParams] = useState({
+        gender: 'Masculino',
+        trainingDays: '4',
+        level: 'Intermedio',
+        goal: 'Hipertrofia',
+        trainingIntensity: 'Moderada',
+        bodyFocusArea: 'Cuerpo Completo',
+    });
 
     useEffect(() => {
         const fetchLibrary = async () => {
@@ -1635,6 +1644,11 @@ const TemplateEditor: React.FC<{
         };
         fetchLibrary();
     }, [gym._id]);
+    
+    const handleParamChange = (field: keyof typeof generationParams, value: string) => {
+        setGenerationParams(prev => ({ ...prev, [field]: value }));
+    };
+
 
     const handleGenerateRoutine = async () => {
         setIsGenerating(true);
@@ -1646,17 +1660,17 @@ const TemplateEditor: React.FC<{
                 age: "30",
                 weight: "75",
                 height: "175",
-                gender: "Masculino",
-                level: "Intermedio",
-                goal: "Hipertrofia",
-                trainingDays: "4",
+                gender: generationParams.gender as Profile['gender'],
+                level: generationParams.level as Profile['level'],
+                goal: generationParams.goal as Profile['goal'],
+                trainingDays: generationParams.trainingDays,
                 activityFactor: "Activo",
                 useAdvancedTechniques: "No",
-                bodyFocusArea: "Cuerpo Completo",
+                bodyFocusArea: generationParams.bodyFocusArea as Profile['bodyFocusArea'],
                 muscleFocus: "General",
                 includeAdaptationPhase: "Sí",
                 includeDeloadPhase: "Sí",
-                trainingIntensity: "Moderada"
+                trainingIntensity: generationParams.trainingIntensity as Profile['trainingIntensity']
             };
             
             // Cast to a partial ClientData that satisfies generateRoutineForClient
@@ -1755,16 +1769,69 @@ const TemplateEditor: React.FC<{
                 </div>
             ) : (
                 <div className="placeholder-action generation-container" style={{marginTop: '2rem'}}>
-                    <p>Genera una rutina base con IA para empezar. Podrás editarla antes de guardarla.</p>
-                     <div className="admin-instructions-box">
-                        <label htmlFor="template-instructions-gen">Instrucciones para la IA (Opcional)</label>
-                        <textarea
-                            id="template-instructions-gen"
-                            rows={3}
-                            value={adminInstructions}
-                            onChange={(e) => setAdminInstructions(e.target.value)}
-                            placeholder="Ej: Crear una rutina de 3 días enfocada en fuerza."
-                        ></textarea>
+                    <p>Define los parámetros para generar una rutina base con IA. Podrás editarla antes de guardarla.</p>
+                     <div className="generation-config-panel">
+                        <h3>Parámetros de Generación</h3>
+                        <div className="generation-params-grid">
+                             <div className="form-group">
+                                <label>Género</label>
+                                <select value={generationParams.gender} onChange={e => handleParamChange('gender', e.target.value)}>
+                                    <option value="Masculino">Masculino</option>
+                                    <option value="Femenino">Femenino</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Días de Entrenamiento</label>
+                                <select value={generationParams.trainingDays} onChange={e => handleParamChange('trainingDays', e.target.value)}>
+                                    {[...Array(7)].map((_, i) => <option key={i+1} value={i+1}>{i+1} día{i > 0 ? 's' : ''}</option>)}
+                                </select>
+                            </div>
+                             <div className="form-group">
+                                <label>Nivel de Experiencia</label>
+                                <select value={generationParams.level} onChange={e => handleParamChange('level', e.target.value)}>
+                                    <option value="Principiante">Principiante</option>
+                                    <option value="Intermedio">Intermedio</option>
+                                    <option value="Avanzado">Avanzado</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Objetivo Principal</label>
+                                <select value={generationParams.goal} onChange={e => handleParamChange('goal', e.target.value)}>
+                                    <option value="Hipertrofia">Hipertrofia</option>
+                                    <option value="Pérdida de grasa">Pérdida de grasa</option>
+                                    <option value="Mantenimiento">Mantenimiento</option>
+                                    <option value="Resistencia">Resistencia</option>
+                                </select>
+                            </div>
+                             <div className="form-group">
+                                <label>Intensidad</label>
+                                 <select value={generationParams.trainingIntensity} onChange={e => handleParamChange('trainingIntensity', e.target.value)}>
+                                    <option value="Baja">Baja</option>
+                                    <option value="Moderada">Moderada</option>
+                                    <option value="Alta">Alta</option>
+                                    <option value="Extrema">Extrema</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Enfoque Corporal</label>
+                                 <select value={generationParams.bodyFocusArea} onChange={e => handleParamChange('bodyFocusArea', e.target.value)}>
+                                    <option value="Cuerpo Completo">Cuerpo Completo (Dividida)</option>
+                                    <option value="Full Body">Full Body (Cuerpo Entero)</option>
+                                    <option value="Tren Superior">Tren Superior</option>
+                                    <option value="Tren Inferior">Tren Inferior</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-group" style={{gridColumn: '1 / -1'}}>
+                            <label htmlFor="template-instructions-gen">Instrucciones Adicionales (Opcional)</label>
+                            <textarea
+                                id="template-instructions-gen"
+                                rows={2}
+                                value={adminInstructions}
+                                onChange={(e) => setAdminInstructions(e.target.value)}
+                                placeholder="Ej: Enfocar en fuerza, evitar ejercicios de alto impacto."
+                            ></textarea>
+                        </div>
                     </div>
                     <button className="cta-button" onClick={handleGenerateRoutine} disabled={isGenerating}>
                         Generar Rutina Base
