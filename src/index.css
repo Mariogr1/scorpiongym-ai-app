@@ -207,7 +207,7 @@ body {
     flex-direction: row;
     justify-content: space-between;
     text-align: left;
-    max-width: 900px;
+    max-width: 1100px;
 }
 
 .client-header-actions {
@@ -1232,12 +1232,13 @@ body {
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
-  padding: 0 1.5rem;
+  padding: 0;
 }
 
 .accordion-content.open {
   max-height: 5000px; /* Increased to prevent cutting off content */
-  padding: 1.5rem;
+  padding: 1.5rem 0;
+  background-color: var(--background-color);
 }
 
 .day-tabs-nav {
@@ -1245,6 +1246,7 @@ body {
     gap: 0.5rem;
     flex-wrap: wrap;
     margin-bottom: 1.5rem;
+    padding: 0 1.5rem;
 }
 .day-tab-button {
     background-color: var(--background-color);
@@ -1272,9 +1274,9 @@ body {
 }
 
 .day-card {
-    /* No background - this is now just a container */
-    padding: 0;
+    padding: 0 1.5rem;
     border-radius: 0;
+    background-color: transparent;
 }
 .day-card h3, .day-card h4 {
     font-size: 1.4rem;
