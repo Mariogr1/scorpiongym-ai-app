@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1661,7 +1662,7 @@ const TemplateEditor: React.FC<{
                 <h2>{template ? `Editando: ${template.templateName}` : "Crear Nueva Plantilla"}</h2>
                 <div>
                     <button onClick={handleSaveTemplate} className="cta-button" disabled={isSaving || !routine}>
-                        {isSaving ? 'Guardando...' : 'Guardar Plantilla'}
+                        {isSaving && routine ? 'Guardando...' : 'Guardar Plantilla'}
                     </button>
                     <button onClick={onBack} className="back-button" style={{marginLeft: '1rem'}}>Cancelar</button>
                 </div>
@@ -1678,7 +1679,14 @@ const TemplateEditor: React.FC<{
                 </div>
             </div>
 
-            {routine ? (
+            {isSaving && !routine ? (
+                <div className="placeholder-action generation-container" style={{marginTop: '2rem'}}>
+                    <div className="loading-container" style={{minHeight: 'auto', padding: '2rem'}}>
+                        <div className="spinner"></div>
+                        <p>Generando rutina base con IA, por favor espera...</p>
+                    </div>
+                </div>
+            ) : routine ? (
                 <div className="plan-container" style={{marginTop: '2rem'}}>
                     <RoutinePlan 
                         routine={routine} 
@@ -1701,7 +1709,7 @@ const TemplateEditor: React.FC<{
                         ></textarea>
                     </div>
                     <button className="cta-button" onClick={handleGenerateRoutine} disabled={isSaving}>
-                        {isSaving ? 'Generando...' : 'Generar Rutina Base'}
+                        Generar Rutina Base
                     </button>
                     {generationError && <p className="error-text" style={{marginTop: '1rem'}}>{generationError}</p>}
                 </div>
