@@ -198,7 +198,7 @@ export const apiClient = {
   
   async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
      try {
-        const response = await fetch(`/api/gyms/${gymId}`, {
+        const response = await fetch('/api/gyms/' + gymId, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
