@@ -2,6 +2,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3340,7 +3341,6 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 // --- Client View ---
 
-// FIX: Added ExerciseTracker component, as it was missing.
 const ExerciseTracker: React.FC<{
     clientData: ClientData;
     onProgressLogged: () => void;
@@ -3349,8 +3349,8 @@ const ExerciseTracker: React.FC<{
 }> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
-    const [exerciseLogs, setExerciseLogs] = useState<Record<string, { weight: string; reps: string }>>({});
-    const [isSaving, setIsSaving] = useState(false);
+    const [newLogs, setNewLogs] = useState<Record<string, { weight: string; reps: string }>>({});
+    const [isSaving, setIsSaving] = useState<string | null>(null); // Store exercise name being saved
     const exerciseLibrary = useRef<ExerciseLibrary | null>(null);
     
     useEffect(() => {
@@ -3363,30 +3363,24 @@ const ExerciseTracker: React.FC<{
     const routine = clientData.routine;
     if (!routine) return null;
 
-    const currentPhase = routine.phases[activePhaseIndex];
-    const currentDay = currentPhase?.routine.dias[activeDayIndex];
-    
-    const handleLogChange = (exerciseName: string, setIndex: number, field: 'weight' | 'reps', value: string) => {
-        const logKey = `${exerciseName}-${setIndex}`;
-        // FIX: Ensure the object passed to setExerciseLogs always conforms to the state type.
-        setExerciseLogs(prev => ({
+    const handleNewLogChange = (exerciseName: string, field: 'weight' | 'reps', value: string) => {
+        setNewLogs(prev => ({
             ...prev,
-            [logKey]: {
-                ...(prev[logKey] || { weight: '', reps: '' }),
+            [exerciseName]: {
+                ...(prev[exerciseName] || { weight: '', reps: '' }),
                 [field]: value,
             }
         }));
     };
 
-    const handleLogSet = async (exerciseName: string, setIndex: number) => {
-        const logKey = `${exerciseName}-${setIndex}`;
-        const log = exerciseLogs[logKey];
+    const handleLogSet = async (exerciseName: string) => {
+        const log = newLogs[exerciseName];
         if (!log || !log.weight || !log.reps) {
             alert("Por favor, completa el peso y las repeticiones.");
             return;
         }
 
-        setIsSaving(true);
+        setIsSaving(exerciseName);
 
         const newEntry: ProgressLogEntry = {
             date: new Date().toISOString(),
@@ -3402,11 +3396,12 @@ const ExerciseTracker: React.FC<{
         
         const success = await apiClient.saveClientData(clientData.dni, { progressLog: newProgressLog });
         if (success) {
+            setNewLogs(prev => ({ ...prev, [exerciseName]: { weight: '', reps: '' } }));
             onProgressLogged(); // This will refetch clientData
         } else {
             alert("No se pudo guardar el progreso.");
         }
-        setIsSaving(false);
+        setIsSaving(null);
     };
     
     const findExerciseVideoUrl = (exerciseName: string) => {
@@ -3417,12 +3412,16 @@ const ExerciseTracker: React.FC<{
         }
         return undefined;
     };
+    
+    const togglePhase = (index: number) => {
+        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
+    };
 
     return (
         <div className="exercise-tracker animated-fade-in">
             <div className="plan-header">
                 <h2>{routine.planName}</h2>
-                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+                {routine.totalDurationWeeks > 0 && <p>Duración Total: {routine.totalDurationWeeks} semanas</p>}
             </div>
             
             <div className="accordion-phases">
@@ -3430,7 +3429,7 @@ const ExerciseTracker: React.FC<{
                     <div key={phaseIndex} className="accordion-item">
                         <button 
                             className={`accordion-header ${activePhaseIndex === phaseIndex ? 'active' : ''}`}
-                            onClick={() => setActivePhaseIndex(phaseIndex)}
+                            onClick={() => togglePhase(phaseIndex)}
                         >
                             <span>{phase.phaseName} (Semanas: {phase.durationWeeks})</span>
                              <span className="accordion-header-icon">+</span>
@@ -3448,41 +3447,52 @@ const ExerciseTracker: React.FC<{
                                 ))}
                             </nav>
                             
-                            {currentDay && (
+                            {phase.routine.dias[activeDayIndex] && (
                                 <div className="day-card">
-                                    <h3>{currentDay?.dia}: <span className="muscle-group">{currentDay?.grupoMuscular}</span></h3>
+                                    <h3>{phase.routine.dias[activeDayIndex].dia}: <span className="muscle-group">{phase.routine.dias[activeDayIndex].grupoMuscular}</span></h3>
                                     <ul className="exercise-list">
-                                        {currentDay?.ejercicios.map((exercise, exIndex) => (
-                                            <li key={exIndex} className="exercise-item-client">
-                                                <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} videoUrl={findExerciseVideoUrl(exercise.nombre)} />
-                                                <div className="log-sets">
-                                                    {Array.from({ length: Number(exercise.series) || 0 }).map((_, setIndex) => {
-                                                        const logKey = `${exercise.nombre}-${setIndex}`;
-                                                        const logData = exerciseLogs[logKey] || { weight: '', reps: '' };
-                                                        return (
-                                                            <div key={setIndex} className="log-set-row">
-                                                                <span className="set-number">Serie {setIndex + 1}</span>
-                                                                <input 
-                                                                    type="number" 
-                                                                    placeholder="kg" 
-                                                                    value={logData.weight} 
-                                                                    onChange={(e) => handleLogChange(exercise.nombre, setIndex, 'weight', e.target.value)}
-                                                                />
-                                                                <input 
-                                                                    type="number" 
-                                                                    placeholder="reps" 
-                                                                    value={logData.reps}
-                                                                    onChange={(e) => handleLogChange(exercise.nombre, setIndex, 'reps', e.target.value)}
-                                                                />
-                                                                <button className="log-button" onClick={() => handleLogSet(exercise.nombre, setIndex)} disabled={isSaving}>✓</button>
+                                        {phase.routine.dias[activeDayIndex].ejercicios.map((exercise, exIndex) => {
+                                            const lastLog = clientData.progressLog?.[exercise.nombre]?.slice(-1)[0];
+                                            const currentNewLog = newLogs[exercise.nombre] || { weight: '', reps: '' };
+                                            return (
+                                                <li key={exIndex} className="exercise-item-client">
+                                                    <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} videoUrl={findExerciseVideoUrl(exercise.nombre)} />
+                                                    <div className="client-log-section">
+                                                        <div className="last-log-display">
+                                                            <div className="last-log-item">
+                                                                <label>Últ. Peso (kg)</label>
+                                                                <span>{lastLog?.weight ?? '-'}</span>
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </li>
-                                        ))}
+                                                            <div className="last-log-item">
+                                                                <label>Últ. Reps</label>
+                                                                <span>{lastLog?.repetitions ?? '-'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="new-log-inputs">
+                                                             <input 
+                                                                type="number" 
+                                                                placeholder="kg" 
+                                                                value={currentNewLog.weight} 
+                                                                onChange={(e) => handleNewLogChange(exercise.nombre, 'weight', e.target.value)}
+                                                                disabled={isSaving === exercise.nombre}
+                                                            />
+                                                            <input 
+                                                                type="number" 
+                                                                placeholder="reps" 
+                                                                value={currentNewLog.reps}
+                                                                onChange={(e) => handleNewLogChange(exercise.nombre, 'reps', e.target.value)}
+                                                                disabled={isSaving === exercise.nombre}
+                                                            />
+                                                            <button className="new-log-btn" onClick={() => handleLogSet(exercise.nombre)} disabled={isSaving === exercise.nombre}>
+                                                                {isSaving === exercise.nombre ? <div className="spinner small" style={{borderColor: '#fff', borderTopColor: 'transparent'}}></div> : '+'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            )
+                                        })}
                                     </ul>
-                                    {currentDay?.cardio && <p className="cardio-note"><strong>Cardio:</strong> {currentDay.cardio}</p>}
+                                    {phase.routine.dias[activeDayIndex].cardio && <p className="cardio-note"><strong>Cardio:</strong> {phase.routine.dias[activeDayIndex].cardio}</p>}
                                 </div>
                             )}
                         </div>
@@ -3497,7 +3507,6 @@ const ExerciseTracker: React.FC<{
     );
 };
 
-// FIX: Added ClientDietTabsView component, as it was missing.
 const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ dietPlans }) => {
     const [activePlanIndex, setActivePlanIndex] = useState(0);
 
@@ -3535,7 +3544,6 @@ const ClientDietTabsView: React.FC<{ dietPlans: (DietPlan | null)[] }> = ({ diet
     );
 };
 
-// FIX: Added ClientProfileView component, as it was missing.
 const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
     const { profile } = clientData;
     const bmi = calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
@@ -3607,7 +3615,6 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
             return false; // No hay plan o fecha, no se puede determinar la expiración
         }
         const generatedDate = new Date(clientData.routineGeneratedDate);
-        // FIX: Ensure totalDurationWeeks is treated as a number for arithmetic operation.
         const expirationDate = new Date(generatedDate.setDate(generatedDate.getDate() + (Number(clientData.routine.totalDurationWeeks) * 7)));
         return new Date() > expirationDate;
     };
