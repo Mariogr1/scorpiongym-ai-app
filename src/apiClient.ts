@@ -174,7 +174,6 @@ export const apiClient = {
     try {
         const response = await fetch('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
-        // FIX: Explicitly cast the result of response.json() to the correct type.
         return (await response.json()) as Gym[];
     } catch (error) {
         console.error("Failed to fetch gyms:", error);
@@ -229,7 +228,6 @@ export const apiClient = {
             body: JSON.stringify({ username, password }),
         });
         if (!response.ok) return null;
-        // FIX: Explicitly cast the result of response.json() to the correct type.
         return (await response.json()) as Gym;
     } catch (error) {
         console.error("Gym login failed:", error);
@@ -257,7 +255,6 @@ export const apiClient = {
             if (response.status === 404) return null;
             throw new Error('Network response was not ok');
         }
-        // FIX: Explicitly cast the result of response.json() to the correct type.
         return (await response.json()) as ClientData;
     } catch (error) {
         console.error(`Failed to fetch client data for DNI ${dni}:`, error);
@@ -353,7 +350,6 @@ export const apiClient = {
             body: JSON.stringify({ dni, code: accessCode }),
         });
         if (!response.ok) return { success: false };
-        // FIX: Explicitly cast the result of response.json() to the correct type.
         const data = await response.json();
         return data as { success: boolean; resetRequired?: boolean; };
     } catch (error) {
@@ -409,7 +405,6 @@ export const apiClient = {
     try {
         const response = await fetch(`/api/library?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
-        // FIX: Explicitly cast the result of response.json() to the correct type.
         return (await response.json()) as ExerciseLibrary;
     } catch (error) {
         console.error("Failed to fetch exercise library:", error);
@@ -440,7 +435,6 @@ export const apiClient = {
     try {
       const response = await fetch(`/api/requests?gymId=${gymId}`);
       if (!response.ok) throw new Error('Network response was not ok');
-      // FIX: Explicitly cast the result of response.json() to the correct type.
       return (await response.json()) as Request[];
     } catch (error) {
       console.error("Failed to fetch requests:", error);
@@ -452,7 +446,6 @@ export const apiClient = {
     try {
       const response = await fetch(`/api/requests?clientId=${clientId}`);
       if (!response.ok) throw new Error('Network response was not ok');
-      // FIX: Explicitly cast the result of response.json() to the correct type.
       return (await response.json()) as Request[];
     } catch (error) {
       console.error(`Failed to fetch requests for client ${clientId}:`, error);
@@ -476,7 +469,7 @@ export const apiClient = {
 
   async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
     try {
-      const response = await fetch(`/api/requests?id=${requestId}`, {
+      const response = await fetch(`/api/requests/${requestId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -490,7 +483,7 @@ export const apiClient = {
 
   async deleteRequest(requestId: string): Promise<boolean> {
     try {
-      const response = await fetch(`/api/requests?id=${requestId}`, { method: 'DELETE' });
+      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
       return response.ok;
     } catch (error) {
       console.error(`Failed to delete request ${requestId}:`, error);

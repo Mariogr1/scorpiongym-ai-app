@@ -34,6 +34,16 @@ body {
   padding: 1rem;
 }
 
+/* --- Animaciones --- */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animated-fade-in {
+    animation: fadeIn 0.4s ease-in-out;
+}
+
+
 /* --- Logo --- */
 .app-logo {
   object-fit: contain;
@@ -498,7 +508,7 @@ body {
 
 
 /* --- Panel de Gimnasio/Entrenador --- */
-.admin-dashboard, .library-container {
+.admin-dashboard, .library-container, .template-manager {
     padding: 1rem;
     margin-top: 2rem;
 }
@@ -1467,12 +1477,12 @@ body {
 
 /* --- BMI Display --- */
 .bmi-display {
-    margin-top: 1.5rem;
+    margin: 1rem auto 0 auto;
     display: flex;
     justify-content: center;
     gap: 1rem;
-    background-color: var(--surface-color);
-    padding: 0.75rem 1rem;
+    background-color: var(--background-color);
+    padding: 0.5rem 1rem;
     border-radius: 8px;
     width: fit-content;
 }
@@ -1634,7 +1644,7 @@ body {
     justify-content: center;
 }
 
-/* --- Onboarding View --- */
+/* --- Plan Selection & Onboarding View --- */
 .onboarding-container {
     max-width: 800px;
     margin: 2rem auto;
@@ -1667,6 +1677,46 @@ body {
     margin-top: 1rem;
     padding: 0 2rem;
 }
+
+.plan-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    width: 100%;
+}
+.plan-option-card {
+    background-color: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.plan-option-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.plan-option-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+.plan-option-card h3 {
+    font-size: 1.5rem;
+    color: var(--text-color);
+}
+.plan-option-card p {
+    color: var(--text-secondary-color);
+    margin-bottom: auto; /* Pushes button to bottom */
+}
+.plan-option-card .cta-button {
+    margin-top: 1rem;
+    width: 100%;
+}
+
 
 /* --- Onboarding Generation Progress --- */
 .generation-progress-container {
@@ -1890,13 +1940,46 @@ body {
     color: var(--archive-color);
 }
 
-
-.animated-fade-in {
-    animation: fadeIn 0.4s ease-in-out;
+/* --- NEW Template Manager --- */
+.template-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
 }
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+.template-card {
+    background-color: var(--surface-color);
+    border-radius: 10px;
+    padding: 1.5rem;
+    border-left: 4px solid var(--primary-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.template-card-header {
+    margin-bottom: 1rem;
+}
+.template-card-header h3 {
+    margin: 0 0 0.5rem;
+}
+.template-card-header p {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+}
+.template-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.template-editor .template-form {
+    background-color: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.5rem;
+    align-items: center;
 }
 
 /* --- NEW Exercise Library Manager --- */
@@ -2516,6 +2599,9 @@ input:checked + .slider:before {
         margin-top: 0.5rem;
         justify-content: flex-start;
     }
+    .template-editor .template-form {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 600px) {
@@ -2523,8 +2609,9 @@ input:checked + .slider:before {
         margin: 0;
         padding: 0;
     }
-    .admin-dashboard, .client-view-container, .library-container {
+    .admin-dashboard, .client-view-container, .library-container, .onboarding-container {
         padding: 0.5rem;
+        margin-top: 1rem;
     }
     .login-box, .landing-box {
         padding: 1.5rem;
