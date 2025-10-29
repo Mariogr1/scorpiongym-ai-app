@@ -1304,7 +1304,7 @@ body {
     gap: 1.5rem;
 }
 .exercise-item {
-    background-color: var(--background-color);
+    background-color: var(--surface-color);
     padding: 1.25rem;
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
@@ -2068,7 +2068,7 @@ body {
 
 .plan-selection-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 1.5rem;
     width: 100%;
     max-width: 800px;
@@ -2076,12 +2076,15 @@ body {
 
 .choice-card, .plan-option-card {
     background-color: var(--surface-color);
-    padding: 2rem;
+    padding: 1.5rem;
     border-radius: 12px;
     text-align: center;
     border: 1px solid var(--border-color);
     transition: all 0.2s ease;
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 .choice-card:hover {
     transform: translateY(-5px);
