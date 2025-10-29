@@ -208,7 +208,8 @@ const validateAndCorrectRoutine = (routine: Routine, library: ExerciseLibrary): 
     const correctedRoutine = JSON.parse(JSON.stringify(routine)); // Deep copy to avoid mutation
     const allValidExercises = new Set<string>();
     Object.values(library).forEach(group => {
-        group.forEach(ex => {
+        // FIX: Cast `group` to `ExerciseDefinition[]` as its type is not being correctly inferred.
+        (group as ExerciseDefinition[]).forEach(ex => {
             if (ex.isEnabled) {
                 allValidExercises.add(ex.name);
             }
@@ -1123,15 +1124,17 @@ const RequestSection: React.FC<{
     onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
     onDelete: (id: string) => void;
 }> = ({ title, requests, onUpdateStatus, onDelete }) => {
-    if (requests.length === 0) {
+    // FIX: Cast `requests` to `TrainerRequest[]` as its type is not being correctly inferred.
+    const typedRequests = requests as TrainerRequest[];
+    if (typedRequests.length === 0) {
         return <div className="placeholder" style={{ marginTop: '2rem' }}>No hay solicitudes en esta categoría.</div>;
     }
     
     return (
         <div className="request-section">
-            <h3>{title} ({requests.length})</h3>
+            <h3>{title} ({typedRequests.length})</h3>
             <div className="request-list">
-                {requests.map(req => (
+                {typedRequests.map(req => (
                     <div key={req._id} className={`request-card status-${req.status}`}>
                         <div className="request-card-header">
                             <h4>{req.subject}</h4>
@@ -1388,7 +1391,7 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
                             aria-expanded={activeGroup === group}
                             aria-controls={`content-${group}`}
                         >
-                            {group} ({exercises.length})
+                            {group} ({(exercises as ExerciseDefinition[]).length})
                             <span className="icon">+</span>
                         </button>
                         <div id={`content-${group}`} className={`library-accordion-content ${activeGroup === group ? 'open' : ''}`} role="region">
@@ -1399,7 +1402,7 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
                                     <span>URL del Video</span>
                                     <span>Acciones</span>
                                 </div>
-                                {exercises.map((ex, index) => {
+                                {(exercises as ExerciseDefinition[]).map((ex, index) => {
                                     const isEditing = editingExercise?.group === group && editingExercise.index === index;
                                     return (
                                         <div key={`${group}-${index}`} className="exercise-entry-row">
@@ -2108,7 +2111,8 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
-                const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+                // FIX: Cast `exercises` to `ExerciseDefinition[]` as its type is not being correctly inferred.
+                const enabled = (exercises as ExerciseDefinition[]).filter(ex => ex.isEnabled).map(ex => ex.name);
                 if (enabled.length > 0) {
                     acc[group] = enabled;
                 }
@@ -2173,7 +2177,8 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
                     contents: prompt,
                 })
             );
-            const text = response.text;
+            // FIX: Cast `response` to `GenerateContentResponse` to access the `text` property, as its type is not being correctly inferred.
+            const text = (response as GenerateContentResponse).text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -2546,7 +2551,8 @@ const ExerciseItemEditor: React.FC<{
                 >
                     {Object.entries(exerciseLibrary).map(([group, exercises]) => (
                         <optgroup label={group} key={group}>
-                            {exercises.map(ex => (
+                            {/* FIX: Cast `exercises` to `ExerciseDefinition[]` as its type is not being correctly inferred. */}
+                            {(exercises as ExerciseDefinition[]).map(ex => (
                                 <option key={ex.name} value={ex.name}>{ex.name}</option>
                             ))}
                         </optgroup>
@@ -2674,7 +2680,7 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                     contents: prompt,
                 })
             );
-            const text = response.text;
+            const text = (response as GenerateContentResponse).text;
             
             const jsonString = extractJson(text);
             if (!jsonString) {
@@ -3081,14 +3087,15 @@ const ChatAssistant: React.FC<{
                         config: { systemInstruction: calorieSystemInstruction }
                     })
                 );
-                responseText = response.text;
+                responseText = (response as GenerateContentResponse).text;
                 // Note: This special request does not get added to the main 'chat' history object
                 // to keep that conversation's context clean (as a fitness coach).
             } else if (chat) {
                 const result: GenerateContentResponse = await withRetry(() => 
                     chat.sendMessage({ message: userMessageText })
                 );
-                responseText = result.text;
+                // FIX: Cast `result` to `GenerateContentResponse` to access the `text` property, as its type is not being correctly inferred.
+                responseText = (result as GenerateContentResponse).text;
             } else {
                  throw new Error("Chat not initialized.");
             }
@@ -3185,7 +3192,7 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
     const exerciseLibrary = await apiClient.getExerciseLibrary(gymId);
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
-        const enabled = exercises.filter(ex => ex.isEnabled).map(ex => ex.name);
+        const enabled = (exercises as ExerciseDefinition[]).filter(ex => ex.isEnabled).map(ex => ex.name);
         if (enabled.length > 0) acc[group] = enabled;
         return acc;
     }, {} as Record<string, string[]>);
@@ -3210,7 +3217,8 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson(response.text);
+    // FIX: Cast `response` to `GenerateContentResponse` to access the `text` property, as its type is not being correctly inferred.
+    const jsonString = extractJson((response as GenerateContentResponse).text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de rutina válido.");
     
     const generatedPlan = JSON.parse(jsonString);
@@ -3234,7 +3242,8 @@ const generateDietForClient = async (clientData: ClientData, instructions?: stri
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
     );
-    const jsonString = extractJson(response.text);
+    // FIX: Cast `response` to `GenerateContentResponse` to access the `text` property, as its type is not being correctly inferred.
+    const jsonString = extractJson((response as GenerateContentResponse).text);
     if (!jsonString) throw new Error("La IA no devolvió un JSON de dieta válido.");
     return JSON.parse(jsonString);
 };
@@ -3602,7 +3611,8 @@ const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: st
                         </button>
                         <div className={`accordion-content ${activeGroup === group ? 'open' : ''}`}>
                             <ul className="exercise-list">
-                                {exercises.filter(ex => ex.isEnabled).map((exercise) => (
+                                {/* FIX: Cast `exercises` to `ExerciseDefinition[]` as its type is not being correctly inferred. */}
+                                {(exercises as ExerciseDefinition[]).filter(ex => ex.isEnabled).map((exercise) => (
                                     <li key={exercise.name} className="exercise-item">
                                         <div className="exercise-name-wrapper">
                                             <span className="exercise-name">{exercise.name}</span>
@@ -3972,7 +3982,7 @@ const PhaseContentClient: React.FC<{
     const findVideoUrl = (exerciseName: string): string | undefined => {
         if (!exerciseLibrary) return undefined;
         for (const group in exerciseLibrary) {
-            const found = exerciseLibrary[group].find(ex => ex.name === exerciseName);
+            const found = (exerciseLibrary[group] as ExerciseDefinition[]).find(ex => ex.name === exerciseName);
             if (found) return found.videoUrl;
         }
         return undefined;

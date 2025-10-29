@@ -105,8 +105,7 @@ export interface RoutineTemplate {
     gymId: string;
     templateName: string;
     description: string;
-    trainingDays: number;
-    structure: DayStructure[];
+    routine: Routine;
 }
 
 

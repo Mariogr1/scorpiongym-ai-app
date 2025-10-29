@@ -88,6 +88,10 @@ body {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
+.modal-content.large {
+    max-width: 900px;
+}
+
 .close-button {
     position: absolute;
     top: 1rem;
@@ -275,7 +279,6 @@ body {
     font-size: 0.9rem;
     margin: -0.5rem 0 0.5rem 0;
 }
-
 .success-text {
     color: var(--success-color);
     font-weight: 600;
@@ -499,7 +502,7 @@ body {
 
 
 /* --- Panel de Gimnasio/Entrenador --- */
-.admin-dashboard, .library-container {
+.admin-dashboard, .library-container, .template-manager {
     padding: 1rem;
     margin-top: 2rem;
 }
@@ -1299,7 +1302,7 @@ body {
     line-height: 1;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color: 0.2s;
+    transition: background-color 0.2s;
 }
 .delete-exercise-btn:hover {
     background-color: var(--primary-color-hover);
@@ -1668,6 +1671,37 @@ body {
     margin-top: 1rem;
     padding: 0 2rem;
 }
+
+.plan-choice-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+.choice-card {
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.choice-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--primary-color);
+    box-shadow: 0 5px 20px rgba(229, 9, 20, 0.1);
+}
+.choice-card h3 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+.choice-card p {
+    font-size: 1rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 0;
+}
+
 
 /* --- Onboarding Generation Progress --- */
 .generation-progress-container {
@@ -2106,6 +2140,48 @@ body {
 .action-btn.save { background-color: var(--success-color); color: white; border-color: var(--success-color); }
 .action-btn.cancel { background-color: var(--secondary-button-color); color: white; border-color: var(--secondary-button-color); }
 
+/* Routine Template Manager */
+.template-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+.template-card {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: 10px;
+    border-left: 4px solid var(--archive-color);
+    display: flex;
+    flex-direction: column;
+}
+.template-card h3 { margin-bottom: 0.5rem; }
+.template-card p {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+}
+.template-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+.create-template-view {
+    padding: 1.5rem;
+    background-color: var(--surface-color);
+    border-radius: 12px;
+}
+.create-template-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 2rem;
+}
+.template-details-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
 
 /* The switch - the box around the slider */
 .switch {
@@ -2510,6 +2586,9 @@ input:checked + .slider:before {
         margin-top: 0.5rem;
         justify-content: flex-start;
     }
+    .create-template-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 600px) {
@@ -2517,7 +2596,7 @@ input:checked + .slider:before {
         margin: 0;
         padding: 0;
     }
-    .admin-dashboard, .client-view-container, .library-container {
+    .admin-dashboard, .client-view-container, .library-container, .template-manager {
         padding: 0.5rem;
     }
     .login-box, .landing-box {
@@ -2651,5 +2730,9 @@ input:checked + .slider:before {
 
     .agreement-buttons {
         flex-direction: column;
+    }
+
+    .plan-choice-container {
+        grid-template-columns: 1fr;
     }
 }

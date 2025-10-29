@@ -27,8 +27,8 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { gymId, templateName, description, trainingDays, structure } = req.body;
-        if (!gymId || !templateName || !trainingDays || !structure) {
+        const { gymId, templateName, description, routine } = req.body;
+        if (!gymId || !templateName || !routine) {
           return res.status(400).json({ message: 'Missing required fields for template' });
         }
 
@@ -36,8 +36,7 @@ export default async function handler(req, res) {
           gymId,
           templateName,
           description: description || '',
-          trainingDays: Number(trainingDays),
-          structure, // [{ dia: 'Día 1', grupoMuscular: 'Pecho' }, ...]
+          routine,
           createdAt: new Date(),
         };
         
