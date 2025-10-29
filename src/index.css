@@ -1745,99 +1745,49 @@ body {
 }
 
 /* --- Vistas de Cliente Final --- */
+.client-main-content {
+    animation: fadeIn 0.4s ease-in-out;
+}
 
-.client-profile-view {
-    padding: 1.5rem;
-    background-color: var(--background-color);
-    border-radius: 12px;
-}
-.client-profile-view h2 {
-    text-align: center;
-    margin-bottom: 2rem;
-}
-.profile-info-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-}
-.info-card {
+.exercise-item-client {
     background-color: var(--surface-color);
-    padding: 1.5rem;
     border-radius: 10px;
-}
-.info-card.full-width {
-    grid-column: 1 / -1;
-}
-.info-card h3 {
-    margin-bottom: 1rem;
-    color: var(--primary-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
-}
-.info-card ul {
-    list-style: none;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-}
-.info-card li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 1rem;
-}
-.info-card li strong {
-    color: var(--text-secondary-color);
-}
-.info-card li span {
-    font-weight: 600;
-    text-align: right;
-}
-.health-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    text-align: center;
-    gap: 1rem;
-}
-.metric-item .metric-label {
-    display: block;
-    font-size: 0.9rem;
-    color: var(--text-secondary-color);
-}
-.metric-item .metric-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-.target-weight-info {
-    margin-top: 1rem;
-    font-size: 0.9rem;
-    text-align: center;
-    color: var(--text-secondary-color);
-    background: var(--background-color);
-    padding: 0.5rem;
-    border-radius: 6px;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
 }
 
-.exercise-tracking {
+.exercise-item-client .exercise-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.log-sets {
     margin-top: 1.5rem;
-    padding-top: 1.5rem;
+    padding-top: 1rem;
     border-top: 1px solid var(--border-color);
     display: flex;
-    gap: 1rem;
-    align-items: flex-end; /* Align items to the bottom */
-}
-.exercise-tracking div {
-    display: flex;
     flex-direction: column;
-    flex-grow: 1; /* Inputs take available space */
+    gap: 0.75rem;
 }
-.exercise-tracking label {
-    font-size: 0.8rem;
+
+.log-set-row {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: var(--background-color);
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+.log-set-row .set-number {
     color: var(--text-secondary-color);
-    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+    padding-right: 0.5rem;
 }
-.exercise-tracking input {
+
+.log-set-row input {
     width: 100%;
     padding: 0.6rem;
     background-color: var(--surface-color);
@@ -1845,27 +1795,115 @@ body {
     border-radius: 6px;
     color: var(--text-color);
     font-size: 1rem;
+    text-align: center;
 }
-.exercise-tracking .cta-button {
-    width: 60px; /* Square button */
-    height: 60px;
-    padding: 0;
-    font-size: 2rem;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+
+/* Hide number input spinners */
+.log-set-row input[type=number]::-webkit-inner-spin-button, 
+.log-set-row input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
 }
-.exercise-tracking .cta-button svg {
-    width: 28px;
-    height: 28px;
-    fill: currentColor;
+.log-set-row input[type=number] {
+  -moz-appearance: textfield; /* Firefox */
 }
-.exercise-tracking .cta-button.saved {
+
+.log-button {
+    background-color: var(--secondary-button-color);
+    border: none;
+    color: var(--text-color);
+    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    line-height: 1;
+}
+
+.log-button:hover {
+    background-color: var(--secondary-button-hover);
+}
+
+.request-change-button {
+    margin-top: 2rem;
+    width: auto;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Client Profile View specific styles */
+.client-profile-view .plan-header {
+    text-align: center;
+}
+.client-profile-view .plan-header p {
+    margin-bottom: 0;
+}
+
+.profile-card-container {
     background-color: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    margin-top: 1.5rem;
 }
-.exercise-tracking .cta-button.saved svg path {
-    fill: var(--success-color);
+
+.profile-details-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.profile-detail-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 1rem;
+}
+.profile-detail-item:last-child {
+    border-bottom: none;
+}
+
+.profile-detail-item .label {
+    color: var(--text-secondary-color);
+    text-align: left;
+}
+.profile-detail-item .value {
+    font-weight: 600;
+    text-align: right;
+}
+
+.profile-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.stat-card {
+    background-color: var(--background-color);
+    padding: 1.5rem 1rem;
+    border-radius: 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.stat-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary-color);
+}
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.stat-category {
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
 }
 
 
@@ -2234,9 +2272,6 @@ body {
         width: 100%;
         margin-top: 1rem;
         justify-content: flex-start;
-    }
-     .profile-info-grid {
-        grid-template-columns: 1fr;
     }
 }
 
