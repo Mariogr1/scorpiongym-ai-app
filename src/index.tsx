@@ -2393,7 +2393,15 @@ const ProfileEditor: React.FC<{
                 </div>
                  <div className="form-group">
                     <label>Días de Entrenamiento por Semana</label>
-                    <input type="number" min="1" max="7" value={profile.trainingDays} onChange={e => handleChange('trainingDays', e.target.value)} />
+                    <select value={profile.trainingDays} onChange={e => handleChange('trainingDays', e.target.value)}>
+                        <option value="1">1 día</option>
+                        <option value="2">2 días</option>
+                        <option value="3">3 días</option>
+                        <option value="4">4 días</option>
+                        <option value="5">5 días</option>
+                        <option value="6">6 días</option>
+                        <option value="7">7 días</option>
+                    </select>
                 </div>
                  <div className="form-group">
                     <label>Índice de Actividad (fuera del gym)</label>
