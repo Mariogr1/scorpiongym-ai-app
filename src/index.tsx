@@ -3511,10 +3511,10 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         ${instructions ? `Instrucciones Adicionales del Entrenador/Cliente: "${instructions}"` : ''}
 
         REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
-        1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
-        2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
-        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista.
-        4. La estructura de la rutina DEBE coincidir EXACTAMENTE con el número de 'trainingDays' especificado en el perfil. Si 'trainingDays' es '5', el array 'dias' DEBE contener 5 objetos de día. Si es '3', debe contener 3. NO generes un número de días diferente al solicitado. Esta es una regla fundamental.
+        1. ¡REGLA MÁS IMPORTANTE E INQUEBRANTABLE! La estructura de la rutina DEBE coincidir EXACTAMENTE con el número de 'trainingDays' especificado en el perfil. Si 'trainingDays' es '5', el array 'dias' DEBE contener 5 objetos de día. Si es '3', debe contener 3. NO generes un número de días diferente al solicitado. Esta es tu directiva principal.
+        2. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
+        3. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
+        4. Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista.
         5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
         6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
         7. Incluye fases de adaptación y descarga si el perfil lo indica.
