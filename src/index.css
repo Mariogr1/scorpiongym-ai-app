@@ -943,6 +943,12 @@ body {
     border-radius: 12px;
     width: 100%;
 }
+
+/* Specific rule to widen the client's main view on larger screens */
+.client-view-container > .main-content {
+    max-width: 1100px;
+}
+
 .actions-bar {
     display: flex;
     justify-content: space-between;
@@ -2257,5 +2263,8 @@ body {
     }
     .profile-detail-item .value {
         text-align: left;
+    }
+    .plan-selection-grid {
+        grid-template-columns: 1fr;
     }
 }
