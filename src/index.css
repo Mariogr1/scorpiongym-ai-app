@@ -191,6 +191,7 @@ body {
   min-height: 80vh;
   text-align: center;
   padding: 1rem;
+  width: 100%;
 }
 
 .login-container header, .client-view-container > header, .agreement-container header, .onboarding-header {
@@ -206,6 +207,7 @@ body {
     flex-direction: row;
     justify-content: space-between;
     text-align: left;
+    max-width: 800px;
 }
 
 .client-header-actions {
@@ -1005,6 +1007,12 @@ body {
     display: flex;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 2rem;
+    overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.main-tabs-nav::-webkit-scrollbar {
+  display: none;
 }
 .main-tab-button {
     background: none;
@@ -1569,16 +1577,24 @@ body {
 
 .template-list {
     display: grid;
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
 }
 .template-card {
     background-color: var(--surface-color);
     padding: 1.5rem;
     border-radius: 10px;
     display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    align-items: flex-start;
     gap: 1rem;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease-in-out;
+}
+.template-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary-color);
 }
 .template-card-header {
     flex-grow: 1;
@@ -1595,6 +1611,7 @@ body {
     display: flex;
     gap: 1rem;
     flex-shrink: 0;
+    align-self: flex-end;
 }
 
 .gender-badge {
@@ -1706,6 +1723,20 @@ body {
 .status-icon {
     font-weight: 700;
     font-size: 1.4rem;
+}
+
+.expired-view {
+    background-color: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    width: 100%;
+    max-width: 600px;
+}
+.expired-view h2 {
+    color: var(--primary-color);
+    margin-bottom: 1rem;
 }
 
 /* --- Responsive Design --- */
