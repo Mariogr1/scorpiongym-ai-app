@@ -105,6 +105,7 @@ export interface RoutineTemplate {
     gymId: string;
     templateName: string;
     description: string;
+    gender: 'Male' | 'Female' | 'Unisex';
     routine: Routine;
 }
 

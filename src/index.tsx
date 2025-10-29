@@ -307,7 +307,6 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
  * Main application component that handles routing and state.
  */
 const App: React.FC = () => {
-    // FIX: Add 'clientOnboarding' to AppView to allow navigation to the onboarding screen.
     type AppView = 'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset' | 'planSelection' | 'clientOnboarding';
     const [view, setView] = useState<AppView>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
@@ -733,7 +732,7 @@ const NewPasswordResetPage: React.FC<{
         </div>
     );
 };
-// FIX: Define missing PlanSelectionPage component.
+
 const PlanSelectionPage: React.FC<{
     dni: string;
     onSelectCustom: () => void;
@@ -742,6 +741,8 @@ const PlanSelectionPage: React.FC<{
     const [templates, setTemplates] = useState<RoutineTemplate[]>([]);
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [view, setView] = useState<'planChoice' | 'genderChoice' | 'templateList'>('planChoice');
+    const [selectedGender, setSelectedGender] = useState<'Male' | 'Female' | null>(null);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -760,8 +761,6 @@ const PlanSelectionPage: React.FC<{
     const handleApplyTemplate = async (template: RoutineTemplate) => {
         if (!clientData) return;
         setIsLoading(true);
-        // We only apply the routine part of the template.
-        // We assume nutrition is either custom or not part of templates.
         const updatedData = {
             routine: template.routine,
             routineGeneratedDate: new Date().toISOString(),
@@ -785,42 +784,92 @@ const PlanSelectionPage: React.FC<{
     }
     
     const planType = clientData.planType || 'full';
+    
+    const filteredTemplates = templates.filter(t => t.gender === selectedGender || t.gender === 'Unisex' || !t.gender);
+
+    const renderContent = () => {
+        switch (view) {
+            case 'genderChoice':
+                return (
+                    <div className="animated-fade-in">
+                        <header className="onboarding-header" style={{marginBottom: '2rem'}}>
+                            <h2>Selecciona una opción</h2>
+                        </header>
+                         <div className="plan-selection-grid">
+                            <div className="choice-card" onClick={() => { setSelectedGender('Male'); setView('templateList'); }}>
+                                <div className="choice-icon">👨</div>
+                                <h3>Hombre</h3>
+                            </div>
+                             <div className="choice-card" onClick={() => { setSelectedGender('Female'); setView('templateList'); }}>
+                                <div className="choice-icon">👩</div>
+                                <h3>Mujer</h3>
+                            </div>
+                        </div>
+                         <button onClick={() => setView('planChoice')} className="back-button simple">Volver</button>
+                    </div>
+                );
+            case 'templateList':
+                return (
+                    <div className="animated-fade-in">
+                         <header className="onboarding-header" style={{marginBottom: '2rem'}}>
+                             <h2>Rutinas Predeterminadas</h2>
+                             <p>Estas son las rutinas sugeridas para vos.</p>
+                        </header>
+                         <div className="plan-selection-grid">
+                            {filteredTemplates.map(template => (
+                                <div key={template._id} className="plan-option-card">
+                                    <div className="plan-option-icon">📋</div>
+                                    <h3>{template.templateName}</h3>
+                                    <p>{template.description || 'Una plantilla de rutina predefinida por tu entrenador.'}</p>
+                                    <button className="cta-button secondary" onClick={() => handleApplyTemplate(template)}>
+                                        Empezar con esta Rutina
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        {filteredTemplates.length === 0 && <p style={{textAlign: 'center', marginTop: '2rem'}}>No hay rutinas predeterminadas para esta categoría.</p>}
+                         <button onClick={() => setView('genderChoice')} className="back-button simple">Volver</button>
+                    </div>
+                );
+            case 'planChoice':
+            default:
+                 return (
+                    <div className="animated-fade-in">
+                        <div className="plan-selection-grid">
+                            {(planType === 'full' || planType === 'routine') && (
+                                <div className="choice-card" onClick={onSelectCustom}>
+                                    <div className="choice-icon">🤖</div>
+                                    <h3>Plan Personalizado con IA</h3>
+                                    <p>Crea un plan único para vos respondiendo unas preguntas.</p>
+                                </div>
+                            )}
+                            {templates.length > 0 && (planType === 'full' || planType === 'routine') && (
+                                <div className="choice-card" onClick={() => setView('genderChoice')}>
+                                    <div className="choice-icon">📋</div>
+                                    <h3>Rutinas Predeterminadas</h3>
+                                    <p>Elige una rutina ya armada por tu entrenador.</p>
+                                </div>
+                            )}
+                        </div>
+                         {templates.length === 0 && (planType !== 'full' && planType !== 'routine') && (
+                             <div className="placeholder" style={{gridColumn: '1 / -1', textAlign: 'center'}}>
+                                <p>Tu plan solo incluye nutrición. Continúa para generar tu plan de nutrición con IA.</p>
+                                 <button className="cta-button" style={{marginTop: '1rem'}} onClick={onSelectCustom}>Generar Plan de Nutrición</button>
+                            </div>
+                        )}
+                    </div>
+                );
+        }
+    }
+
 
     return (
         <div className="onboarding-container">
             <header className="onboarding-header">
                 <h1>Selecciona tu Plan</h1>
-                <p>Elige una de las plantillas creadas por tu entrenador o genera un plan personalizado con IA.</p>
+                <p>Elige cómo quieres empezar tu entrenamiento.</p>
             </header>
-
-            <div className="plan-selection-grid">
-                {(planType === 'full' || planType === 'routine') && (
-                    <div className="plan-option-card" onClick={onSelectCustom}>
-                        <div className="plan-option-icon">🤖</div>
-                        <h3>Plan Personalizado con IA</h3>
-                        <p>Responde unas preguntas para que nuestra inteligencia artificial cree un plan de rutina y nutrición único para vos.</p>
-                        <button className="cta-button">Crear Plan con IA</button>
-                    </div>
-                )}
-                
-                {templates.map(template => (
-                    <div key={template._id} className="plan-option-card">
-                        <div className="plan-option-icon">📋</div>
-                        <h3>{template.templateName}</h3>
-                        <p>{template.description || 'Una plantilla de rutina predefinida por tu entrenador.'}</p>
-                        <button className="cta-button secondary" onClick={() => handleApplyTemplate(template)}>
-                            Empezar con esta Plantilla
-                        </button>
-                    </div>
-                ))}
-            </div>
-            
-            {templates.length === 0 && (planType !== 'full' && planType !== 'routine') && (
-                 <div className="placeholder" style={{gridColumn: '1 / -1'}}>
-                    <p>Tu plan solo incluye nutrición. Continúa para generar tu plan de nutrición con IA.</p>
-                     <button className="cta-button" onClick={onSelectCustom}>Generar Plan de Nutrición</button>
-                </div>
-            )}
+            {renderContent()}
         </div>
     );
 };
@@ -1226,7 +1275,6 @@ const QrCodeModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 const RequestSection: React.FC<{
     title: string;
-    // FIX: Changed `unknown` to `TrainerRequest[]` to match usage and prevent type errors.
     requests: TrainerRequest[];
     onUpdateStatus: (id: string, status: 'read' | 'resolved') => void;
     onDelete: (id: string) => void;
@@ -1564,7 +1612,6 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         </div>
     );
 };
-// FIX: Define missing TemplateEditor and RoutineTemplateManager components.
 const TemplateEditor: React.FC<{
     gym: Gym;
     template?: RoutineTemplate;
@@ -1573,8 +1620,10 @@ const TemplateEditor: React.FC<{
 }> = ({ gym, template, onBack, onSave }) => {
     const [templateName, setTemplateName] = useState(template?.templateName || '');
     const [description, setDescription] = useState(template?.description || '');
+    const [gender, setGender] = useState<'Male' | 'Female' | 'Unisex'>(template?.gender || 'Unisex');
     const [routine, setRoutine] = useState<Routine | null>(template?.routine || null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState('');
     const [adminInstructions, setAdminInstructions] = useState('');
     const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
@@ -1588,7 +1637,7 @@ const TemplateEditor: React.FC<{
     }, [gym._id]);
 
     const handleGenerateRoutine = async () => {
-        setIsSaving(true);
+        setIsGenerating(true);
         setGenerationError('');
         try {
             // We create a dummy client profile to generate a generic template
@@ -1622,7 +1671,7 @@ const TemplateEditor: React.FC<{
         } catch (error) {
             setGenerationError(error instanceof Error ? error.message : "Error al generar la rutina.");
         } finally {
-            setIsSaving(false);
+            setIsGenerating(false);
         }
     };
     
@@ -1633,10 +1682,11 @@ const TemplateEditor: React.FC<{
         }
         setIsSaving(true);
         
-        const templateData = {
+        const templateData: Omit<RoutineTemplate, '_id'> = {
             gymId: gym._id,
             templateName,
             description,
+            gender,
             routine,
         };
 
@@ -1644,7 +1694,7 @@ const TemplateEditor: React.FC<{
         if (template) {
             success = await apiClient.updateRoutineTemplate(template._id, templateData);
         } else {
-            const result = await apiClient.createRoutineTemplate(templateData as Omit<RoutineTemplate, '_id'>);
+            const result = await apiClient.createRoutineTemplate(templateData);
             success = !!result;
         }
 
@@ -1662,7 +1712,7 @@ const TemplateEditor: React.FC<{
                 <h2>{template ? `Editando: ${template.templateName}` : "Crear Nueva Plantilla"}</h2>
                 <div>
                     <button onClick={handleSaveTemplate} className="cta-button" disabled={isSaving || !routine}>
-                        {isSaving && routine ? 'Guardando...' : 'Guardar Plantilla'}
+                        {isSaving ? 'Guardando...' : 'Guardar Plantilla'}
                     </button>
                     <button onClick={onBack} className="back-button" style={{marginLeft: '1rem'}}>Cancelar</button>
                 </div>
@@ -1677,9 +1727,17 @@ const TemplateEditor: React.FC<{
                     <label>Descripción (Opcional)</label>
                     <input type="text" value={description} onChange={e => setDescription(e.target.value)} />
                 </div>
+                <div className="form-group">
+                    <label>Género de la Plantilla</label>
+                    <select value={gender} onChange={e => setGender(e.target.value as any)}>
+                        <option value="Unisex">Unisex</option>
+                        <option value="Male">Hombre</option>
+                        <option value="Female">Mujer</option>
+                    </select>
+                </div>
             </div>
 
-            {isSaving && !routine ? (
+            {isGenerating ? (
                 <div className="placeholder-action generation-container" style={{marginTop: '2rem'}}>
                     <div className="loading-container" style={{minHeight: 'auto', padding: '2rem'}}>
                         <div className="spinner"></div>
@@ -1708,7 +1766,7 @@ const TemplateEditor: React.FC<{
                             placeholder="Ej: Crear una rutina de 3 días enfocada en fuerza."
                         ></textarea>
                     </div>
-                    <button className="cta-button" onClick={handleGenerateRoutine} disabled={isSaving}>
+                    <button className="cta-button" onClick={handleGenerateRoutine} disabled={isGenerating}>
                         Generar Rutina Base
                     </button>
                     {generationError && <p className="error-text" style={{marginTop: '1rem'}}>{generationError}</p>}
@@ -1795,6 +1853,7 @@ const RoutineTemplateManager: React.FC<{ gym: Gym; onBack: () => void; }> = ({ g
                         <div key={template._id} className="template-card">
                             <div className="template-card-header">
                                 <h3>{template.templateName}</h3>
+                                {template.gender && <span className={`gender-badge ${template.gender.toLowerCase()}`}>{template.gender === 'Male' ? 'Hombre' : template.gender === 'Female' ? 'Mujer' : 'Unisex'}</span>}
                                 <p>{template.description || 'Sin descripción'}</p>
                             </div>
                             <div className="template-card-actions">
@@ -2460,86 +2519,10 @@ const RoutineGenerator: React.FC<{ clientData: ClientData; setClientData: (data:
         setIsGenerating(true);
         setError('');
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const generatedRoutine = await generateRoutineForClient(clientData, gymId, adminInstructions);
             
-            const enabledExercises = Object.entries(exerciseLibrary).reduce((acc, [group, exercises]) => {
-                const enabled = (exercises as ExerciseDefinition[]).filter(ex => ex.isEnabled).map(ex => ex.name);
-                if (enabled.length > 0) {
-                    acc[group] = enabled;
-                }
-                return acc;
-            }, {} as Record<string, string[]>);
-
-
-            const prompt = `
-                Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
-                - Perfil: ${JSON.stringify(clientData.profile)}
-                - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
-                
-                Instrucciones Adicionales del Entrenador: "${adminInstructions || 'Ninguna'}"
-
-                REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
-                1.  Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
-                2.  El JSON debe seguir esta estructura exacta:
-                    {
-                      "planName": "Nombre del Plan (ej: Hipertrofia Intensa)",
-                      "totalDurationWeeks": 12, // Duración total en semanas
-                      "phases": [
-                        {
-                          "phaseName": "Nombre de la Fase (ej: Adaptación y Fuerza)",
-                          "durationWeeks": 4,
-                          "routine": {
-                            "dias": [
-                              {
-                                "dia": "Día 1",
-                                "grupoMuscular": "Músculos Principales del Día",
-                                "ejercicios": [
-                                  {
-                                    "nombre": "Nombre del Ejercicio",
-                                    "series": "Número de series (ej: '4')",
-                                    "repeticiones": "Rango de reps (ej: '8-12')",
-                                    "descanso": "Tiempo en segundos (ej: '60s')",
-                                    "tecnicaAvanzada": "Nombre de la técnica si aplica (ej: 'Drop Set') o '' si no aplica",
-                                  }
-                                ],
-                                "cardio": "Descripción del cardio (ej: '30 min en cinta a 120-140ppm') o '' si no aplica"
-                              }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                3.  ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista. Si un ejercicio no está en la lista, no puedes usarlo. El incumplimiento de esta regla hará que tu respuesta sea rechazada.
-                4.  Asigna los días de entrenamiento según el número de 'trainingDays' del perfil. Por ejemplo, si son 4 días, crea 4 planes de día.
-                5.  La suma de 'durationWeeks' de todas las fases debe ser igual a 'totalDurationWeeks'.
-                6.  Aplica 'tecnicaAvanzada' solo si el perfil del cliente lo permite ('useAdvancedTechniques: "Sí"'). Las opciones válidas son: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, el valor debe ser un string vacío "".
-                7.  Si el perfil incluye 'includeAdaptationPhase: "Sí"', la primera fase debe ser de adaptación.
-                8.  Si el perfil incluye 'includeDeloadPhase: "Sí"', una de las fases (preferiblemente intermedia o la última) debe ser una "Fase de Descarga" con una notable reducción de volumen e intensidad (ej. reducir series, usar pesos más ligeros) para facilitar la recuperación.
-                9.  Ajusta el número de ejercicios por día según la 'trainingIntensity' del perfil: 'Baja' (5-6 ejercicios), 'Moderada' (6-7), 'Alta' (8-10), y 'Extrema' (11-13, mezclando fuerza, hipertrofia y resistencia).
-                10. Presta especial atención a 'bodyFocusArea' y 'muscleFocus' para priorizar esos grupos musculares, siguiendo la lógica de la regla 11.
-                11. Diferencia entre 'Full Body' y 'Cuerpo Completo':
-                    - Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior).
-                    - Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
-            `;
-            
-            const response = await withRetry(() => 
-                ai.models.generateContent({
-                    model: 'gemini-2.5-flash',
-                    contents: prompt,
-                })
-            );
-            const text = (response as GenerateContentResponse).text;
-            
-            const jsonString = extractJson(text);
-            if (!jsonString) {
-                throw new Error("La IA no devolvió un JSON válido.");
-            }
-            const generatedPlan: Routine = JSON.parse(jsonString);
-            
-            const correctedPlan = validateAndCorrectRoutine(generatedPlan, exerciseLibrary);
-
-            setCurrentRoutine(correctedPlan);
-            setClientData({ ...clientData, routine: correctedPlan, routineGeneratedDate: new Date().toISOString() });
+            setCurrentRoutine(generatedRoutine);
+            setClientData({ ...clientData, routine: generatedRoutine, routineGeneratedDate: new Date().toISOString() });
             setIsEditing(false); // Salir del modo edición al generar un nuevo plan
         } catch (err) {
             console.error(err);
@@ -3525,18 +3508,19 @@ const generateRoutineForClient = async (clientData: ClientData, gymId: string, i
         Por favor, crea un plan de entrenamiento de gimnasio para un cliente con el siguiente perfil:
         - Perfil: ${JSON.stringify(clientData.profile)}
         - Lista de ejercicios disponibles, agrupados por músculo: ${JSON.stringify(enabledExercises)}
-        ${instructions ? `Instrucciones Adicionales del Cliente: "${instructions}"` : ''}
+        ${instructions ? `Instrucciones Adicionales del Entrenador/Cliente: "${instructions}"` : ''}
+
         REGLAS CRÍTICAS E INQUEBRANTABLES PARA TU RESPUESTA:
         1. Tu respuesta DEBE ser únicamente un objeto JSON válido, sin ningún texto adicional, formato markdown, o explicaciones.
         2. El JSON debe seguir esta estructura exacta: {"planName": "Nombre", "totalDurationWeeks": 12, "phases": [{"phaseName": "Nombre Fase", "durationWeeks": 4, "routine": {"dias": [{"dia": "Día 1", "grupoMuscular": "Músculos", "ejercicios": [{"nombre": "Ejercicio", "series": "4", "repeticiones": "8-12", "descanso": "60s", "tecnicaAvanzada": ""}], "cardio": "Desc Cardio"}]}}]}
-        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista. Si un ejercicio no está en la lista, no puedes usarlo. El incumplimiento de esta regla hará que tu respuesta sea rechazada.
-        4. Asigna los días de entrenamiento según 'trainingDays'.
+        3. ¡REGLA MÁS IMPORTANTE! Selecciona ejercicios EXCLUSIVAMENTE de la "Lista de ejercicios disponibles" proporcionada. NO inventes, alteres ni incluyas ejercicios que no estén en esa lista.
+        4. La estructura de la rutina DEBE coincidir EXACTAMENTE con el número de 'trainingDays' especificado en el perfil. Si 'trainingDays' es '5', el array 'dias' DEBE contener 5 objetos de día. Si es '3', debe contener 3. NO generes un número de días diferente al solicitado. Esta es una regla fundamental.
         5. La suma de 'durationWeeks' de las fases debe ser igual a 'totalDurationWeeks'.
         6. Aplica 'tecnicaAvanzada' solo si 'useAdvancedTechniques: "Sí"'. Opciones válidas: ${advancedTechniqueOptions.filter(o => o.value).map(o => o.value).join(', ')}. Si no se usa, debe ser "".
         7. Incluye fases de adaptación y descarga si el perfil lo indica.
         8. Ajusta el número de ejercicios según la 'trainingIntensity'.
-        9. Prioriza 'bodyFocusArea' y 'muscleFocus', siguiendo la lógica de la regla 10.
-        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero (tren superior e inferior). Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días, asegurando que todos los músculos principales se entrenen a lo largo de la semana. Por ejemplo: Día 1 Pecho/Tríceps, Día 2 Espalda/Bíceps, etc. Esta es una rutina 'normal' y balanceada.
+        9. Prioriza 'bodyFocusArea' y 'muscleFocus'.
+        10. Diferencia entre 'Full Body' y 'Cuerpo Completo': Si 'bodyFocusArea' es 'Full Body', cada día de entrenamiento debe incluir ejercicios para el cuerpo entero. Si 'bodyFocusArea' es 'Cuerpo Completo', crea una rutina dividida (split) que trabaje diferentes grupos musculares en diferentes días.
     `;
     const response = await withRetry(() => 
         ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt })
