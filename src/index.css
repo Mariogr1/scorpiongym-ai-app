@@ -507,7 +507,8 @@ body {
     align-items: center;
 }
 
-.gym-card-actions .action-btn {
+/* --- BOTONES DE ACCIÓN GENÉRICOS --- */
+.action-btn {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
     font-weight: 500;
@@ -515,22 +516,23 @@ body {
     border-radius: 6px;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    color: var(--text-color);
 }
 
 .action-btn.edit {
     background-color: var(--secondary-button-color);
-    color: var(--text-color);
 }
 .action-btn.edit:hover {
     background-color: var(--secondary-button-hover);
 }
 .action-btn.delete {
     background-color: var(--error-color);
-    color: white;
 }
 .action-btn.delete:hover {
     background-color: #c82333;
 }
+.action-btn.save { background-color: var(--success-color); }
+.action-btn.cancel { background-color: var(--secondary-button-color); }
 
 
 
@@ -1730,11 +1732,11 @@ body {
     transform: rotate(45deg);
 }
 .library-accordion-content {
-    padding: 1rem;
     background-color: var(--background-color);
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.3s ease, padding 0.3s ease;
+    transition: max-height 0.4s ease, padding 0.4s ease;
+    padding: 0 1.5rem;
 }
 .library-accordion-content.open {
     max-height: 5000px;
@@ -1791,8 +1793,7 @@ body {
     gap: 0.5rem;
     justify-content: flex-end;
 }
-.action-btn.save { background-color: var(--success-color); }
-.action-btn.cancel { background-color: var(--secondary-button-color); }
+
 
 /* Switch Toggle */
 .switch {
@@ -1809,7 +1810,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #ccc;
+  background-color: var(--error-color);
   transition: .4s;
 }
 .slider:before {
@@ -1886,21 +1887,26 @@ input:checked + .slider:before { transform: translateX(20px); }
     background-color: var(--female-color);
 }
 
-.template-card:has(.gender-badge.male) .action-btn.edit {
+.template-card .action-btn.edit.male {
     background-color: var(--male-color);
 }
-
-.template-card:has(.gender-badge.female) .action-btn.edit {
+.template-card .action-btn.edit.female {
     background-color: var(--female-color);
 }
+.template-card .action-btn.edit.unisex {
+     background-color: var(--secondary-button-color);
+}
 
-.template-card:has(.gender-badge.male) .action-btn.edit:hover {
+.template-card .action-btn.edit.male:hover {
     background-color: #0b5ed7; /* Darker blue */
 }
-
-.template-card:has(.gender-badge.female) .action-btn.edit:hover {
+.template-card .action-btn.edit.female:hover {
     background-color: #b02a6c; /* Darker pink */
 }
+.template-card .action-btn.edit.unisex:hover {
+    background-color: var(--secondary-button-hover);
+}
+
 
 .template-editor .template-form {
     display: grid;
@@ -1937,7 +1943,24 @@ input:checked + .slider:before { transform: translateX(20px); }
 }
 .request-date { font-size: 0.9rem; color: var(--text-secondary-color); }
 .request-client { margin-bottom: 1rem; color: var(--text-secondary-color); }
-.request-card-actions { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: flex-end; }
+.request-card-actions { 
+    margin-top: 1.5rem; 
+    display: flex; 
+    gap: 1rem; 
+    justify-content: flex-end; 
+}
+.request-card-actions .action-btn {
+    background-color: var(--secondary-button-color);
+}
+.request-card-actions .action-btn:hover {
+    background-color: var(--secondary-button-hover);
+}
+.request-card-actions .action-btn.delete {
+    background-color: var(--error-color);
+}
+.request-card-actions .action-btn.delete:hover {
+    background-color: #c82333;
+}
 
 
 /* --- Progress View --- */
@@ -2376,7 +2399,14 @@ input:checked + .slider:before { transform: translateX(20px); }
     .admin-header-nav {
         width: 100%;
     }
-    .client-management-bar, .view-controls, .selection-controls {
+    .client-management-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .add-client-form, .search-client-form {
+        flex-grow: 0; /* Prevents vertical stretching on mobile */
+    }
+    .view-controls, .selection-controls {
         flex-direction: column;
         align-items: stretch;
     }
@@ -2389,8 +2419,6 @@ input:checked + .slider:before { transform: translateX(20px); }
     .exercise-entry-row {
         grid-template-columns: 1fr;
         padding: 1rem;
-        /* border: 1px solid var(--border-color);
-        border-radius: 8px; */
     }
     .exercise-entry-row > * {
         grid-column: 1 / -1;
