@@ -2375,6 +2375,11 @@ input:checked + .slider:before { transform: translateX(20px); }
 @media (max-width: 768px) {
     #root {
         margin: 1rem auto;
+        padding: 1rem 0.5rem;
+    }
+    .login-container, .client-view-container, .onboarding-container {
+        padding-left: 0;
+        padding-right: 0;
     }
     .main-header {
         flex-direction: column;
@@ -2442,6 +2447,7 @@ input:checked + .slider:before { transform: translateX(20px); }
         padding: 1.5rem;
     }
     .main-content {
-        padding: 1rem 0.5rem;
+        padding: 1rem 0;
+        border-radius: 0;
     }
 }
