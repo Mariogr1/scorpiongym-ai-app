@@ -421,7 +421,7 @@ body {
   border-radius: 8px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color: 0.2s ease;
 }
 .file-input-label:hover {
   background-color: var(--secondary-button-hover);
@@ -2056,41 +2056,26 @@ input:checked + .slider:before { transform: translateX(20px); }
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
 }
-.client-log-section {
+
+.exercise-tracking {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
     border-top: 1px solid var(--border-color);
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    align-items: center;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 0.75rem;
+    align-items: flex-end;
 }
-.last-log-display {
+.exercise-tracking div {
     display: flex;
-    gap: 1rem;
-    text-align: center;
+    flex-direction: column;
 }
-.last-log-item {
-    background-color: var(--background-color);
-    padding: 0.5rem;
-    border-radius: 6px;
-    flex: 1;
-}
-.last-log-item label {
+.exercise-tracking label {
     font-size: 0.8rem;
     color: var(--text-secondary-color);
-    display: block;
+    margin-bottom: 0.25rem;
 }
-.last-log-item span {
-    font-size: 1.2rem;
-    font-weight: 600;
-}
-.new-log-inputs {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-.new-log-inputs input {
+.exercise-tracking input {
     width: 100%;
     padding: 0.75rem;
     background-color: var(--background-color);
@@ -2100,19 +2085,20 @@ input:checked + .slider:before { transform: translateX(20px); }
     text-align: center;
     font-size: 1rem;
 }
-.new-log-btn {
+.exercise-tracking input::placeholder {
+  color: #777;
+}
+.exercise-tracking .cta-button {
     width: 44px;
     height: 44px;
+    padding: 0;
     border-radius: 50%;
-    border: none;
-    background-color: var(--primary-color);
-    color: white;
     font-size: 1.5rem;
-    cursor: pointer;
     flex-shrink: 0;
     display: flex;
     justify-content: center;
     align-items: center;
+    line-height: 1;
 }
 
 .expired-view {
@@ -2433,7 +2419,7 @@ input:checked + .slider:before { transform: translateX(20px); }
         font-size: 0.9rem;
         padding: 0.8rem 0.5rem;
     }
-    .client-log-section {
+    .exercise-tracking {
         grid-template-columns: 1fr;
     }
     .client-view-container > header {

@@ -3492,36 +3492,30 @@ const ExerciseTracker: React.FC<{
                                             return (
                                                 <li key={exIndex} className="exercise-item-client">
                                                     <ExerciseView exercise={exercise} onPlayVideo={onPlayVideo} videoUrl={findExerciseVideoUrl(exercise.nombre)} />
-                                                    <div className="client-log-section">
-                                                        <div className="last-log-display">
-                                                            <div className="last-log-item">
-                                                                <label>Últ. Peso (kg)</label>
-                                                                <span>{lastLog?.weight ?? '-'}</span>
-                                                            </div>
-                                                            <div className="last-log-item">
-                                                                <label>Últ. Reps</label>
-                                                                <span>{lastLog?.repetitions ?? '-'}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="new-log-inputs">
-                                                             <input 
+                                                    <div className="exercise-tracking">
+                                                        <div>
+                                                            <label>Peso (kg)</label>
+                                                            <input 
                                                                 type="number" 
-                                                                placeholder="kg" 
+                                                                placeholder={lastLog ? `Últ: ${lastLog.weight}` : "kg"}
                                                                 value={currentNewLog.weight} 
                                                                 onChange={(e) => handleNewLogChange(exercise.nombre, 'weight', e.target.value)}
                                                                 disabled={isSaving === exercise.nombre}
                                                             />
+                                                        </div>
+                                                        <div>
+                                                            <label>Repeticiones</label>
                                                             <input 
                                                                 type="number" 
-                                                                placeholder="reps" 
+                                                                placeholder={lastLog ? `Últ: ${lastLog.repetitions}` : "reps"}
                                                                 value={currentNewLog.reps}
                                                                 onChange={(e) => handleNewLogChange(exercise.nombre, 'reps', e.target.value)}
                                                                 disabled={isSaving === exercise.nombre}
                                                             />
-                                                            <button className="new-log-btn" onClick={() => handleLogSet(exercise.nombre)} disabled={isSaving === exercise.nombre}>
-                                                                {isSaving === exercise.nombre ? <div className="spinner small" style={{borderColor: '#fff', borderTopColor: 'transparent'}}></div> : '+'}
-                                                            </button>
                                                         </div>
+                                                        <button className="cta-button" onClick={() => handleLogSet(exercise.nombre)} disabled={isSaving === exercise.nombre}>
+                                                            {isSaving === exercise.nombre ? <div className="spinner small" style={{borderColor: '#fff', borderTopColor: 'transparent'}}></div> : '+'}
+                                                        </button>
                                                     </div>
                                                 </li>
                                             )
