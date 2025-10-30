@@ -948,11 +948,6 @@ body {
     width: 100%;
 }
 
-/* Specific rule to widen the client's main view on larger screens */
-.client-view-container > .main-content {
-    max-width: 1100px;
-}
-
 .actions-bar {
     display: flex;
     justify-content: space-between;
