@@ -1574,8 +1574,6 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
     width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
 }
 
 .choice-card, .plan-option-card {
@@ -1620,6 +1618,8 @@ body {
     padding: 2rem;
     border-radius: 12px;
     border: 1px solid var(--border-color);
+    margin-left: auto;
+    margin-right: auto;
 }
 .generation-config-panel h3 {
     text-align: center;
@@ -1916,6 +1916,10 @@ input:checked + .slider:before { transform: translateX(20px); }
     padding: 2rem;
     border-radius: 12px;
     margin-bottom: 2rem;
+    width: 100%;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 
