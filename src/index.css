@@ -14,6 +14,8 @@
   --archive-color: #36a2eb; /* Blue for archive/restore */
   --warning-bg-color: rgba(255, 165, 0, 0.1);
   --warning-border-color: #ffa500;
+  --male-color: #0d6efd; /* Azul oscuro para hombre */
+  --female-color: #d63384; /* Rosa oscuro para mujer */
 }
 
 * {
@@ -1744,26 +1746,42 @@ body {
     flex-direction: column;
 }
 
-.exercise-entry-header, .exercise-entry-row {
+.exercise-entry-header {
     display: grid;
     grid-template-columns: 100px 1fr 1fr 150px;
     gap: 1rem;
     align-items: center;
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-}
-.exercise-entry-header {
+    padding: 0 0.75rem 0.75rem 0.75rem;
     font-weight: 600;
     color: var(--text-secondary-color);
     font-size: 0.9rem;
 }
-.exercise-entry-row:last-child {
-    border-bottom: none;
+
+.exercise-entry-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 1fr 150px;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    transition: all 0.2s ease-in-out;
 }
+.library-accordion-content .exercise-entry-list .exercise-entry-row:last-child {
+    margin-bottom: 0;
+}
+.exercise-entry-row:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
 .exercise-entry-row .editing-input {
     width: 100%;
     padding: 0.5rem;
-    background-color: var(--surface-color);
+    background-color: var(--background-color);
     border: 1px solid var(--border-color);
     color: var(--text-color);
     border-radius: 4px;
@@ -1852,11 +1870,36 @@ input:checked + .slider:before { transform: translateX(20px); }
     border-radius: 12px;
     font-weight: 600;
     background-color: var(--secondary-button-color);
+    color: var(--text-color);
 }
 .template-card-actions {
     display: flex;
     justify-content: flex-end;
     gap: 1rem;
+}
+
+/* Template gender coloring */
+.gender-badge.male {
+    background-color: var(--male-color);
+}
+.gender-badge.female {
+    background-color: var(--female-color);
+}
+
+.template-card:has(.gender-badge.male) .action-btn.edit {
+    background-color: var(--male-color);
+}
+
+.template-card:has(.gender-badge.female) .action-btn.edit {
+    background-color: var(--female-color);
+}
+
+.template-card:has(.gender-badge.male) .action-btn.edit:hover {
+    background-color: #0b5ed7; /* Darker blue */
+}
+
+.template-card:has(.gender-badge.female) .action-btn.edit:hover {
+    background-color: #b02a6c; /* Darker pink */
 }
 
 .template-editor .template-form {
@@ -2346,8 +2389,8 @@ input:checked + .slider:before { transform: translateX(20px); }
     .exercise-entry-row {
         grid-template-columns: 1fr;
         padding: 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
+        /* border: 1px solid var(--border-color);
+        border-radius: 8px; */
     }
     .exercise-entry-row > * {
         grid-column: 1 / -1;
