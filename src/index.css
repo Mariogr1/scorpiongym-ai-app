@@ -32,8 +32,8 @@ body {
 
 #root {
   max-width: 1200px;
-  margin: 2rem auto;
-  padding: 1rem;
+  margin: 1rem auto;
+  padding: 1rem 0.5rem;
 }
 
 /* --- Animaciones --- */
@@ -515,27 +515,40 @@ body {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
     font-weight: 500;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
-    color: var(--text-color);
+    transition: all 0.2s ease;
+    background-color: transparent;
 }
 
 .action-btn.edit {
-    background-color: var(--secondary-button-color);
+    border-color: var(--secondary-button-color);
+    color: var(--text-secondary-color);
 }
 .action-btn.edit:hover {
     background-color: var(--secondary-button-hover);
+    color: var(--text-color);
+    border-color: var(--secondary-button-hover);
 }
 .action-btn.delete {
-    background-color: var(--error-color);
+    border-color: var(--error-color);
+    color: var(--error-color);
 }
 .action-btn.delete:hover {
-    background-color: #c82333;
+    background-color: var(--error-color);
+    color: var(--text-color);
 }
-.action-btn.save { background-color: var(--success-color); }
-.action-btn.cancel { background-color: var(--secondary-button-color); }
+.action-btn.save { 
+    background-color: var(--success-color); 
+    border-color: var(--success-color);
+    color: var(--text-color);
+}
+.action-btn.cancel { 
+    background-color: var(--secondary-button-color); 
+    border-color: var(--secondary-button-color);
+    color: var(--text-color);
+}
 
 
 
@@ -2373,10 +2386,6 @@ input:checked + .slider:before { transform: translateX(20px); }
     }
 }
 @media (max-width: 768px) {
-    #root {
-        margin: 1rem auto;
-        padding: 1rem 0.5rem;
-    }
     .login-container, .client-view-container, .onboarding-container {
         padding-left: 0;
         padding-right: 0;
