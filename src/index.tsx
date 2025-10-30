@@ -166,6 +166,40 @@ const calculateTargetWeight = (height: number): string => {
 };
 
 /**
+ * Calculates the estimated final weight based on the client's goal and plan duration.
+ * @param clientData The client's data.
+ * @returns A string representing the estimated final weight, or 'N/A'.
+ */
+const calculateEstimatedFinalWeight = (clientData: ClientData): string => {
+    const { profile, routine } = clientData;
+    const initialWeight = parseFloat(profile.weight);
+    const durationWeeks = routine?.totalDurationWeeks;
+
+    if (!initialWeight || !durationWeeks) {
+        return 'N/A';
+    }
+
+    let weeklyChange = 0;
+    switch (profile.goal) {
+        case 'Pérdida de grasa':
+            weeklyChange = -0.5; // Estimated 0.5kg loss per week
+            break;
+        case 'Hipertrofia':
+            weeklyChange = 0.25; // Estimated 0.25kg gain per week
+            break;
+        case 'Mantenimiento':
+        case 'Resistencia':
+        default:
+            weeklyChange = 0;
+            break;
+    }
+
+    const finalWeight = initialWeight + (weeklyChange * durationWeeks);
+    return `${finalWeight.toFixed(1)} kg`;
+};
+
+
+/**
  * Calculates the Levenshtein distance between two strings.
  * This is used to find the "closest" string match for correcting AI hallucinations.
  * @param a The first string.
@@ -1912,8 +1946,8 @@ const RoutineTemplateManager: React.FC<{ gym: Gym; onBack: () => void; }> = ({ g
                             <div className="template-card-header">
                                 <h3>{template.templateName}</h3>
                                 {template.gender && <span className={`gender-badge ${template.gender.toLowerCase()}`}>{template.gender === 'Male' ? 'Hombre' : template.gender === 'Female' ? 'Mujer' : 'Unisex'}</span>}
-                                <p>{template.description || 'Sin descripción'}</p>
                             </div>
+                            <p>{template.description || 'Sin descripción'}</p>
                             <div className="template-card-actions">
                                 <button className="action-btn edit" onClick={() => setIsEditing(template)}>Editar</button>
                                 <button className="action-btn delete" onClick={() => handleDelete(template._id)}>Eliminar</button>
@@ -3545,6 +3579,7 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
     const { profile } = clientData;
     const bmi = calculateBMI(parseFloat(profile.weight), parseFloat(profile.height));
     const targetWeight = calculateTargetWeight(parseFloat(profile.height));
+    const estimatedFinalWeight = calculateEstimatedFinalWeight(clientData);
 
     return (
         <div className="client-profile-view animated-fade-in">
@@ -3578,9 +3613,13 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
                             <span className="value-large">{bmi.value || 'N/A'}</span>
                         </div>
                     </div>
-                    <div className="healthy-weight-box">
+                     <div className="healthy-weight-box">
                         Peso saludable estimado:
                         <strong>{targetWeight}</strong>
+                    </div>
+                    <div className="healthy-weight-box">
+                        Peso Estimado al Finalizar:
+                        <strong>{estimatedFinalWeight}</strong>
                     </div>
                 </div>
             </div>
@@ -4346,7 +4385,6 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
     return (
         <div className="main-content">
              <nav className="main-tabs-nav">
-                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
                 {(planType === 'full' || planType === 'routine') &&
                     <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
                 }
@@ -4355,6 +4393,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                 }
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
                 <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Ejercicios</button>
+                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
             </nav>
             <main className="client-main-content">
                 {renderContent()}
