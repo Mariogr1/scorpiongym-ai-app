@@ -212,6 +212,10 @@ body {
     max-width: 1100px;
 }
 
+.client-view-container > .main-content {
+    max-width: 1100px;
+}
+
 .client-header-actions {
     display: flex;
     gap: 1rem;
@@ -2414,9 +2418,6 @@ input:checked + .slider:before { transform: translateX(20px); }
         font-size: 0.9rem;
         padding: 0.8rem 0.5rem;
     }
-    .exercise-tracking {
-        grid-template-columns: 1fr;
-    }
     .client-view-container > header {
         flex-direction: column;
         align-items: flex-start;
@@ -2441,6 +2442,6 @@ input:checked + .slider:before { transform: translateX(20px); }
         padding: 1.5rem;
     }
     .main-content {
-        padding: 1rem;
+        padding: 1rem 0.5rem;
     }
 }
