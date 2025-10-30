@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3419,6 +3420,10 @@ const ExerciseTracker: React.FC<{
                 <h2>{routine.planName}</h2>
                 {routine.totalDurationWeeks > 0 && <p>Duración Total: {routine.totalDurationWeeks} semanas</p>}
             </div>
+
+            <button onClick={onRequestChange} className="cta-button secondary contact-trainer-button">
+                Contacta a tu entrenador
+            </button>
             
             <div className="accordion-phases">
                 {routine.phases.map((phase, phaseIndex) => (
@@ -3495,10 +3500,6 @@ const ExerciseTracker: React.FC<{
                     </div>
                 ))}
             </div>
-            
-            <button onClick={onRequestChange} className="cta-button secondary request-change-button">
-                ¿Necesitas un cambio? Contacta a tu entrenador
-            </button>
         </div>
     );
 };
@@ -4345,6 +4346,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
     return (
         <div className="main-content">
              <nav className="main-tabs-nav">
+                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
                 {(planType === 'full' || planType === 'routine') &&
                     <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
                 }
@@ -4353,7 +4355,6 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
                 }
                 <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
                 <button className={`main-tab-button ${activeTab === 'library' ? 'active' : ''}`} onClick={() => setActiveTab('library')}>Ejercicios</button>
-                <button className={`main-tab-button ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi Perfil</button>
             </nav>
             <main className="client-main-content">
                 {renderContent()}
