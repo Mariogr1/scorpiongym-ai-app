@@ -1,5 +1,6 @@
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -661,8 +662,10 @@ const ClientRegistrationPage: React.FC<{
                         required
                         disabled={isLoading || gyms.length === 0}
                     >
-                        {gyms.length === 0 ? (
+                        {isLoading ? (
                             <option>Cargando gimnasios...</option>
+                        ) : gyms.length === 0 ? (
+                            <option>No se encontraron gimnasios</option>
                         ) : (
                             gyms.map(gym => <option key={gym._id} value={gym._id}>{gym.name}</option>)
                         )}
@@ -3382,11 +3385,12 @@ const ExerciseTracker: React.FC<{
     const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [newLogs, setNewLogs] = useState<Record<string, { weight: string; reps: string }>>({});
     const [isSaving, setIsSaving] = useState<string | null>(null); // Store exercise name being saved
-    const exerciseLibrary = useRef<ExerciseLibrary | null>(null);
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
     
     useEffect(() => {
         const fetchLibrary = async () => {
-            exerciseLibrary.current = await apiClient.getExerciseLibrary(clientData.gymId);
+            const library = await apiClient.getExerciseLibrary(clientData.gymId);
+            setExerciseLibrary(library);
         };
         fetchLibrary();
     }, [clientData.gymId]);
@@ -3436,8 +3440,8 @@ const ExerciseTracker: React.FC<{
     };
     
     const findExerciseVideoUrl = (exerciseName: string) => {
-        if (!exerciseLibrary.current) return undefined;
-        for (const group of Object.values(exerciseLibrary.current)) {
+        if (!exerciseLibrary) return undefined;
+        for (const group of Object.values(exerciseLibrary)) {
             const exercise = (group as ExerciseDefinition[]).find(ex => ex.name === exerciseName);
             if (exercise) return exercise.videoUrl;
         }
