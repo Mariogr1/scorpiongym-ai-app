@@ -1,6 +1,7 @@
 
 
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -385,7 +386,7 @@ const App: React.FC = () => {
     };
 
 
-    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string) => {
+    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string): Promise<void> => {
         setLoginError('');
         setLoginMessage('');
         if (type === 'client') {
@@ -511,7 +512,7 @@ const LandingPage: React.FC<{ onIngresar: () => void }> = ({ onIngresar }) => {
 };
 
 const LoginPage: React.FC<{ 
-    onLogin: (type: 'client' | 'gym', id: string, code?: string) => void; 
+    onLogin: (type: 'client' | 'gym', id: string, code?: string) => Promise<void>; 
     error: string; 
     message: string;
     onBack: () => void;
@@ -520,10 +521,17 @@ const LoginPage: React.FC<{
     const [loginType, setLoginType] = useState<'client' | 'gym'>('client');
     const [id, setId] = useState('');
     const [code, setCode] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onLogin(loginType, id, code);
+        setIsLoading(true);
+        try {
+            await onLogin(loginType, id, code);
+        } finally {
+            // This will only be reached if the login fails and the component doesn't unmount.
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -547,6 +555,7 @@ const LoginPage: React.FC<{
                         value={id}
                         onChange={(e) => setId(e.target.value)}
                         required
+                        disabled={isLoading}
                     />
                     <input
                         type='password'
@@ -554,9 +563,12 @@ const LoginPage: React.FC<{
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         required
+                        disabled={isLoading}
                     />
                     {error && <p className="error-text">{error}</p>}
-                    <button type="submit" className="cta-button">Ingresar</button>
+                    <button type="submit" className="cta-button" disabled={isLoading}>
+                        {isLoading ? <><span className="spinner small"></span> Ingresando...</> : 'Ingresar'}
+                    </button>
                 </form>
                  <button onClick={onGoToRegister} className="back-button simple" style={{ marginTop: '1rem' }}>
                     Crear cuenta de cliente

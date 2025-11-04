@@ -159,6 +159,46 @@ export interface Request {
     createdAt: string;
 }
 
+/**
+ * A wrapper around fetch that retries on transient server errors and network issues.
+ * @param url The URL to fetch.
+ * @param options The fetch options.
+ * @param maxRetries Maximum number of retries.
+ * @param baseDelay Base delay for exponential backoff.
+ * @returns A promise that resolves to the Response.
+ */
+async function fetchWithRetry(url: RequestInfo | URL, options?: RequestInit, maxRetries = 2, baseDelay = 1000): Promise<Response> {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            const response = await fetch(url, options);
+            // Retry on server errors (502, 503, 504) which often indicate cold starts or temporary issues.
+            if ([502, 503, 504].includes(response.status) && attempt < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                console.warn(`API call to ${url} failed with status ${response.status}. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                attempt++;
+                continue;
+            }
+            return response;
+        } catch (error) {
+            // Retry on network errors.
+            if (attempt < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, attempt);
+                console.warn(`API call to ${url} failed with network error. Retrying in ${delay}ms... (Attempt ${attempt + 1}/${maxRetries})`, error);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                attempt++;
+            } else {
+                console.error(`API call to ${url} failed after maximum retries.`, error);
+                throw error;
+            }
+        }
+    }
+    // This part is technically unreachable if the loop logic is correct, but it's needed for type safety.
+    throw new Error('Function failed after maximum retries.');
+}
+
+
 // --- Constants ---
 
 export const advancedTechniqueOptions: { value: string; label: string; description: string; }[] = [
@@ -173,7 +213,7 @@ export const apiClient = {
   // --- Super Admin ---
   async getGyms(): Promise<Gym[]> {
     try {
-        const response = await fetch('/api/gyms');
+        const response = await fetchWithRetry('/api/gyms');
         if (!response.ok) throw new Error('Network response was not ok');
         return (await response.json()) as Gym[];
     } catch (error) {
@@ -184,7 +224,7 @@ export const apiClient = {
   
   async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
      try {
-        const response = await fetch('/api/gyms', {
+        const response = await fetchWithRetry('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
@@ -198,7 +238,7 @@ export const apiClient = {
   
   async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
      try {
-        const response = await fetch('/api/gyms/' + gymId, {
+        const response = await fetchWithRetry('/api/gyms/' + gymId, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
@@ -212,7 +252,7 @@ export const apiClient = {
 
   async deleteGym(gymId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/gyms/${gymId}`, { method: 'DELETE' });
+        const response = await fetchWithRetry(`/api/gyms/${gymId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
         console.error(`Failed to delete gym ${gymId}:`, error);
@@ -223,7 +263,7 @@ export const apiClient = {
   // --- Gym/Coach Auth ---
   async gymLogin(username: string, password: string): Promise<Gym | null> {
     try {
-        const response = await fetch('/api/auth/gym-login', {
+        const response = await fetchWithRetry('/api/auth/gym-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
@@ -239,7 +279,7 @@ export const apiClient = {
   // --- Client Management (Scoped by Gym) ---
   async getClients(gymId: string): Promise<ClientListItem[]> {
     try {
-        const response = await fetch(`/api/clients?gymId=${gymId}`);
+        const response = await fetchWithRetry(`/api/clients?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         const clients: ClientListItem[] = await response.json();
         return clients.sort((a, b) => (a.profile.name || a.dni).localeCompare(b.profile.name || b.dni));
@@ -251,7 +291,7 @@ export const apiClient = {
 
   async getClientData(dni: string): Promise<ClientData | null> {
     try {
-        const response = await fetch(`/api/clients/${dni}`);
+        const response = await fetchWithRetry(`/api/clients/${dni}`);
         if (!response.ok) {
             if (response.status === 404) return null;
             throw new Error('Network response was not ok');
@@ -265,7 +305,7 @@ export const apiClient = {
 
   async saveClientData(dni: string, dataToSave: Partial<ClientData>): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients/${dni}`, {
+        const response = await fetchWithRetry(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dataToSave),
@@ -283,7 +323,7 @@ export const apiClient = {
 
   async createClient(dni: string, gymId: string): Promise<{ success: boolean; message?: string }> {
     try {
-        const response = await fetch('/api/clients', {
+        const response = await fetchWithRetry('/api/clients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dni, gymId }),
@@ -302,7 +342,7 @@ export const apiClient = {
   async updateClientStatus(dnis: Set<string>, newStatus: 'active' | 'archived'): Promise<void> {
     try {
         const promises = Array.from(dnis).map(dni => 
-            fetch(`/api/clients/${dni}`, {
+            fetchWithRetry(`/api/clients/${dni}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus }),
@@ -317,7 +357,7 @@ export const apiClient = {
   async deleteClients(dnis: Set<string>): Promise<void> {
     try {
         const promises = Array.from(dnis).map(dni =>
-            fetch(`/api/clients/${dni}`, { method: 'DELETE' })
+            fetchWithRetry(`/api/clients/${dni}`, { method: 'DELETE' })
         );
         await Promise.all(promises);
     } catch (error) {
@@ -327,7 +367,7 @@ export const apiClient = {
 
   async registerClient(dni: string, name: string, password: string, gymId: string): Promise<{ success: boolean; message?: string }> {
     try {
-        const response = await fetch('/api/auth/client-register', {
+        const response = await fetchWithRetry('/api/auth/client-register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dni, name, password, gymId }),
@@ -345,7 +385,7 @@ export const apiClient = {
 
   async loginClient(dni: string, accessCode: string): Promise<{ success: boolean; resetRequired?: boolean; }> {
      try {
-        const response = await fetch(`/api/auth/client-login`, {
+        const response = await fetchWithRetry(`/api/auth/client-login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dni, code: accessCode }),
@@ -360,7 +400,7 @@ export const apiClient = {
 
   async enablePlanGeneration(dni: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients/${dni}`, {
+        const response = await fetchWithRetry(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'reset_plan' }),
@@ -374,7 +414,7 @@ export const apiClient = {
   
    async requestPasswordReset(dni: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients/${dni}`, {
+        const response = await fetchWithRetry(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'request_password_reset' }),
@@ -388,7 +428,7 @@ export const apiClient = {
 
   async setNewPassword(dni: string, password: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/clients/${dni}`, {
+        const response = await fetchWithRetry(`/api/clients/${dni}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'set_new_password', password: password }),
@@ -404,7 +444,7 @@ export const apiClient = {
   // Exercise Library Management (Scoped by Gym)
   async getExerciseLibrary(gymId: string): Promise<ExerciseLibrary> {
     try {
-        const response = await fetch(`/api/library?gymId=${gymId}`);
+        const response = await fetchWithRetry(`/api/library?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         return (await response.json()) as ExerciseLibrary;
     } catch (error) {
@@ -415,7 +455,7 @@ export const apiClient = {
 
   async saveExerciseLibrary(library: ExerciseLibrary, gymId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/library?gymId=${gymId}`, {
+        const response = await fetchWithRetry(`/api/library?gymId=${gymId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(library),
@@ -434,7 +474,7 @@ export const apiClient = {
   // --- Trainer Request System ---
   async getRequests(gymId: string): Promise<Request[]> {
     try {
-      const response = await fetch(`/api/requests?gymId=${gymId}`);
+      const response = await fetchWithRetry(`/api/requests?gymId=${gymId}`);
       if (!response.ok) throw new Error('Network response was not ok');
       return (await response.json()) as Request[];
     } catch (error) {
@@ -445,7 +485,7 @@ export const apiClient = {
 
   async getRequestsByClient(clientId: string): Promise<Request[]> {
     try {
-      const response = await fetch(`/api/requests?clientId=${clientId}`);
+      const response = await fetchWithRetry(`/api/requests?clientId=${clientId}`);
       if (!response.ok) throw new Error('Network response was not ok');
       return (await response.json()) as Request[];
     } catch (error) {
@@ -456,7 +496,7 @@ export const apiClient = {
 
   async createRequest(requestData: Omit<Request, '_id' | 'status' | 'createdAt'>): Promise<boolean> {
     try {
-      const response = await fetch('/api/requests', {
+      const response = await fetchWithRetry('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
@@ -470,7 +510,7 @@ export const apiClient = {
 
   async updateRequestStatus(requestId: string, status: 'read' | 'resolved'): Promise<boolean> {
     try {
-      const response = await fetch(`/api/requests/${requestId}`, {
+      const response = await fetchWithRetry(`/api/requests/${requestId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -484,7 +524,7 @@ export const apiClient = {
 
   async deleteRequest(requestId: string): Promise<boolean> {
     try {
-      const response = await fetch(`/api/requests/${requestId}`, { method: 'DELETE' });
+      const response = await fetchWithRetry(`/api/requests/${requestId}`, { method: 'DELETE' });
       return response.ok;
     } catch (error) {
       console.error(`Failed to delete request ${requestId}:`, error);
@@ -495,7 +535,7 @@ export const apiClient = {
   // --- Routine Templates ---
   async getRoutineTemplates(gymId: string): Promise<RoutineTemplate[]> {
     try {
-        const response = await fetch(`/api/routine-templates?gymId=${gymId}`);
+        const response = await fetchWithRetry(`/api/routine-templates?gymId=${gymId}`);
         if (!response.ok) throw new Error('Network response was not ok');
         return (await response.json()) as RoutineTemplate[];
     } catch (error) {
@@ -506,7 +546,7 @@ export const apiClient = {
 
   async createRoutineTemplate(templateData: Omit<RoutineTemplate, '_id'>): Promise<RoutineTemplate | null> {
     try {
-        const response = await fetch('/api/routine-templates', {
+        const response = await fetchWithRetry('/api/routine-templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(templateData),
@@ -521,7 +561,7 @@ export const apiClient = {
 
   async updateRoutineTemplate(templateId: string, templateData: Partial<RoutineTemplate>): Promise<boolean> {
     try {
-        const response = await fetch(`/api/routine-templates/${templateId}`, {
+        const response = await fetchWithRetry(`/api/routine-templates/${templateId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(templateData),
@@ -535,7 +575,7 @@ export const apiClient = {
 
   async deleteRoutineTemplate(templateId: string): Promise<boolean> {
     try {
-        const response = await fetch(`/api/routine-templates/${templateId}`, { method: 'DELETE' });
+        const response = await fetchWithRetry(`/api/routine-templates/${templateId}`, { method: 'DELETE' });
         return response.ok;
     } catch (error) {
         console.error(`Failed to delete routine template ${templateId}:`, error);
