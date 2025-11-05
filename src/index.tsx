@@ -2,6 +2,8 @@
 
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3453,7 +3455,16 @@ const ExerciseTracker: React.FC<{
     };
     
     const togglePhase = (index: number) => {
-        setActivePhaseIndex(activePhaseIndex === index ? -1 : index);
+        setActivePhaseIndex(prevIndex => {
+            const newIndex = prevIndex === index ? -1 : index;
+            // When opening a phase, always reset the day view to the first day.
+            // This prevents an out-of-bounds error if the new phase has fewer days
+            // than the previously selected day index, which can cause rendering issues.
+            if (newIndex !== -1) {
+                setActiveDayIndex(0);
+            }
+            return newIndex;
+        });
     };
 
     return (
