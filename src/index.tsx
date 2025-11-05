@@ -3389,24 +3389,16 @@ const ProgressView: React.FC<{ clientData: ClientData, onDataUpdate: () => void 
 
 const ExerciseTracker: React.FC<{
     clientData: ClientData;
+    exerciseLibrary: ExerciseLibrary | null;
     onProgressLogged: () => void;
     onRequestChange: () => void;
     onPlayVideo: (url: string) => void;
-}> = ({ clientData, onProgressLogged, onRequestChange, onPlayVideo }) => {
+}> = ({ clientData, exerciseLibrary, onProgressLogged, onRequestChange, onPlayVideo }) => {
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [newLogs, setNewLogs] = useState<Record<string, { weight: string; reps: string }>>({});
     const [isSaving, setIsSaving] = useState<string | null>(null); // Store exercise name being saved
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
     
-    useEffect(() => {
-        const fetchLibrary = async () => {
-            const library = await apiClient.getExerciseLibrary(clientData.gymId);
-            setExerciseLibrary(library);
-        };
-        fetchLibrary();
-    }, [clientData.gymId]);
-
     const routine = clientData.routine;
     if (!routine) return null;
 
@@ -3649,18 +3641,26 @@ const ClientProfileView: React.FC<{ clientData: ClientData }> = ({ clientData })
 
 const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [showChat, setShowChat] = useState(false);
 
-    const fetchClientData = async (showLoading = true) => {
+    const fetchAllClientViewData = async (showLoading = true) => {
         if (showLoading) setIsLoading(true);
         const data = await apiClient.getClientData(dni);
-        setClientData(data);
+        if (data) {
+            const library = await apiClient.getExerciseLibrary(data.gymId);
+            setClientData(data);
+            setExerciseLibrary(library);
+        } else {
+            setClientData(null);
+            setExerciseLibrary(null);
+        }
         if (showLoading) setIsLoading(false);
     };
 
     useEffect(() => {
-        fetchClientData();
+        fetchAllClientViewData();
     }, [dni]);
 
     const isPlanExpired = () => {
@@ -3714,7 +3714,7 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
                      <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
                 </div>
             ) : (
-                <ClientPortalTabs clientData={clientData} onDataUpdate={() => fetchClientData(false)} />
+                <ClientPortalTabs clientData={clientData} exerciseLibrary={exerciseLibrary} onDataUpdate={() => fetchAllClientViewData(false)} />
             )}
         </div>
     );
@@ -4295,33 +4295,24 @@ const RequestModal: React.FC<{
     );
 };
 
-const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: string) => void; }> = ({ gymId, onPlayVideo }) => {
-    const [library, setLibrary] = useState<ExerciseLibrary | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+const ClientExerciseLibraryView: React.FC<{ library: ExerciseLibrary | null; onPlayVideo: (url: string) => void; }> = ({ library, onPlayVideo }) => {
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchLibrary = async () => {
-            setIsLoading(true);
-            const fetchedLibrary = await apiClient.getExerciseLibrary(gymId);
-            setLibrary(fetchedLibrary);
-            if (fetchedLibrary && Object.keys(fetchedLibrary).length > 0) {
-                setActiveGroup(Object.keys(fetchedLibrary)[0]);
-            }
-            setIsLoading(false);
-        };
-        fetchLibrary();
-    }, [gymId]);
+        if (library && Object.keys(library).length > 0 && !activeGroup) {
+            setActiveGroup(Object.keys(library).sort((a,b) => a.localeCompare(b))[0]);
+        }
+    }, [library, activeGroup]);
 
     const toggleGroup = (group: string) => {
         setActiveGroup(prev => (prev === group ? null : group));
     };
 
-    if (isLoading) {
+    if (!library) {
         return <div className="loading-container"><div className="spinner"></div>Cargando biblioteca...</div>;
     }
 
-    if (!library || Object.keys(library).length === 0) {
+    if (Object.keys(library).length === 0) {
         return <div className="placeholder">No hay ejercicios en la biblioteca de este gimnasio.</div>;
     }
 
@@ -4366,7 +4357,7 @@ const ClientExerciseLibraryView: React.FC<{ gymId: string; onPlayVideo: (url: st
     );
 };
 
-const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => void }> = ({ clientData, onDataUpdate }) => {
+const ClientPortalTabs: React.FC<{ clientData: ClientData, exerciseLibrary: ExerciseLibrary | null, onDataUpdate: () => void }> = ({ clientData, exerciseLibrary, onDataUpdate }) => {
     const planType = clientData.planType || 'full';
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'profile' | 'library'>(planType === 'nutrition' ? 'diet' : 'routine');
     const [showRequestModal, setShowRequestModal] = useState(false);
@@ -4376,7 +4367,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
         switch(activeTab) {
             case 'routine':
                 return clientData.routine 
-                    ? <ExerciseTracker clientData={clientData} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} onPlayVideo={setPlayingVideoUrl} /> 
+                    ? <ExerciseTracker clientData={clientData} exerciseLibrary={exerciseLibrary} onProgressLogged={onDataUpdate} onRequestChange={() => setShowRequestModal(true)} onPlayVideo={setPlayingVideoUrl} /> 
                     : <div className="placeholder">Aún no tienes una rutina asignada.</div>;
             case 'diet':
                 return clientData.dietPlans && (clientData.dietPlans[0] || clientData.dietPlans[1])
@@ -4385,7 +4376,7 @@ const ClientPortalTabs: React.FC<{ clientData: ClientData, onDataUpdate: () => v
             case 'progress':
                 return <ProgressView clientData={clientData} onDataUpdate={onDataUpdate} />;
             case 'library':
-                return <ClientExerciseLibraryView gymId={clientData.gymId} onPlayVideo={setPlayingVideoUrl} />;
+                return <ClientExerciseLibraryView library={exerciseLibrary} onPlayVideo={setPlayingVideoUrl} />;
             case 'profile':
                  return <ClientProfileView clientData={clientData} />;
             default: return null;
