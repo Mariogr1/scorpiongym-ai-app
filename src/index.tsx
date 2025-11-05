@@ -1,9 +1,4 @@
 
-
-
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -4310,10 +4305,13 @@ const ClientExerciseLibraryView: React.FC<{ library: ExerciseLibrary | null; onP
     const [activeGroup, setActiveGroup] = useState<string | null>(null);
 
     useEffect(() => {
+        // Set the first group as active only when the library loads for the first time
+        // and no group is already active. This prevents the accordion from re-opening
+        // when a user manually closes it.
         if (library && Object.keys(library).length > 0 && !activeGroup) {
             setActiveGroup(Object.keys(library).sort((a,b) => a.localeCompare(b))[0]);
         }
-    }, [library, activeGroup]);
+    }, [library]); // Dependency array updated to only run when library data changes.
 
     const toggleGroup = (group: string) => {
         setActiveGroup(prev => (prev === group ? null : group));
