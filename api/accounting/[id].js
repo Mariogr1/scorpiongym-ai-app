@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb';
-import clientPromise from './util/mongodb.js';
+import clientPromise from '../util/mongodb.js';
 
 export default async function handler(req, res) {
     const client = await clientPromise;
