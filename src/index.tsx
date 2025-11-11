@@ -479,10 +479,15 @@ const calculateLevenshteinDistance = (a: string, b: string): number => {
 const validateAndCorrectRoutine = (routine: Routine, library: ExerciseLibrary): Routine => {
     const correctedRoutine = JSON.parse(JSON.stringify(routine)); // Deep copy to avoid mutation
     const allValidExercises = new Set<string>();
+    const videoMap: Record<string, string> = {};
+
     Object.values(library).forEach(group => {
         (group as ExerciseDefinition[]).forEach(ex => {
             if (ex.isEnabled) {
                 allValidExercises.add(ex.name);
+                if (ex.videoUrl) {
+                    videoMap[ex.name] = ex.videoUrl;
+                }
             }
         });
     });
@@ -526,6 +531,10 @@ const validateAndCorrectRoutine = (routine: Routine, library: ExerciseLibrary): 
                     
                     console.warn(`Corrected AI hallucinated exercise: "${originalName}" was replaced with the closest match "${bestMatch}" in group "${closestGroupKey}".`);
                     exercise.nombre = bestMatch;
+                }
+                 // Add video URL after correction
+                if (videoMap[exercise.nombre]) {
+                    exercise.videoUrl = videoMap[exercise.nombre];
                 }
             }
         }
@@ -1737,22 +1746,8 @@ const RoutinePlan: React.FC<{
     exerciseLibrary?: ExerciseLibrary;
 }> = ({ routine, isEditing = false, onRoutineChange, exerciseLibrary }) => {
     const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const [activeDayIndex, setActiveDayIndex] = useState(0);
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
-    const [exerciseVideos, setExerciseVideos] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        if (exerciseLibrary) {
-            const videoMap: Record<string, string> = {};
-            Object.values(exerciseLibrary).forEach(group => {
-                (group as ExerciseDefinition[]).forEach(ex => {
-                    if (ex.videoUrl) {
-                        videoMap[ex.name] = ex.videoUrl;
-                    }
-                });
-            });
-            setExerciseVideos(videoMap);
-        }
-    }, [exerciseLibrary]);
 
     const handleExerciseChange = (phaseIndex: number, dayIndex: number, exerciseIndex: number, field: keyof Exercise, value: string) => {
         if (!onRoutineChange) return;
@@ -1762,11 +1757,34 @@ const RoutinePlan: React.FC<{
         
         (exercise as any)[field] = value;
         
-        if (field === 'nombre' && exerciseVideos[value]) {
-            exercise.videoUrl = exerciseVideos[value];
+        if (field === 'nombre' && exerciseLibrary) {
+            const allExercises = Object.values(exerciseLibrary).flat();
+            const foundEx = allExercises.find(exDef => exDef.name === value);
+            exercise.videoUrl = foundEx?.videoUrl || '';
         }
 
         onRoutineChange(newRoutine);
+    };
+    
+    const handleAddExercise = (phaseIndex: number, dayIndex: number) => {
+        if (!onRoutineChange) return;
+        const newRoutine = JSON.parse(JSON.stringify(routine));
+        newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.push({
+            nombre: allExercises[0] || 'Nuevo Ejercicio',
+            series: '3',
+            repeticiones: '10-12',
+            descanso: '60s',
+        });
+        onRoutineChange(newRoutine);
+    };
+
+    const handleDeleteExercise = (phaseIndex: number, dayIndex: number, exerciseIndex: number) => {
+        if (!onRoutineChange) return;
+         if (window.confirm("¿Seguro que quieres eliminar este ejercicio?")) {
+            const newRoutine = JSON.parse(JSON.stringify(routine));
+            newRoutine.phases[phaseIndex].routine.dias[dayIndex].ejercicios.splice(exerciseIndex, 1);
+            onRoutineChange(newRoutine);
+        }
     };
 
     const allExercises = useMemo(() => {
@@ -1777,9 +1795,16 @@ const RoutinePlan: React.FC<{
     if (!routine) return <div className="placeholder">No routine available.</div>;
 
     const activePhase = routine.phases[activePhaseIndex];
+    const activeDay = activePhase.routine.dias[activeDayIndex];
+    
+    if (!activeDay) {
+        // Handle case where day index is out of bounds after a change
+        if (activePhase.routine.dias.length > 0) setActiveDayIndex(0);
+        return null;
+    }
 
     return (
-        <div className="plan-container animated-fade-in">
+        <div className={`plan-container animated-fade-in routine-plan ${isEditing ? 'editable' : ''}`}>
             {videoUrl && <VideoPlayerModal videoUrl={videoUrl} onClose={() => setVideoUrl(null)} />}
             <div className="plan-header">
                 <h2>{routine.planName}</h2>
@@ -1792,7 +1817,7 @@ const RoutinePlan: React.FC<{
                         <button 
                             key={index} 
                             className={`phase-button ${index === activePhaseIndex ? 'active' : ''}`}
-                            onClick={() => setActivePhaseIndex(index)}
+                            onClick={() => { setActivePhaseIndex(index); setActiveDayIndex(0); }}
                         >
                             {phase.phaseName} ({phase.durationWeeks} sem)
                         </button>
@@ -1802,62 +1827,95 @@ const RoutinePlan: React.FC<{
 
             <div className="phase-content">
                 <h3>{activePhase.phaseName}</h3>
-                <div className="days-grid">
-                    {activePhase.routine.dias.map((day, dayIndex) => (
-                        <div key={dayIndex} className="day-card">
-                            <div className="day-header">
-                                <h4>{day.dia}</h4>
-                                <span>{day.grupoMuscular}</span>
-                            </div>
-                            <ul className="exercise-list">
-                                {day.ejercicios.map((ex, exIndex) => (
-                                    <li key={exIndex} className="exercise-item">
-                                        <div className="exercise-details">
-                                            {isEditing ? (
-                                                <select 
-                                                    value={ex.nombre} 
-                                                    onChange={e => handleExerciseChange(activePhaseIndex, dayIndex, exIndex, 'nombre', e.target.value)}
-                                                    className="exercise-select"
-                                                >
-                                                    {allExercises.map(exName => <option key={exName} value={exName}>{exName}</option>)}
+                
+                <nav className="day-tabs-nav">
+                    {activePhase.routine.dias.map((day, index) => (
+                         <button 
+                            key={index} 
+                            className={`day-tab-button ${index === activeDayIndex ? 'active' : ''}`}
+                            onClick={() => setActiveDayIndex(index)}
+                        >
+                            {day.dia}
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="day-card">
+                    <h4><span className="muscle-group">{activeDay.grupoMuscular}</span></h4>
+                    <ul className="exercise-list">
+                        {activeDay.ejercicios.map((ex, exIndex) => (
+                            <li key={exIndex} className={`exercise-item ${isEditing ? 'editable' : ''}`}>
+                                {isEditing ? (
+                                    <div className="exercise-item-editor">
+                                        <div className="editor-row editor-row-main">
+                                            <select 
+                                                value={ex.nombre} 
+                                                onChange={e => handleExerciseChange(activePhaseIndex, activeDayIndex, exIndex, 'nombre', e.target.value)}
+                                                className="exercise-select"
+                                            >
+                                                {allExercises.map(exName => <option key={exName} value={exName}>{exName}</option>)}
+                                            </select>
+                                            <button className="delete-exercise-btn" onClick={() => handleDeleteExercise(activePhaseIndex, activeDayIndex, exIndex)}>&times;</button>
+                                        </div>
+                                         <div className="editor-row">
+                                            <div className="form-group-inline">
+                                                <label>Series</label>
+                                                <input type="text" value={ex.series} onChange={e => handleExerciseChange(activePhaseIndex, activeDayIndex, exIndex, 'series', e.target.value)} />
+                                            </div>
+                                            <div className="form-group-inline">
+                                                <label>Repeticiones</label>
+                                                <input type="text" value={ex.repeticiones} onChange={e => handleExerciseChange(activePhaseIndex, activeDayIndex, exIndex, 'repeticiones', e.target.value)} />
+                                            </div>
+                                             <div className="form-group-inline">
+                                                <label>Descanso</label>
+                                                <input type="text" value={ex.descanso} onChange={e => handleExerciseChange(activePhaseIndex, activeDayIndex, exIndex, 'descanso', e.target.value)} />
+                                            </div>
+                                        </div>
+                                         <div className="editor-row">
+                                            <div className="form-group-inline full-width">
+                                                <label>Técnica Avanzada (Opcional)</label>
+                                                 <select value={ex.tecnicaAvanzada || ''} onChange={e => handleExerciseChange(activePhaseIndex, activeDayIndex, exIndex, 'tecnicaAvanzada', e.target.value)}>
+                                                    {advancedTechniqueOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                                 </select>
-                                            ) : (
-                                                <span className="exercise-name">{ex.nombre}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="exercise-name-wrapper">
+                                            <span className="exercise-name">{ex.nombre}</span>
+                                            {ex.videoUrl && (
+                                                <button className="video-play-button" onClick={() => setVideoUrl(ex.videoUrl!)} aria-label={`Ver video de ${ex.nombre}`}>
+                                                    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                                </button>
                                             )}
+                                        </div>
+                                        <div className="exercise-details">
+                                            <span>{ex.series} x {ex.repeticiones}</span>
+                                            <span>{ex.descanso}</span>
                                             {ex.tecnicaAvanzada && <span className="advanced-technique-badge">{ex.tecnicaAvanzada}</span>}
                                         </div>
-                                        <div className="exercise-sets">
-                                            {isEditing ? (
-                                                <>
-                                                    <input type="text" value={ex.series} onChange={e => handleExerciseChange(activePhaseIndex, dayIndex, exIndex, 'series', e.target.value)} /> x
-                                                    <input type="text" value={ex.repeticiones} onChange={e => handleExerciseChange(activePhaseIndex, dayIndex, exIndex, 'repeticiones', e.target.value)} />
-                                                    <span>-</span>
-                                                    <input type="text" value={ex.descanso} onChange={e => handleExerciseChange(activePhaseIndex, dayIndex, exIndex, 'descanso', e.target.value)} />
-                                                </>
-                                            ) : (
-                                                <span>{ex.series} x {ex.repeticiones} - {ex.descanso}</span>
-                                            )}
-                                        </div>
-                                        {exerciseVideos[ex.nombre] && (
-                                            <button className="video-btn" onClick={() => setVideoUrl(exerciseVideos[ex.nombre])} aria-label={`Ver video de ${ex.nombre}`}>
-                                                ▶
-                                            </button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                            {day.cardio && day.cardio.toLowerCase() !== 'no aplica' && (
-                                <div className="cardio-section">
-                                    <strong>Cardio:</strong> {day.cardio}
-                                </div>
-                            )}
+                                    </>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                    {isEditing && (
+                        <div className="add-exercise-action">
+                            <button className="add-exercise-button" onClick={() => handleAddExercise(activePhaseIndex, activeDayIndex)}>+ Añadir Ejercicio</button>
                         </div>
-                    ))}
+                    )}
+                    {activeDay.cardio && activeDay.cardio.toLowerCase() !== 'no aplica' && (
+                        <div className="cardio-note">
+                            <strong>Cardio:</strong> {activeDay.cardio}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 };
+
 
 const DietPlanDisplay: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
     if (!dietPlan) return null;
@@ -3594,8 +3652,25 @@ const ClientRoutineView: React.FC<{
     routine: Routine;
     progressLog: ProgressLog;
     onProgressUpdate: (newLog: ProgressLog) => void;
-}> = ({ routine, progressLog, onProgressUpdate }) => {
+    exerciseLibrary: ExerciseLibrary;
+}> = ({ routine, progressLog, onProgressUpdate, exerciseLibrary }) => {
     const [logEntry, setLogEntry] = useState<{ exerciseName: string; weight: string; repetitions: string } | null>(null);
+    const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+
+    const exerciseVideos = useMemo(() => {
+        const videoMap: Record<string, string> = {};
+        if (exerciseLibrary) {
+            Object.values(exerciseLibrary).forEach(group => {
+                (group as ExerciseDefinition[]).forEach(ex => {
+                    if (ex.videoUrl) {
+                        videoMap[ex.name] = ex.videoUrl;
+                    }
+                });
+            });
+        }
+        return videoMap;
+    }, [exerciseLibrary]);
 
     const handleOpenLogModal = (exerciseName: string) => {
         const lastEntry = progressLog[exerciseName]?.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -3625,13 +3700,11 @@ const ClientRoutineView: React.FC<{
         setLogEntry(null);
     };
     
-    // This is a simplified view for the client. The RoutinePlan component is more for editing.
-    // Let's create a simpler display for the client.
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
     const activePhase = routine.phases[activePhaseIndex];
 
     return (
         <div className="plan-container animated-fade-in">
+            {videoUrl && <VideoPlayerModal videoUrl={videoUrl} onClose={() => setVideoUrl(null)} />}
             {logEntry && (
                 <div className="modal-overlay">
                     <div className="modal-content edit-modal">
@@ -3645,7 +3718,7 @@ const ClientRoutineView: React.FC<{
                              <label>Repeticiones</label>
                              <input type="number" value={logEntry.repetitions} onChange={e => setLogEntry({...logEntry, repetitions: e.target.value})} />
                          </div>
-                         <div className="modal-actions">
+                         <div className="modal-actions" style={{marginTop: '1.5rem'}}>
                              <button className="cta-button secondary" onClick={() => setLogEntry(null)}>Cancelar</button>
                              <button className="cta-button" onClick={handleSaveLog}>Guardar</button>
                          </div>
@@ -3691,7 +3764,14 @@ const ClientRoutineView: React.FC<{
                                         <div className="exercise-sets">
                                             <span>{ex.series} x {ex.repeticiones} - {ex.descanso}</span>
                                         </div>
-                                        <button className="log-progress-btn" onClick={() => handleOpenLogModal(ex.nombre)}>Registrar</button>
+                                        <div> {/* Wrapper for buttons */}
+                                            {ex.videoUrl && (
+                                                <button className="video-play-button" onClick={() => setVideoUrl(ex.videoUrl!)} aria-label={`Ver video de ${ex.nombre}`}>
+                                                     <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                                </button>
+                                            )}
+                                            <button className="log-progress-btn" onClick={() => handleOpenLogModal(ex.nombre)}>Registrar</button>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -3872,6 +3952,7 @@ const ClientOnboardingView: React.FC<{
 const ClientView: React.FC<{ dni: string, onLogout: () => void }> = ({ dni, onLogout }) => {
     const [clientData, setClientData] = useState<ClientData | null>(null);
     const [gym, setGym] = useState<Gym | null>(null);
+    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>('routine');
 
@@ -3880,12 +3961,13 @@ const ClientView: React.FC<{ dni: string, onLogout: () => void }> = ({ dni, onLo
         const data = await apiClient.getClientData(dni);
         if (data) {
             setClientData(data);
-            const allGyms = await apiClient.getGyms(); // In a real app with many gyms, we'd have a getGymById endpoint
-            const clientGym = allGyms.find(g => g._id === data.gymId);
+            const [clientGym, library] = await Promise.all([
+                 apiClient.getGyms().then(gyms => gyms.find(g => g._id === data.gymId)),
+                 apiClient.getExerciseLibrary(data.gymId)
+            ]);
             
-            if (clientGym) {
-                setGym(clientGym);
-            }
+            if (clientGym) setGym(clientGym);
+            if (library) setExerciseLibrary(library);
             
             // Adjust default tab based on plan type
             if (data.planType === 'nutrition' && activeTab === 'routine') {
@@ -3933,7 +4015,7 @@ const ClientView: React.FC<{ dni: string, onLogout: () => void }> = ({ dni, onLo
     const renderContent = () => {
         switch (activeTab) {
             case 'routine':
-                return clientData.routine ? <ClientRoutineView routine={clientData.routine} progressLog={clientData.progressLog} onProgressUpdate={handleProgressUpdate} /> : <div className="placeholder">Tu rutina aún no ha sido generada.</div>;
+                return clientData.routine ? <ClientRoutineView routine={clientData.routine} progressLog={clientData.progressLog} onProgressUpdate={handleProgressUpdate} exerciseLibrary={exerciseLibrary} /> : <div className="placeholder">Tu rutina aún no ha sido generada.</div>;
             case 'diet':
                 return <ClientDietView dietPlans={clientData.dietPlans} />;
             case 'progress':

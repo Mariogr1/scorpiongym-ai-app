@@ -258,7 +258,7 @@ body {
     gap: 1rem;
 }
 
-.login-box input {
+.login-box input, .login-box select {
     width: 100%;
     padding: 0.8rem 1rem;
     background-color: var(--background-color);
@@ -266,9 +266,10 @@ body {
     border-radius: 8px;
     color: var(--text-color);
     font-size: 1rem;
+    font-family: inherit;
 }
 
-.login-box input:focus {
+.login-box input:focus, .login-box select:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
@@ -377,7 +378,7 @@ body {
     gap: 1.5rem;
     align-items: flex-start;
 }
-.add-gym-form input {
+.add-gym-form input, .add-gym-form select {
     width: 100%;
     padding: 0.8rem 1rem;
     background-color: var(--background-color);
@@ -1109,6 +1110,16 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animated-fade-in {
+    animation: fadeIn 0.4s ease-in-out;
+}
+
+
 .plan-container, .diet-plan-container {
     animation: fadeIn 0.5s ease-in-out;
     width: 100%;
@@ -1237,7 +1248,7 @@ body {
 
 .day-card {
     background-color: var(--surface-color);
-    padding: 1.5rem 0.5rem;
+    padding: 1.5rem;
     border-radius: 10px;
 }
 .day-card h3, .day-card h4 {
@@ -1251,18 +1262,23 @@ body {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
 }
 .exercise-item {
     background-color: var(--background-color);
-    padding: 1.25rem;
+    padding: 1rem;
     border-radius: 8px;
     border-left: 4px solid var(--primary-color);
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 1rem;
 }
 .exercise-item.editable {
     padding: 1rem;
     border: 1px solid var(--border-color);
     border-left: 4px solid var(--archive-color);
+    display: block; /* Revert to block for editor styles */
 }
 
 /* --- Routine Editor Styles --- */
@@ -1369,9 +1385,9 @@ body {
 
 .exercise-details {
     display: flex;
-    gap: 1.5rem;
-    color: var(--text-secondary-color);
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.2rem;
+    grid-column: 1;
 }
 
 .exercise-details span {
@@ -1418,13 +1434,13 @@ body {
     margin: 1.5rem 0;
     text-align: center;
 }
-.diet-summary div {
+.diet-summary .summary-item {
     flex: 1;
 }
-.diet-summary strong {
-    display: block;
-    color: var(--text-secondary-color);
+.diet-summary .summary-item h4 {
     font-size: 0.9rem;
+    color: var(--text-secondary-color);
+    margin-bottom: 0.25rem;
 }
 .meals-grid {
     display: grid;
@@ -1436,21 +1452,30 @@ body {
     padding: 1.5rem;
     border-radius: 10px;
 }
-.meal-card h3, .meal-card h4 {
+.meal-card h3, .meal-card h4, .meal-header h4 {
     color: var(--primary-color);
     margin-bottom: 1rem;
 }
-.meal-card ul {
+.meal-card ul, .food-list {
     list-style: none;
 }
-.meal-card li {
+.meal-card li, .food-list li {
     margin-bottom: 0.5rem;
     display: flex;
     justify-content: space-between;
 }
-.meal-card li span {
+.meal-card li span, .food-list li span {
     color: var(--text-secondary-color);
 }
+.food-name {
+    flex-grow: 1;
+    padding-right: 1rem;
+}
+.food-amount {
+    flex-shrink: 0;
+    color: var(--text-color) !important;
+}
+
 
 .recommendations-section {
     margin-top: 2rem;
@@ -1459,11 +1484,12 @@ body {
     border-radius: 10px;
     border-left: 4px solid var(--archive-color);
 }
-.recommendations-section h4 {
+.recommendations-section h3, .recommendations-section h4 {
     margin-bottom: 1rem;
 }
 .recommendations-section ul {
-    padding-left: 1rem;
+    list-style-position: inside;
+    padding-left: 0;
 }
 .recommendations-section li {
     margin-bottom: 0.5rem;
@@ -1482,4 +1508,328 @@ body {
 }
 .bmi-category {
     font-weight: 600;
+}
+.bmi-category.underweight { color: #36a2eb; }
+.bmi-category.normal { color: #4caf50; }
+.bmi-category.overweight { color: #ffa500; }
+.bmi-category.obesity { color: #e50914; }
+
+/* --- Onboarding and Plan Selection --- */
+.onboarding-container {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: var(--surface-color);
+    border-radius: 12px;
+}
+.onboarding-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+.onboarding-header h1 {
+    font-size: 2.5rem;
+}
+.onboarding-header p {
+    font-size: 1.1rem;
+    color: var(--text-secondary-color);
+}
+.onboarding-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+.profile-editor.onboarding-style {
+    padding: 0;
+}
+.profile-editor.onboarding-style .profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+.profile-editor.onboarding-style .form-group.full-width {
+    grid-column: 1 / -1;
+}
+.profile-editor.onboarding-style .profile-summary {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-around;
+    background-color: var(--background-color);
+    padding: 1rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+    text-align: center;
+}
+.profile-editor.onboarding-style .summary-item p { margin: 0; }
+.form-group.switch-like select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--secondary-button-color);
+    text-align: center;
+    font-weight: 600;
+}
+
+.plan-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    justify-content: center;
+}
+.choice-card, .plan-option-card {
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.choice-card:hover, .plan-option-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--primary-color);
+}
+.choice-icon, .plan-option-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+.choice-card h3, .plan-option-card h3 {
+    margin-bottom: 0.5rem;
+}
+.choice-card p, .plan-option-card p {
+    color: var(--text-secondary-color);
+    margin: 0;
+}
+.plan-option-card .cta-button {
+    margin-top: 1.5rem;
+    font-size: 1rem;
+    padding: 0.7rem 1.5rem;
+}
+
+/* --- Client View Specific Styles --- */
+.client-dashboard-view {
+    padding: 1rem;
+}
+.client-main-content {
+    background-color: var(--surface-color);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-top: 2rem;
+}
+.days-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+.day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+.day-header span {
+    color: var(--text-secondary-color);
+    font-weight: 500;
+}
+.exercise-sets {
+    color: var(--text-secondary-color);
+    grid-column: 2;
+}
+.log-progress-btn {
+    grid-column: 3;
+    background: none;
+    border: none;
+    color: var(--archive-color);
+    text-decoration: underline;
+    cursor: pointer;
+    justify-self: end;
+}
+.log-progress-btn:hover {
+    color: #5bc0de;
+}
+.cardio-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border-color);
+    color: var(--text-secondary-color);
+}
+.plan-toggle {
+    display: flex;
+    gap: 0.5rem;
+}
+.plan-toggle button {
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.plan-toggle button.active {
+    background: var(--primary-color);
+    color: var(--text-color);
+}
+.plan-toggle button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Message View --- */
+.message-view-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+.message-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+/* Progress View */
+.progress-view-container {
+    width: 100%;
+}
+.progress-tabs-nav {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+.progress-tab-button {
+    background: none;
+    border: none;
+    color: var(--text-secondary-color);
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+    font-size: 1rem;
+    position: relative;
+    transition: color 0.2s;
+}
+.progress-tab-button.active {
+    color: var(--text-color);
+    font-weight: 600;
+}
+.progress-tab-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: var(--primary-color);
+}
+.add-progress-form {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0 2rem 0;
+}
+.add-progress-form input {
+    flex-grow: 1;
+    padding: 0.7rem;
+    background-color: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 1rem;
+}
+.progress-log-list table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+.progress-log-list th, .progress-log-list td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+.progress-log-list th {
+    color: var(--text-secondary-color);
+}
+.progress-log-list tbody tr:last-child td {
+    border-bottom: none;
+}
+.exercise-progress-block {
+    margin-bottom: 2rem;
+}
+
+.video-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.video-modal-content {
+    position: relative;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+}
+
+.video-modal-content video {
+    width: 100%;
+    height: auto;
+    max-height: 90vh;
+    border-radius: 8px;
+}
+
+.video-modal-close-btn {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 2.5rem;
+    cursor: pointer;
+}
+
+.phases-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.phase-button {
+    background-color: var(--secondary-button-color);
+    color: var(--text-secondary-color);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.phase-button:hover {
+    background-color: var(--secondary-button-hover);
+    color: var(--text-color);
+}
+.phase-button.active {
+    background-color: var(--text-color);
+    color: var(--background-color);
+    border-color: var(--text-color);
+    font-weight: 600;
+}
+.phase-content h3 {
+    margin-bottom: 1.5rem;
+}
+
+.advanced-technique-badge {
+    background-color: var(--primary-color);
+    color: var(--text-color);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
 }
