@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -2164,20 +2162,30 @@ const RoutineTemplateManager: React.FC<{ gym: Gym; onBack: () => void; }> = ({ g
     );
 };
 
-// FIX: Define the missing AccountingDashboard component.
+// --- Accounting Module ---
+
 const AccountingDashboard: React.FC<{ gym: Gym }> = ({ gym }) => {
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'balance' | 'accounts' | 'fixedExpenses' | 'categories'>('balance');
+    
+    // Data states
     const [accounts, setAccounts] = useState<AccountingAccount[]>([]);
     const [transactions, setTransactions] = useState<AccountingTransaction[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
+    const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
+    const [categoryGroups, setCategoryGroups] = useState<ExpenseCategoryGroup[]>([]);
+    
     const fetchData = async () => {
         setIsLoading(true);
-        const [accs, trans] = await Promise.all([
+        const [accs, trans, fExpenses, catGroups] = await Promise.all([
             apiClient.getAccountingData<AccountingAccount>(gym._id, 'accounts'),
-            apiClient.getAccountingData<AccountingTransaction>(gym._id, 'transactions')
+            apiClient.getAccountingData<AccountingTransaction>(gym._id, 'transactions'),
+            apiClient.getAccountingData<FixedExpense>(gym._id, 'fixed_expenses'),
+            apiClient.getAccountingData<ExpenseCategoryGroup>(gym._id, 'expense_category_groups')
         ]);
         setAccounts(accs);
-        setTransactions(trans);
+        setTransactions(trans.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        setFixedExpenses(fExpenses);
+        setCategoryGroups(catGroups);
         setIsLoading(false);
     };
 
@@ -2185,27 +2193,471 @@ const AccountingDashboard: React.FC<{ gym: Gym }> = ({ gym }) => {
         fetchData();
     }, [gym._id]);
 
-    if (isLoading) {
-        return <div className="loading-container"><div className="spinner"></div></div>;
-    }
+    const renderContent = () => {
+        if (isLoading) {
+            return <div className="loading-container"><div className="spinner"></div></div>;
+        }
+
+        switch(activeTab) {
+            case 'accounts':
+                return <AccountsView accounts={accounts} onDataUpdate={fetchData} gymId={gym._id} />;
+            case 'fixedExpenses':
+                return <FixedExpensesView fixedExpenses={fixedExpenses} accounts={accounts} onDataUpdate={fetchData} gymId={gym._id} />;
+            case 'categories':
+                return <CategoriesView categoryGroups={categoryGroups} onDataUpdate={fetchData} gymId={gym._id} />;
+            case 'balance':
+            default:
+                return <BalanceView transactions={transactions} accounts={accounts} categoryGroups={categoryGroups} onDataUpdate={fetchData} gymId={gym._id} />;
+        }
+    };
     
     return (
-        <div className="accounting-dashboard animated-fade-in">
-            <h2>Panel de Contabilidad</h2>
-             <div className="placeholder" style={{ marginTop: '2rem', textAlign: 'center' }}>
-                <p>Módulo de contabilidad en construcción.</p>
-                <h3>Cuentas</h3>
-                {accounts.length > 0 ? (
-                    <ul>{accounts.map(a => <li key={a._id}>{a.name}: ${a.balance}</li>)}</ul>
-                ) : <p>No hay cuentas.</p>}
-                 <h3>Últimas Transacciones</h3>
-                {transactions.length > 0 ? (
-                    <ul>{transactions.slice(0, 5).map(t => <li key={t._id}>{t.description}: ${t.amount} ({t.type})</li>)}</ul>
-                ) : <p>No hay transacciones.</p>}
+        <div className="accounting-container animated-fade-in">
+            <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>Panel de Contabilidad</h2>
+            <nav className="main-tabs-nav">
+                <button className={`main-tab-button ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>Balance</button>
+                <button className={`main-tab-button ${activeTab === 'accounts' ? 'active' : ''}`} onClick={() => setActiveTab('accounts')}>Cuentas</button>
+                <button className={`main-tab-button ${activeTab === 'fixedExpenses' ? 'active' : ''}`} onClick={() => setActiveTab('fixedExpenses')}>Gastos Fijos</button>
+                <button className={`main-tab-button ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => setActiveTab('categories')}>Gastos/Categorías</button>
+            </nav>
+            <div className="accounting-content">
+                {renderContent()}
             </div>
         </div>
     );
 };
+
+const BalanceView: React.FC<{
+    transactions: AccountingTransaction[],
+    accounts: AccountingAccount[],
+    categoryGroups: ExpenseCategoryGroup[],
+    onDataUpdate: () => void,
+    gymId: string
+}> = ({ transactions, accounts, categoryGroups, onDataUpdate, gymId }) => {
+    
+    const [showTransactionModal, setShowTransactionModal] = useState(false);
+
+    const { totalIncome, totalExpenses, totalBalance } = useMemo(() => {
+        const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const balance = accounts.reduce((sum, a) => sum + a.balance, 0);
+        return { totalIncome: income, totalExpenses: expenses, totalBalance: balance };
+    }, [transactions, accounts]);
+
+    return (
+        <div>
+            {showTransactionModal && (
+                <AddTransactionModal
+                    accounts={accounts}
+                    categoryGroups={categoryGroups}
+                    gymId={gymId}
+                    onClose={() => setShowTransactionModal(false)}
+                    onSave={onDataUpdate}
+                />
+            )}
+            <div className="actions-bar">
+                <h3>Resumen General</h3>
+                <button className="cta-button" onClick={() => setShowTransactionModal(true)}>+ Nueva Transacción</button>
+            </div>
+            <div className="summary-cards">
+                <div className="summary-card">
+                    <h4>Ingresos Totales</h4>
+                    <p className="amount income">${totalIncome.toLocaleString('es-AR')}</p>
+                </div>
+                <div className="summary-card">
+                    <h4>Gastos Totales</h4>
+                    <p className="amount expense">${totalExpenses.toLocaleString('es-AR')}</p>
+                </div>
+                 <div className="summary-card">
+                    <h4>Balance Total</h4>
+                    <p className="amount balance">${totalBalance.toLocaleString('es-AR')}</p>
+                </div>
+            </div>
+            <div className="accounting-card" style={{marginTop: '2rem'}}>
+                <h3>Últimas Transacciones</h3>
+                {transactions.length > 0 ? (
+                    <ul className="transaction-list">
+                        {transactions.slice(0, 10).map(t => (
+                             <li key={t._id} className={`transaction-item ${t.type}`}>
+                                <div className="transaction-details">
+                                    <span className="description">{t.description}</span>
+                                    <span className="meta">{new Date(t.date).toLocaleDateString()} - {t.accountName} {t.category ? `(${t.category.group}/${t.category.name})` : ''}</span>
+                                </div>
+                                <span className={`transaction-amount ${t.type}`}>{t.type === 'income' ? '+' : '-'}${t.amount.toLocaleString('es-AR')}</span>
+                             </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p>No hay transacciones todavía.</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+const AccountsView: React.FC<{
+    accounts: AccountingAccount[],
+    onDataUpdate: () => void,
+    gymId: string
+}> = ({ accounts, onDataUpdate, gymId }) => {
+    const [newAccountName, setNewAccountName] = useState('');
+    const [updatingBalances, setUpdatingBalances] = useState<Record<string, string>>({});
+
+    const handleCreateAccount = async () => {
+        if (!newAccountName) return;
+        await apiClient.createAccountingData(gymId, 'accounts', { name: newAccountName, balance: 0 });
+        setNewAccountName('');
+        onDataUpdate();
+    };
+
+    const handleBalanceChange = (accountId: string, value: string) => {
+        setUpdatingBalances(prev => ({...prev, [accountId]: value}));
+    };
+
+    const handleUpdateBalance = async (account: AccountingAccount) => {
+        const newBalanceStr = updatingBalances[account._id];
+        if (!newBalanceStr) return;
+        const newBalance = parseFloat(newBalanceStr);
+        if (isNaN(newBalance)) return;
+
+        const difference = newBalance - account.balance;
+        if (difference !== 0) {
+            // Create a transaction for the difference
+            await apiClient.createAccountingData(gymId, 'transactions', {
+                date: new Date().toISOString(),
+                type: difference > 0 ? 'income' : 'expense',
+                amount: Math.abs(difference),
+                description: `Ajuste de saldo de cuenta: ${account.name}`,
+                accountId: account._id,
+                accountName: account.name,
+            });
+        }
+
+        // Update the account's total balance
+        await apiClient.updateAccountingData('accounts', account._id, { balance: newBalance });
+        
+        setUpdatingBalances(prev => {
+            const newState = {...prev};
+            delete newState[account._id];
+            return newState;
+        });
+        onDataUpdate();
+    };
+
+
+    return (
+        <div className="accounting-grid">
+            <div className="accounting-card">
+                <h3>Crear Nueva Cuenta</h3>
+                <div className="form-group">
+                    <label>Nombre de la cuenta (Ej: Efectivo, Banco)</label>
+                    <input type="text" value={newAccountName} onChange={e => setNewAccountName(e.target.value)} />
+                </div>
+                <button className="cta-button" onClick={handleCreateAccount} disabled={!newAccountName}>Crear</button>
+            </div>
+            <div className="accounting-card" style={{ gridColumn: '1 / -1' }}>
+                 <h3>Cuentas Actuales</h3>
+                 <div className="account-list">
+                    {accounts.map(account => (
+                        <div key={account._id} className="accounting-card account-card">
+                            <h4>{account.name}</h4>
+                            <p className="balance">${account.balance.toLocaleString('es-AR')}</p>
+                            <div className="form-group">
+                                <label>Actualizar saldo total</label>
+                                <form className="update-balance-form" onSubmit={(e) => { e.preventDefault(); handleUpdateBalance(account); }}>
+                                    <input 
+                                        type="number" 
+                                        step="any"
+                                        placeholder="Nuevo Saldo Total"
+                                        value={updatingBalances[account._id] || ''}
+                                        onChange={e => handleBalanceChange(account._id, e.target.value)}
+                                    />
+                                    <button type="submit" className="cta-button secondary" disabled={!updatingBalances[account._id]}>✓</button>
+                                </form>
+                                <small>El sistema calculará la diferencia como ingreso/gasto.</small>
+                            </div>
+                        </div>
+                    ))}
+                 </div>
+            </div>
+        </div>
+    );
+};
+
+const FixedExpensesView: React.FC<{
+    fixedExpenses: FixedExpense[],
+    accounts: AccountingAccount[],
+    onDataUpdate: () => void,
+    gymId: string
+}> = ({ fixedExpenses, accounts, onDataUpdate, gymId }) => {
+    
+    const [showModal, setShowModal] = useState(false);
+    
+    const handleMarkAsPaid = async (expense: FixedExpense) => {
+        if (accounts.length === 0) {
+            alert("Debes crear una cuenta primero para poder pagar gastos.");
+            return;
+        }
+
+        const accountId = accounts[0]._id; // Default to first account
+        const accountName = accounts[0].name;
+
+        await apiClient.createAccountingData(gymId, 'transactions', {
+            date: new Date().toISOString(),
+            type: 'expense',
+            amount: expense.amount,
+            description: `Pago de gasto fijo: ${expense.name}`,
+            accountId: accountId,
+            accountName: accountName,
+        });
+
+        const newBalance = (accounts.find(a => a._id === accountId)?.balance || 0) - expense.amount;
+        await apiClient.updateAccountingData('accounts', accountId, { balance: newBalance });
+
+        await apiClient.updateAccountingData('fixed_expenses', expense._id, { lastPaid: new Date().toISOString() });
+        onDataUpdate();
+    };
+
+    const isPaidThisMonth = (lastPaid: string | null) => {
+        if (!lastPaid) return false;
+        const lastPaidDate = new Date(lastPaid);
+        const now = new Date();
+        return lastPaidDate.getMonth() === now.getMonth() && lastPaidDate.getFullYear() === now.getFullYear();
+    };
+
+    return (
+        <div>
+            {showModal && (
+                <AddFixedExpenseModal
+                    gymId={gymId}
+                    onClose={() => setShowModal(false)}
+                    onSave={onDataUpdate}
+                />
+            )}
+             <div className="actions-bar">
+                <h3>Listado de Gastos Fijos</h3>
+                <button className="cta-button" onClick={() => setShowModal(true)}>+ Nuevo Gasto Fijo</button>
+            </div>
+             <div className="accounting-card">
+                 <ul className="fixed-expense-list">
+                    {fixedExpenses.map(expense => (
+                        <li key={expense._id} className={`fixed-expense-item ${isPaidThisMonth(expense.lastPaid) ? 'paid' : ''}`}>
+                            <span className="name">{expense.name}</span>
+                            <span className="amount">${expense.amount.toLocaleString('es-AR')}</span>
+                            <button 
+                                className="cta-button pay-button"
+                                onClick={() => handleMarkAsPaid(expense)}
+                                disabled={isPaidThisMonth(expense.lastPaid)}
+                            >
+                                {isPaidThisMonth(expense.lastPaid) ? 'Pagado' : 'Marcar como Pagado'}
+                            </button>
+                        </li>
+                    ))}
+                 </ul>
+             </div>
+        </div>
+    );
+};
+
+const CategoriesView: React.FC<{
+    categoryGroups: ExpenseCategoryGroup[],
+    onDataUpdate: () => void,
+    gymId: string
+}> = ({ categoryGroups, onDataUpdate, gymId }) => {
+    
+    const [newGroupName, setNewGroupName] = useState('');
+    const [newCategory, setNewCategory] = useState<Record<string, string>>({});
+
+    const handleCreateGroup = async () => {
+        if (!newGroupName) return;
+        await apiClient.createAccountingData(gymId, 'expense_category_groups', { name: newGroupName, categories: [] });
+        setNewGroupName('');
+        onDataUpdate();
+    };
+
+    const handleAddCategory = async (group: ExpenseCategoryGroup) => {
+        const categoryName = newCategory[group._id];
+        if (!categoryName) return;
+        const updatedCategories = [...group.categories, categoryName];
+        await apiClient.updateAccountingData('expense_category_groups', group._id, { categories: updatedCategories });
+        setNewCategory(prev => ({...prev, [group._id]: ''}));
+        onDataUpdate();
+    };
+
+    return (
+        <div className="accounting-grid">
+            <div className="accounting-card">
+                <h3>Crear Nuevo Grupo de Gastos</h3>
+                 <div className="form-group">
+                    <label>Nombre del Grupo (Ej: Gastos Personales, Gimnasio)</label>
+                    <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} />
+                </div>
+                <button className="cta-button" onClick={handleCreateGroup}>Crear Grupo</button>
+            </div>
+             <div className="accounting-card" style={{gridColumn: '1 / -1'}}>
+                 <h3>Categorías Actuales</h3>
+                 {categoryGroups.map(group => (
+                    <div key={group._id} className="category-group">
+                        <div className="category-group-header">
+                            <h4>{group.name}</h4>
+                        </div>
+                        <ul className="category-list">
+                            {group.categories.map(cat => <li key={cat} className="category-item"><span>{cat}</span></li>)}
+                        </ul>
+                         <div className="form-group" style={{marginTop: '1rem'}}>
+                             <form className="update-balance-form" onSubmit={(e) => { e.preventDefault(); handleAddCategory(group); }}>
+                                <input 
+                                    type="text" 
+                                    placeholder="Nueva categoría..."
+                                    value={newCategory[group._id] || ''}
+                                    onChange={e => setNewCategory(prev => ({...prev, [group._id]: e.target.value}))}
+                                />
+                                <button type="submit" className="cta-button secondary" disabled={!newCategory[group._id]}>+</button>
+                            </form>
+                        </div>
+                    </div>
+                 ))}
+             </div>
+        </div>
+    );
+};
+
+
+const AddTransactionModal: React.FC<{
+    accounts: AccountingAccount[],
+    categoryGroups: ExpenseCategoryGroup[],
+    gymId: string,
+    onClose: () => void,
+    onSave: () => void
+}> = ({ accounts, categoryGroups, gymId, onClose, onSave }) => {
+
+    const [type, setType] = useState<'income' | 'expense'>('expense');
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState('');
+    const [accountId, setAccountId] = useState(accounts[0]?._id || '');
+    const [category, setCategory] = useState(''); // "group|category"
+
+    const handleSave = async () => {
+        if (!description || !amount || !accountId) {
+            alert("Completa todos los campos.");
+            return;
+        }
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+            alert("Ingresa un monto válido.");
+            return;
+        }
+
+        const account = accounts.find(a => a._id === accountId);
+        if (!account) return;
+
+        const transactionData: Partial<AccountingTransaction> = {
+            date: new Date().toISOString(),
+            type,
+            amount: amountNum,
+            description,
+            accountId,
+            accountName: account.name,
+        };
+
+        if (type === 'expense' && category) {
+            const [group, name] = category.split('|');
+            transactionData.category = { group, name };
+        }
+
+        await apiClient.createAccountingData(gymId, 'transactions', transactionData);
+
+        const newBalance = type === 'income' ? account.balance + amountNum : account.balance - amountNum;
+        await apiClient.updateAccountingData('accounts', accountId, { balance: newBalance });
+
+        onSave();
+        onClose();
+    };
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal large">
+                <button className="close-button" onClick={onClose}>&times;</button>
+                <h3>Nueva Transacción</h3>
+                <div className="form-group">
+                    <label>Tipo</label>
+                    <select value={type} onChange={e => setType(e.target.value as any)}>
+                        <option value="expense">Gasto</option>
+                        <option value="income">Ingreso</option>
+                    </select>
+                </div>
+                <div className="form-group">
+                    <label>Descripción</label>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} />
+                </div>
+                <div className="form-group">
+                    <label>Monto</label>
+                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+                </div>
+                <div className="form-group">
+                    <label>Cuenta</label>
+                    <select value={accountId} onChange={e => setAccountId(e.target.value)}>
+                        {accounts.map(a => <option key={a._id} value={a._id}>{a.name}</option>)}
+                    </select>
+                </div>
+                {type === 'expense' && (
+                    <div className="form-group">
+                        <label>Categoría (Opcional)</label>
+                        <select value={category} onChange={e => setCategory(e.target.value)}>
+                            <option value="">Ninguna</option>
+                            {categoryGroups.map(group => (
+                                <optgroup key={group._id} label={group.name}>
+                                    {group.categories.map(cat => <option key={cat} value={`${group.name}|${cat}`}>{cat}</option>)}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </div>
+                )}
+                 <div className="modal-actions" style={{marginTop: '2rem'}}>
+                    <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="cta-button" onClick={handleSave}>Guardar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const AddFixedExpenseModal: React.FC<{ gymId: string, onClose: () => void, onSave: () => void }> = ({ gymId, onClose, onSave }) => {
+    const [name, setName] = useState('');
+    const [amount, setAmount] = useState('');
+
+    const handleSave = async () => {
+        if (!name || !amount) return;
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) return;
+        
+        await apiClient.createAccountingData(gymId, 'fixed_expenses', { name, amount: amountNum, lastPaid: null });
+        onSave();
+        onClose();
+    };
+
+    return (
+        <div className="modal-overlay">
+            <div className="modal-content edit-modal">
+                 <button className="close-button" onClick={onClose}>&times;</button>
+                 <h3>Nuevo Gasto Fijo</h3>
+                  <div className="form-group">
+                    <label>Nombre</label>
+                    <input type="text" value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                <div className="form-group">
+                    <label>Monto Mensual</label>
+                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+                </div>
+                 <div className="modal-actions" style={{marginTop: '2rem'}}>
+                    <button type="button" className="cta-button secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="cta-button" onClick={handleSave}>Guardar</button>
+                </div>
+            </div>
+        </div>
+    )
+};
+
 
 const AdminDashboard: React.FC<{ 
     onSelectClient: (dni: string) => void; 
