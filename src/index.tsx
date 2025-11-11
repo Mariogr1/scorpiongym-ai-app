@@ -1,6 +1,5 @@
 
 
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -570,316 +569,6 @@ const VideoPlayerModal: React.FC<{ videoUrl: string; onClose: () => void }> = ({
             </div>
         </div>
     );
-};
-
-// FIX: Define ClientView component before its use in App component to resolve 'Cannot find name' error.
-const ClientView: React.FC<{ dni: string; onLogout: () => void; }> = ({ dni, onLogout }) => {
-    const [clientData, setClientData] = useState<ClientData | null>(null);
-    const [gym, setGym] = useState<Gym | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>('routine');
-
-    const fetchData = async () => {
-        setIsLoading(true);
-        const data = await apiClient.getClientData(dni);
-        setClientData(data);
-        if (data) {
-            if (data.planType === 'nutrition' && activeTab === 'routine') {
-                setActiveTab('diet');
-            }
-            const allGyms = await apiClient.getGyms();
-            const clientGym = allGyms.find(g => g._id === data.gymId);
-            setGym(clientGym || null);
-        }
-        setIsLoading(false);
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [dni]);
-
-    if (isLoading) {
-        return <div className="loading-container"><div className="spinner"></div></div>;
-    }
-
-    if (!clientData) {
-        return <div className="error-container">No se pudieron cargar tus datos. Intenta iniciar sesión de nuevo.</div>;
-    }
-
-    const planType = clientData.planType || 'full';
-
-    return (
-        <div className="client-view-container">
-            <div className="main-header">
-                <div className="header-title-wrapper">
-                     {gym?.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
-                     <div>
-                        <h1>Hola, {clientData.profile.name}!</h1>
-                        <p>{gym?.name || 'Tu Gimnasio'}</p>
-                    </div>
-                </div>
-                <div className="admin-header-nav">
-                    <button onClick={onLogout} className="logout-button admin-logout">Cerrar Sesión</button>
-                </div>
-            </div>
-            
-            <main className="client-main-content">
-                <nav className="main-tabs-nav">
-                    {(planType === 'full' || planType === 'routine') &&
-                        <button 
-                            className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} 
-                            onClick={() => setActiveTab('routine')}>
-                            Mi Rutina
-                        </button>
-                    }
-                     {(planType === 'full' || planType === 'nutrition') &&
-                        <button 
-                            className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} 
-                            onClick={() => setActiveTab('diet')}>
-                            Mi Nutrición
-                        </button>
-                    }
-                    <button 
-                        className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} 
-                        onClick={() => setActiveTab('progress')}>
-                        Mi Progreso
-                    </button>
-                     <button 
-                        className={`main-tab-button ${activeTab === 'messages' ? 'active' : ''}`} 
-                        onClick={() => setActiveTab('messages')}>
-                        Contactar Entrenador
-                    </button>
-                </nav>
-                <div className="client-results-section">
-                    {activeTab === 'routine' && clientData.routine && (
-                        <ClientRoutineView 
-                            routine={clientData.routine} 
-                            progressLog={clientData.progressLog}
-                            onProgressUpdate={async (newLog) => {
-                                const success = await apiClient.saveClientData(dni, { progressLog: newLog });
-                                if (success) fetchData();
-                            }}
-                        />
-                    )}
-                    {activeTab === 'routine' && !clientData.routine && <div className="placeholder">Aún no tienes una rutina asignada.</div>}
-                    
-                    {activeTab === 'diet' && <ClientDietView dietPlans={clientData.dietPlans} />}
-                    
-                    {activeTab === 'progress' && <ProgressView clientData={clientData} onDataUpdate={fetchData} />}
-
-                    {activeTab === 'messages' && <ClientMessageView clientData={clientData} />}
-                </div>
-            </main>
-        </div>
-    );
-};
-
-// FIX: Define missing ClientOnboardingView component before its use.
-const ClientOnboardingView: React.FC<{
-    dni: string;
-    onOnboardingComplete: () => void;
-    onBack: () => void;
-}> = ({ dni, onOnboardingComplete, onBack }) => {
-    const [clientData, setClientData] = useState<ClientData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchClient = async () => {
-            const data = await apiClient.getClientData(dni);
-            setClientData(data);
-            setIsLoading(false);
-        };
-        fetchClient();
-    }, [dni]);
-    
-    const handleSaveAndContinue = async () => {
-        if (!clientData) return;
-        const success = await apiClient.saveClientData(dni, { profile: clientData.profile, planStatus: 'active' });
-        if (success) {
-            onOnboardingComplete();
-        } else {
-            alert('Failed to save profile.');
-        }
-    };
-    
-    if (isLoading) return <div className="loading-container"><div className="spinner"></div></div>;
-    if (!clientData) return <div className="error-container">Could not load client data.</div>;
-
-    const isProfileComplete = clientData.profile.name && clientData.profile.age && clientData.profile.weight && clientData.profile.height;
-
-    return (
-        <div className="onboarding-container">
-            <header className="onboarding-header">
-                <h1>Tu Perfil Personal</h1>
-                <p>Completa tus datos para que podamos generar tu plan personalizado.</p>
-            </header>
-            <div className="onboarding-content">
-                 <ProfileEditor clientData={clientData} setClientData={setClientData} isClientOnboarding={true} />
-            </div>
-            <div className="onboarding-footer">
-                <button onClick={onBack} className="back-button">Volver</button>
-                <button onClick={handleSaveAndContinue} className="cta-button" disabled={!isProfileComplete}>
-                    Guardar y Generar Plan
-                </button>
-            </div>
-        </div>
-    );
-};
-
-
-/**
- * Main application component that handles routing and state.
- */
-const App: React.FC = () => {
-    type AppView = 'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset' | 'planSelection' | 'clientOnboarding';
-    const [view, setView] = useState<AppView>('landing');
-    const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
-    const [currentGym, setCurrentGym] = useState<Gym | null>(null);
-    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
-    const [loginError, setLoginError] = useState<string>('');
-    const [loginMessage, setLoginMessage] = useState('');
-
-    useEffect(() => {
-        // Check session storage to maintain login state
-        const loggedInClientDni = sessionStorage.getItem('loggedInClientDni');
-        const loggedInGym = sessionStorage.getItem('loggedInGym');
-
-        if (loggedInClientDni) {
-            handleClientLoginFlow(loggedInClientDni);
-        } else if (loggedInGym) {
-            const gymData = JSON.parse(loggedInGym);
-            handleGymLoginFlow(gymData);
-        }
-    }, []);
-
-    const handleClientLoginFlow = async (dni: string) => {
-        const clientData = await apiClient.getClientData(dni);
-        setCurrentClientDni(dni);
-        if (clientData?.passwordResetRequired) {
-             setView('clientPasswordReset');
-        } else if (clientData?.planStatus === 'pending') {
-            setView('planSelection');
-        } else {
-            setView('clientView');
-        }
-    };
-
-    const handleGymLoginFlow = (gymData: Gym) => {
-        setCurrentGym(gymData);
-        if (gymData.username === 'superadmin') {
-            setView('superAdminDashboard');
-        } else {
-            setView('adminDashboard');
-        }
-    };
-
-
-    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string): Promise<void> => {
-        setLoginError('');
-        setLoginMessage('');
-        if (type === 'client') {
-            const loginResult = await apiClient.loginClient(id, code!);
-            if (loginResult.success) {
-                sessionStorage.setItem('loggedInClientDni', id);
-                await handleClientLoginFlow(id);
-            } else {
-                setLoginError('DNI o código de acceso/contraseña incorrecto.');
-            }
-        } else { // type === 'gym'
-             const gymData = await apiClient.gymLogin(id, code!);
-             if (gymData) {
-                 sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
-                 handleGymLoginFlow(gymData);
-             } else {
-                 setLoginError('Usuario o contraseña incorrecto.');
-             }
-        }
-    };
-    
-    const handleLogout = () => {
-        sessionStorage.clear();
-        setCurrentClientDni(null);
-        setCurrentGym(null);
-        setImpersonatedGym(null);
-        setView('landing');
-    };
-    
-    const handleSelectClient = (dni: string) => {
-        setCurrentClientDni(dni);
-        setView('clientDashboard');
-    };
-
-    const handleBackToAdmin = () => {
-        setCurrentClientDni(null);
-        setView('adminDashboard');
-    };
-    
-    const handleSelectGym = (gymToManage: Gym) => {
-        setImpersonatedGym(gymToManage);
-        setView('adminDashboard');
-    };
-
-    const handleBackToSuperAdmin = () => {
-        setImpersonatedGym(null);
-        setView('superAdminDashboard');
-    };
-    
-    const handleRegisterAndContinue = (dni: string) => {
-        sessionStorage.setItem('loggedInClientDni', dni);
-        setCurrentClientDni(dni);
-        setView('planSelection');
-    };
-
-    const renderView = () => {
-        switch (view) {
-            case 'landing':
-                return <LandingPage onIngresar={() => setView('login')} />;
-            case 'login':
-                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
-            case 'clientRegistration':
-                return <ClientRegistrationPage onRegister={handleRegisterAndContinue} onBack={() => setView('login')} />;
-            case 'clientPasswordReset':
-                return <NewPasswordResetPage 
-                    dni={currentClientDni!} 
-                    onPasswordSet={() => {
-                        setCurrentClientDni(null);
-                        setView('login');
-                        setLoginMessage('¡Contraseña actualizada! Por favor, inicia sesión con tus nuevas credenciales.');
-                    }} 
-                    onBackToLogin={() => setView('login')} 
-                />;
-            case 'planSelection':
-                 return <PlanSelectionPage 
-                    dni={currentClientDni!} 
-                    onSelectCustom={() => setView('clientOnboarding')} 
-                    onPlanApplied={() => setView('clientView')}
-                />;
-            case 'clientOnboarding':
-                return <ClientOnboardingView 
-                    dni={currentClientDni!} 
-                    onOnboardingComplete={() => setView('clientView')}
-                    onBack={() => setView('planSelection')}
-                />;
-            case 'adminDashboard':
-                return <AdminDashboard 
-                            onSelectClient={handleSelectClient} 
-                            onLogout={handleLogout} 
-                            gym={impersonatedGym || currentGym!} 
-                            loggedInGym={currentGym!}
-                            onBackToSuperAdmin={handleBackToSuperAdmin}
-                        />;
-            case 'clientDashboard':
-                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
-            case 'clientView':
-                return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
-            case 'superAdminDashboard':
-                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
-            default:
-                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
-        }
-    };
-
-    return <>{renderView()}</>;
 };
 
 // --- Landing, Login & Registration Views ---
@@ -2040,6 +1729,7 @@ const ExerciseLibraryManager: React.FC<{ gymId: string; onBack: () => void }> = 
         </div>
     );
 };
+
 const RoutinePlan: React.FC<{
     routine: Routine;
     isEditing?: boolean;
@@ -2169,7 +1859,6 @@ const RoutinePlan: React.FC<{
     );
 };
 
-// FIX: Define DietPlanDisplay component to resolve 'Cannot find name' error.
 const DietPlanDisplay: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
     if (!dietPlan) return null;
 
@@ -2224,7 +1913,6 @@ const DietPlanDisplay: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
         </div>
     );
 };
-
 
 const TemplateEditor: React.FC<{
     gym: Gym;
@@ -3436,7 +3124,6 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
     );
 };
 
-// FIX: Define RoutineGenerator component to resolve 'Cannot find name' error.
 const RoutineGenerator: React.FC<{
     clientData: ClientData;
     setClientData: React.Dispatch<React.SetStateAction<ClientData | null>>;
@@ -3544,7 +3231,6 @@ const RoutineGenerator: React.FC<{
     );
 };
 
-// FIX: Define DietPlanGenerator component to resolve 'Cannot find name' error.
 const DietPlanGenerator: React.FC<{
     clientData: ClientData;
     setClientData: React.Dispatch<React.SetStateAction<ClientData | null>>;
@@ -3563,7 +3249,7 @@ const DietPlanGenerator: React.FC<{
         try {
             const generatedPlan = await generateDietPlanForClient(clientData);
             
-            const newDietPlans = [...clientData.dietPlans];
+            const newDietPlans = [...(clientData.dietPlans || [null, null])];
             newDietPlans[planIndex] = generatedPlan;
             
             const success = await apiClient.saveClientData(clientData.dni, { dietPlans: newDietPlans });
@@ -3581,7 +3267,7 @@ const DietPlanGenerator: React.FC<{
         }
     };
     
-    const currentPlan = clientData.dietPlans[activePlan];
+    const currentPlan = clientData.dietPlans ? clientData.dietPlans[activePlan] : null;
 
     if (isGenerating) {
         return (
@@ -3714,151 +3400,6 @@ const ClientManagementView: React.FC<{ dni: string, onBack: () => void, onLogout
                     </div>
                 </main>
             </div>
-        </div>
-    );
-};
-
-const ClientRoutineView: React.FC<{
-    routine: Routine;
-    progressLog: ProgressLog;
-    onProgressUpdate: (newLog: ProgressLog) => void;
-}> = ({ routine, progressLog, onProgressUpdate }) => {
-    const [logEntry, setLogEntry] = useState<{ exerciseName: string; weight: string; repetitions: string } | null>(null);
-
-    const handleOpenLogModal = (exerciseName: string) => {
-        const lastEntry = progressLog[exerciseName]?.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        setLogEntry({
-            exerciseName,
-            weight: lastEntry?.weight.toString() || '',
-            repetitions: lastEntry?.repetitions.toString() || ''
-        });
-    };
-
-    const handleSaveLog = () => {
-        if (!logEntry || !logEntry.weight || !logEntry.repetitions) return;
-
-        const newLogEntry: ProgressLogEntry = {
-            date: new Date().toISOString(),
-            weight: parseFloat(logEntry.weight),
-            repetitions: parseInt(logEntry.repetitions, 10)
-        };
-        
-        const newProgressLog = JSON.parse(JSON.stringify(progressLog));
-        if (!newProgressLog[logEntry.exerciseName]) {
-            newProgressLog[logEntry.exerciseName] = [];
-        }
-        newProgressLog[logEntry.exerciseName].push(newLogEntry);
-        
-        onProgressUpdate(newProgressLog);
-        setLogEntry(null);
-    };
-    
-    return (
-        <div>
-            {logEntry && (
-                <div className="modal-overlay">
-                    <div className="modal-content edit-modal">
-                         <button className="close-button" onClick={() => setLogEntry(null)}>&times;</button>
-                         <h3>Registrar Progreso: {logEntry.exerciseName}</h3>
-                         <div className="form-group">
-                             <label>Peso (kg)</label>
-                             <input type="number" value={logEntry.weight} onChange={e => setLogEntry({...logEntry, weight: e.target.value})} />
-                         </div>
-                         <div className="form-group">
-                             <label>Repeticiones</label>
-                             <input type="number" value={logEntry.repetitions} onChange={e => setLogEntry({...logEntry, repetitions: e.target.value})} />
-                         </div>
-                         <div className="modal-actions">
-                             <button className="cta-button secondary" onClick={() => setLogEntry(null)}>Cancelar</button>
-                             <button className="cta-button" onClick={handleSaveLog}>Guardar</button>
-                         </div>
-                    </div>
-                </div>
-            )}
-            <RoutinePlan routine={routine} />
-        </div>
-    );
-};
-
-const ClientDietView: React.FC<{ dietPlans: ClientData['dietPlans'] }> = ({ dietPlans }) => {
-    const [activePlanIndex, setActivePlanIndex] = useState(0);
-    const currentPlan = dietPlans[activePlanIndex];
-
-    if (!dietPlans.some(p => p !== null)) {
-        return <div className="placeholder">Aún no tienes un plan de nutrición.</div>;
-    }
-    
-    return (
-        <div className="diet-generator-container">
-            <div className="actions-bar">
-                <h2>Mi Plan de Nutrición</h2>
-                <div className="plan-toggle">
-                    <button className={activePlanIndex === 0 ? 'active' : ''} onClick={() => setActivePlanIndex(0)}>Plan A</button>
-                    <button className={activePlanIndex === 1 ? 'active' : ''} onClick={() => setActivePlanIndex(1)}>Plan B</button>
-                </div>
-            </div>
-            {currentPlan ? (
-                <DietPlanDisplay dietPlan={currentPlan} />
-            ) : (
-                <div className="placeholder">Este plan no está definido.</div>
-            )}
-        </div>
-    );
-};
-
-const ClientMessageView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const [subject, setSubject] = useState('');
-    const [message, setMessage] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!subject || !message) {
-            alert("Por favor, completa el asunto y el mensaje.");
-            return;
-        }
-        setIsSending(true);
-        setSendStatus('idle');
-
-        const success = await apiClient.createRequest({
-            clientId: clientData.dni,
-            clientName: clientData.profile.name,
-            gymId: clientData.gymId,
-            subject,
-            message,
-        });
-
-        if (success) {
-            setSendStatus('success');
-            setSubject('');
-            setMessage('');
-            setTimeout(() => setSendStatus('idle'), 3000);
-        } else {
-            setSendStatus('error');
-        }
-        setIsSending(false);
-    };
-
-    return (
-        <div className="message-view-container animated-fade-in">
-            <h2>Contactar a mi Entrenador</h2>
-            <p>Envía un mensaje o consulta a tu entrenador. Recibirás una respuesta pronto.</p>
-            <form onSubmit={handleSubmit} className="message-form">
-                <div className="form-group">
-                    <label>Asunto</label>
-                    <input type="text" value={subject} onChange={e => setSubject(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                    <label>Mensaje</label>
-                    <textarea value={message} onChange={e => setMessage(e.target.value)} required rows={5}></textarea>
-                </div>
-                {sendStatus === 'success' && <p className="success-text">¡Mensaje enviado con éxito!</p>}
-                {sendStatus === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
-                <button type="submit" className="cta-button" disabled={isSending}>
-                    {isSending ? 'Enviando...' : 'Enviar Mensaje'}
-                </button>
-            </form>
         </div>
     );
 };
@@ -4047,3 +3588,563 @@ const ProfileEditor: React.FC<{
         </div>
     );
 };
+
+// Added missing components for ClientView
+const ClientRoutineView: React.FC<{
+    routine: Routine;
+    progressLog: ProgressLog;
+    onProgressUpdate: (newLog: ProgressLog) => void;
+}> = ({ routine, progressLog, onProgressUpdate }) => {
+    const [logEntry, setLogEntry] = useState<{ exerciseName: string; weight: string; repetitions: string } | null>(null);
+
+    const handleOpenLogModal = (exerciseName: string) => {
+        const lastEntry = progressLog[exerciseName]?.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        setLogEntry({
+            exerciseName,
+            weight: lastEntry?.weight.toString() || '',
+            repetitions: lastEntry?.repetitions.toString() || ''
+        });
+    };
+
+    const handleSaveLog = () => {
+        if (!logEntry || !logEntry.weight || !logEntry.repetitions) return;
+
+        const newLogEntry: ProgressLogEntry = {
+            date: new Date().toISOString(),
+            weight: parseFloat(logEntry.weight),
+            repetitions: parseInt(logEntry.repetitions, 10)
+        };
+        
+        const newProgressLog = JSON.parse(JSON.stringify(progressLog || {}));
+        if (!newProgressLog[logEntry.exerciseName]) {
+            newProgressLog[logEntry.exerciseName] = [];
+        }
+        newProgressLog[logEntry.exerciseName].push(newLogEntry);
+        
+        onProgressUpdate(newProgressLog);
+        setLogEntry(null);
+    };
+    
+    // This is a simplified view for the client. The RoutinePlan component is more for editing.
+    // Let's create a simpler display for the client.
+    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
+    const activePhase = routine.phases[activePhaseIndex];
+
+    return (
+        <div className="plan-container animated-fade-in">
+            {logEntry && (
+                <div className="modal-overlay">
+                    <div className="modal-content edit-modal">
+                         <button className="close-button" onClick={() => setLogEntry(null)}>&times;</button>
+                         <h3>Registrar Progreso: {logEntry.exerciseName}</h3>
+                         <div className="form-group">
+                             <label>Peso (kg)</label>
+                             <input type="number" value={logEntry.weight} onChange={e => setLogEntry({...logEntry, weight: e.target.value})} />
+                         </div>
+                         <div className="form-group">
+                             <label>Repeticiones</label>
+                             <input type="number" value={logEntry.repetitions} onChange={e => setLogEntry({...logEntry, repetitions: e.target.value})} />
+                         </div>
+                         <div className="modal-actions">
+                             <button className="cta-button secondary" onClick={() => setLogEntry(null)}>Cancelar</button>
+                             <button className="cta-button" onClick={handleSaveLog}>Guardar</button>
+                         </div>
+                    </div>
+                </div>
+            )}
+            
+            <div className="plan-header">
+                <h2>{routine.planName}</h2>
+                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+            </div>
+
+            {routine.phases.length > 1 && (
+                <nav className="phases-nav">
+                    {routine.phases.map((phase, index) => (
+                        <button 
+                            key={index} 
+                            className={`phase-button ${index === activePhaseIndex ? 'active' : ''}`}
+                            onClick={() => setActivePhaseIndex(index)}
+                        >
+                            {phase.phaseName} ({phase.durationWeeks} sem)
+                        </button>
+                    ))}
+                </nav>
+            )}
+
+            <div className="phase-content">
+                <h3>{activePhase.phaseName}</h3>
+                <div className="days-grid">
+                    {activePhase.routine.dias.map((day, dayIndex) => (
+                        <div key={dayIndex} className="day-card">
+                            <div className="day-header">
+                                <h4>{day.dia}</h4>
+                                <span>{day.grupoMuscular}</span>
+                            </div>
+                            <ul className="exercise-list">
+                                {day.ejercicios.map((ex, exIndex) => (
+                                    <li key={exIndex} className="exercise-item">
+                                        <div className="exercise-details">
+                                            <span className="exercise-name">{ex.nombre}</span>
+                                            {ex.tecnicaAvanzada && <span className="advanced-technique-badge">{ex.tecnicaAvanzada}</span>}
+                                        </div>
+                                        <div className="exercise-sets">
+                                            <span>{ex.series} x {ex.repeticiones} - {ex.descanso}</span>
+                                        </div>
+                                        <button className="log-progress-btn" onClick={() => handleOpenLogModal(ex.nombre)}>Registrar</button>
+                                    </li>
+                                ))}
+                            </ul>
+                            {day.cardio && day.cardio.toLowerCase() !== 'no aplica' && (
+                                <div className="cardio-section">
+                                    <strong>Cardio:</strong> {day.cardio}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ClientDietView: React.FC<{ dietPlans: ClientData['dietPlans'] }> = ({ dietPlans }) => {
+    const [activePlanIndex, setActivePlanIndex] = useState(0);
+
+    if (!dietPlans || !dietPlans.some(p => p !== null)) {
+        return <div className="placeholder">Aún no tienes un plan de nutrición.</div>;
+    }
+    
+    const currentPlan = dietPlans[activePlanIndex];
+
+    return (
+        <div className="diet-generator-container">
+            <div className="actions-bar">
+                <h2>Mi Plan de Nutrición</h2>
+                <div className="plan-toggle">
+                    <button className={activePlanIndex === 0 ? 'active' : ''} onClick={() => setActivePlanIndex(0)} disabled={!dietPlans[0]}>Plan A</button>
+                    <button className={activePlanIndex === 1 ? 'active' : ''} onClick={() => setActivePlanIndex(1)} disabled={!dietPlans[1]}>Plan B</button>
+                </div>
+            </div>
+            {currentPlan ? (
+                <DietPlanDisplay dietPlan={currentPlan} />
+            ) : (
+                <div className="placeholder">Este plan no está definido.</div>
+            )}
+        </div>
+    );
+};
+
+const ClientMessageView: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!subject || !message) {
+            alert("Por favor, completa el asunto y el mensaje.");
+            return;
+        }
+        setIsSending(true);
+        setSendStatus('idle');
+
+        const success = await apiClient.createRequest({
+            clientId: clientData.dni,
+            clientName: clientData.profile.name,
+            gymId: clientData.gymId,
+            subject,
+            message,
+        });
+
+        if (success) {
+            setSendStatus('success');
+            setSubject('');
+            setMessage('');
+            setTimeout(() => setSendStatus('idle'), 3000);
+        } else {
+            setSendStatus('error');
+        }
+        setIsSending(false);
+    };
+
+    return (
+        <div className="message-view-container animated-fade-in">
+            <h2>Contactar a mi Entrenador</h2>
+            <p>Envía un mensaje o consulta a tu entrenador. Recibirás una respuesta pronto.</p>
+            <form onSubmit={handleSubmit} className="message-form">
+                <div className="form-group">
+                    <label>Asunto</label>
+                    <input type="text" value={subject} onChange={e => setSubject(e.target.value)} required />
+                </div>
+                <div className="form-group">
+                    <label>Mensaje</label>
+                    <textarea value={message} onChange={e => setMessage(e.target.value)} required rows={5}></textarea>
+                </div>
+                {sendStatus === 'success' && <p className="success-text">¡Mensaje enviado con éxito!</p>}
+                {sendStatus === 'error' && <p className="error-text">No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
+                <button type="submit" className="cta-button" disabled={isSending}>
+                    {isSending ? 'Enviando...' : 'Enviar Mensaje'}
+                </button>
+            </form>
+        </div>
+    );
+};
+
+// Fix: Added ClientOnboardingView and ClientView components that were missing.
+const ClientOnboardingView: React.FC<{
+    dni: string;
+    onOnboardingComplete: () => void;
+    onBack: () => void;
+}> = ({ dni, onOnboardingComplete, onBack }) => {
+    const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            const data = await apiClient.getClientData(dni);
+            setClientData(data);
+            setIsLoading(false);
+        };
+        fetchData();
+    }, [dni]);
+
+    const handleComplete = async () => {
+        if (!clientData) return;
+
+        // Simple validation
+        const { name, age, weight, height, goal, trainingDays } = clientData.profile;
+        if (!name || !age || !weight || !height || !goal || !trainingDays) {
+            alert("Por favor, completa todos los campos principales del perfil (nombre, edad, peso, altura, objetivo y días de entrenamiento).");
+            return;
+        }
+
+        setIsLoading(true);
+        
+        // Save profile and activate the plan
+        const success = await apiClient.saveClientData(dni, {
+            profile: clientData.profile,
+            planStatus: 'active',
+        });
+        
+        if (success) {
+            onOnboardingComplete();
+        } else {
+            alert("Hubo un error al guardar tu perfil. Inténtalo de nuevo.");
+            setIsLoading(false);
+        }
+    };
+
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    }
+
+    if (!clientData) {
+        return <div className="error-container">No se pudieron cargar tus datos.</div>;
+    }
+
+    return (
+        <div className="onboarding-container">
+            <header className="onboarding-header">
+                <h1>Completa tu Perfil</h1>
+                <p>Necesitamos algunos datos para crear tu plan personalizado.</p>
+            </header>
+            <div className="onboarding-content">
+                <ProfileEditor 
+                    clientData={clientData} 
+                    setClientData={setClientData} 
+                    isClientOnboarding={true} 
+                />
+            </div>
+             <div className="onboarding-actions">
+                <button onClick={onBack} className="back-button simple" disabled={isLoading}>Volver</button>
+                <button onClick={handleComplete} className="cta-button" disabled={isLoading}>
+                    {isLoading ? 'Guardando...' : 'Crear mi Plan'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+
+const ClientView: React.FC<{ dni: string, onLogout: () => void }> = ({ dni, onLogout }) => {
+    const [clientData, setClientData] = useState<ClientData | null>(null);
+    const [gym, setGym] = useState<Gym | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'messages'>('routine');
+
+    const fetchAllData = async () => {
+        setIsLoading(true);
+        const data = await apiClient.getClientData(dni);
+        if (data) {
+            setClientData(data);
+            const allGyms = await apiClient.getGyms(); // In a real app with many gyms, we'd have a getGymById endpoint
+            const clientGym = allGyms.find(g => g._id === data.gymId);
+            
+            if (clientGym) {
+                setGym(clientGym);
+            }
+            
+            // Adjust default tab based on plan type
+            if (data.planType === 'nutrition' && activeTab === 'routine') {
+                setActiveTab('diet');
+            } else if (data.planType === 'routine' && activeTab === 'diet') {
+                 setActiveTab('routine');
+            }
+
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchAllData();
+    }, [dni]);
+
+    const handleProgressUpdate = async (newProgressLog: ProgressLog) => {
+        if (!clientData) return;
+        
+        setIsLoading(true);
+        const success = await apiClient.saveClientData(dni, { progressLog: newProgressLog });
+        if (success) {
+            await fetchAllData(); // Re-fetch all data to update the view
+        } else {
+            alert("No se pudo guardar el progreso.");
+            setIsLoading(false);
+        }
+    };
+    
+    if (isLoading) {
+        return <div className="loading-container"><div className="spinner"></div></div>;
+    }
+
+    if (!clientData || !gym) {
+        return (
+            <div className="error-container">
+                <p>No se pudieron cargar tus datos. Por favor, intenta de nuevo más tarde.</p>
+                <button onClick={onLogout} className="cta-button">Cerrar Sesión</button>
+            </div>
+        );
+    }
+    
+    const planType = clientData.planType || 'full';
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'routine':
+                return clientData.routine ? <ClientRoutineView routine={clientData.routine} progressLog={clientData.progressLog} onProgressUpdate={handleProgressUpdate} /> : <div className="placeholder">Tu rutina aún no ha sido generada.</div>;
+            case 'diet':
+                return <ClientDietView dietPlans={clientData.dietPlans} />;
+            case 'progress':
+                return <ProgressView clientData={clientData} onDataUpdate={fetchAllData} />;
+            case 'messages':
+                return <ClientMessageView clientData={clientData} />;
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div className="client-dashboard-view">
+            <div className="main-header">
+                <div className="header-title-wrapper">
+                     {gym.logoSvg && <div className="app-logo"><SvgImage svgString={gym.logoSvg} altText={`${gym.name} logo`} /></div>}
+                     <div>
+                        <h1>Hola, {clientData.profile.name}</h1>
+                        <p>{gym.name}</p>
+                    </div>
+                </div>
+                 <div className="admin-header-nav">
+                    <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
+                 </div>
+            </div>
+            
+            <nav className="main-tabs-nav">
+                {(planType === 'full' || planType === 'routine') && (
+                     <button 
+                        className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} 
+                        onClick={() => setActiveTab('routine')}>
+                        Mi Rutina
+                    </button>
+                )}
+                 {(planType === 'full' || planType === 'nutrition') && (
+                     <button 
+                        className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} 
+                        onClick={() => setActiveTab('diet')}>
+                        Nutrición
+                    </button>
+                 )}
+                <button 
+                    className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('progress')}>
+                    Mi Progreso
+                </button>
+                <button 
+                    className={`main-tab-button ${activeTab === 'messages' ? 'active' : ''}`} 
+                    onClick={() => setActiveTab('messages')}>
+                    Contactar
+                </button>
+            </nav>
+            
+            <main className="client-main-content">
+                {renderContent()}
+            </main>
+        </div>
+    );
+};
+
+const App: React.FC = () => {
+    type AppView = 'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset' | 'planSelection' | 'clientOnboarding';
+    const [view, setView] = useState<AppView>('landing');
+    const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
+    const [currentGym, setCurrentGym] = useState<Gym | null>(null);
+    const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
+    const [loginError, setLoginError] = useState<string>('');
+    const [loginMessage, setLoginMessage] = useState('');
+
+    useEffect(() => {
+        // Check session storage to maintain login state
+        const loggedInClientDni = sessionStorage.getItem('loggedInClientDni');
+        const loggedInGym = sessionStorage.getItem('loggedInGym');
+
+        if (loggedInClientDni) {
+            handleClientLoginFlow(loggedInClientDni);
+        } else if (loggedInGym) {
+            const gymData = JSON.parse(loggedInGym);
+            handleGymLoginFlow(gymData);
+        }
+    }, []);
+
+    const handleClientLoginFlow = async (dni: string) => {
+        const clientData = await apiClient.getClientData(dni);
+        setCurrentClientDni(dni);
+        if (clientData?.passwordResetRequired) {
+             setView('clientPasswordReset');
+        } else if (clientData?.planStatus === 'pending') {
+            setView('planSelection');
+        } else {
+            setView('clientView');
+        }
+    };
+
+    const handleGymLoginFlow = (gymData: Gym) => {
+        setCurrentGym(gymData);
+        if (gymData.username === 'superadmin') {
+            setView('superAdminDashboard');
+        } else {
+            setView('adminDashboard');
+        }
+    };
+
+
+    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string): Promise<void> => {
+        setLoginError('');
+        setLoginMessage('');
+        if (type === 'client') {
+            const loginResult = await apiClient.loginClient(id, code!);
+            if (loginResult.success) {
+                sessionStorage.setItem('loggedInClientDni', id);
+                await handleClientLoginFlow(id);
+            } else {
+                setLoginError('DNI o código de acceso/contraseña incorrecto.');
+            }
+        } else { // type === 'gym'
+             const gymData = await apiClient.gymLogin(id, code!);
+             if (gymData) {
+                 sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
+                 handleGymLoginFlow(gymData);
+             } else {
+                 setLoginError('Usuario o contraseña incorrecto.');
+             }
+        }
+    };
+    
+    const handleLogout = () => {
+        sessionStorage.clear();
+        setCurrentClientDni(null);
+        setCurrentGym(null);
+        setImpersonatedGym(null);
+        setView('landing');
+    };
+    
+    const handleSelectClient = (dni: string) => {
+        setCurrentClientDni(dni);
+        setView('clientDashboard');
+    };
+
+    const handleBackToAdmin = () => {
+        setCurrentClientDni(null);
+        setView('adminDashboard');
+    };
+    
+    const handleSelectGym = (gymToManage: Gym) => {
+        setImpersonatedGym(gymToManage);
+        setView('adminDashboard');
+    };
+
+    const handleBackToSuperAdmin = () => {
+        setImpersonatedGym(null);
+        setView('superAdminDashboard');
+    };
+    
+    const handleRegisterAndContinue = (dni: string) => {
+        sessionStorage.setItem('loggedInClientDni', dni);
+        setCurrentClientDni(dni);
+        setView('planSelection');
+    };
+
+    const renderView = () => {
+        switch (view) {
+            case 'landing':
+                return <LandingPage onIngresar={() => setView('login')} />;
+            case 'login':
+                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+            case 'clientRegistration':
+                return <ClientRegistrationPage onRegister={handleRegisterAndContinue} onBack={() => setView('login')} />;
+            case 'clientPasswordReset':
+                return <NewPasswordResetPage 
+                    dni={currentClientDni!} 
+                    onPasswordSet={() => {
+                        setCurrentClientDni(null);
+                        setView('login');
+                        setLoginMessage('¡Contraseña actualizada! Por favor, inicia sesión con tus nuevas credenciales.');
+                    }} 
+                    onBackToLogin={() => setView('login')} 
+                />;
+            case 'planSelection':
+                 return <PlanSelectionPage 
+                    dni={currentClientDni!} 
+                    onSelectCustom={() => setView('clientOnboarding')} 
+                    onPlanApplied={() => setView('clientView')}
+                />;
+            case 'clientOnboarding':
+                return <ClientOnboardingView 
+                    dni={currentClientDni!} 
+                    onOnboardingComplete={() => setView('clientView')}
+                    onBack={() => setView('planSelection')}
+                />;
+            case 'adminDashboard':
+                return <AdminDashboard 
+                            onSelectClient={handleSelectClient} 
+                            onLogout={handleLogout} 
+                            gym={impersonatedGym || currentGym!} 
+                            loggedInGym={currentGym!}
+                            onBackToSuperAdmin={handleBackToSuperAdmin}
+                        />;
+            case 'clientDashboard':
+                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
+            case 'clientView':
+                return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
+            case 'superAdminDashboard':
+                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
+            default:
+                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+        }
+    };
+
+    return <>{renderView()}</>;
+};
+
+const container = document.getElementById("root");
+createRoot(container!).render(<App />);
