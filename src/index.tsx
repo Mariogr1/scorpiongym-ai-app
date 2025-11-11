@@ -1,5 +1,7 @@
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -2284,7 +2286,7 @@ const RoutineTemplateManager: React.FC<{ gym: Gym; onBack: () => void; }> = ({ g
                             </div>
                             <p>{template.description || 'Sin descripción'}</p>
                             <div className="template-card-actions">
-                                <button className="action-btn edit" onClick={() => setIsEditing(template)}>Editar</button>
+                                <button className={`action-btn edit ${template.gender.toLowerCase()}`} onClick={() => setIsEditing(template)}>Editar</button>
                                 <button className="action-btn delete" onClick={() => handleDelete(template._id)}>Eliminar</button>
                             </div>
                         </div>
@@ -4076,157 +4078,202 @@ const ClientView: React.FC<{ dni: string, onLogout: () => void }> = ({ dni, onLo
     );
 };
 
-const App: React.FC = () => {
+// Fix: Refactor App to a function declaration to potentially resolve obscure TS type inference issues.
+function App() {
     type AppView = 'landing' | 'login' | 'adminDashboard' | 'clientDashboard' | 'clientView' | 'superAdminDashboard' | 'clientRegistration' | 'clientPasswordReset' | 'planSelection' | 'clientOnboarding';
     const [view, setView] = useState<AppView>('landing');
     const [currentClientDni, setCurrentClientDni] = useState<string | null>(null);
     const [currentGym, setCurrentGym] = useState<Gym | null>(null);
     const [impersonatedGym, setImpersonatedGym] = useState<Gym | null>(null);
-    const [loginError, setLoginError] = useState<string>('');
+    const [loginError, setLoginError] = useState('');
     const [loginMessage, setLoginMessage] = useState('');
+    const [passwordResetDni, setPasswordResetDni] = useState<string | null>(null);
 
+    // This effect tries to restore state from localStorage
     useEffect(() => {
-        // Check session storage to maintain login state
-        const loggedInClientDni = sessionStorage.getItem('loggedInClientDni');
-        const loggedInGym = sessionStorage.getItem('loggedInGym');
-
-        if (loggedInClientDni) {
-            handleClientLoginFlow(loggedInClientDni);
-        } else if (loggedInGym) {
-            const gymData = JSON.parse(loggedInGym);
-            handleGymLoginFlow(gymData);
+        try {
+            const savedStateJSON = localStorage.getItem('appState');
+            if (savedStateJSON) {
+                const savedState = JSON.parse(savedStateJSON);
+                if (savedState.view) setView(savedState.view);
+                if (savedState.currentClientDni) setCurrentClientDni(savedState.currentClientDni);
+                if (savedState.currentGym) setCurrentGym(savedState.currentGym);
+                if (savedState.impersonatedGym) setImpersonatedGym(savedState.impersonatedGym);
+            }
+        } catch (e) {
+            console.error("Could not restore app state:", e);
+            localStorage.removeItem('appState');
         }
     }, []);
 
-    const handleClientLoginFlow = async (dni: string) => {
-        const clientData = await apiClient.getClientData(dni);
-        setCurrentClientDni(dni);
-        if (clientData?.passwordResetRequired) {
-             setView('clientPasswordReset');
-        } else if (clientData?.planStatus === 'pending') {
-            setView('planSelection');
-        } else {
-            setView('clientView');
+    // This effect saves state to localStorage whenever it changes
+    useEffect(() => {
+        const stateToSave = {
+            view,
+            currentClientDni,
+            currentGym,
+            impersonatedGym,
+        };
+        // Avoid saving initial 'landing' state to not override a valid saved session on reload
+        if (view !== 'landing') {
+            localStorage.setItem('appState', JSON.stringify(stateToSave));
         }
-    };
-
-    const handleGymLoginFlow = (gymData: Gym) => {
-        setCurrentGym(gymData);
-        if (gymData.username === 'superadmin') {
-            setView('superAdminDashboard');
-        } else {
-            setView('adminDashboard');
-        }
-    };
+    }, [view, currentClientDni, currentGym, impersonatedGym]);
 
 
-    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string): Promise<void> => {
+    const handleLogin = async (type: 'client' | 'gym', id: string, code?: string) => {
         setLoginError('');
-        setLoginMessage('');
-        if (type === 'client') {
-            const loginResult = await apiClient.loginClient(id, code!);
-            if (loginResult.success) {
-                sessionStorage.setItem('loggedInClientDni', id);
-                await handleClientLoginFlow(id);
+        if (type === 'gym') {
+            const gym = await apiClient.gymLogin(id, code || '');
+            if (gym) {
+                setCurrentGym(gym);
+                if (gym.username === 'superadmin') {
+                    setView('superAdminDashboard');
+                } else {
+                    setView('adminDashboard');
+                }
             } else {
-                setLoginError('DNI o código de acceso/contraseña incorrecto.');
+                setLoginError('Usuario o contraseña incorrectos.');
             }
-        } else { // type === 'gym'
-             const gymData = await apiClient.gymLogin(id, code!);
-             if (gymData) {
-                 sessionStorage.setItem('loggedInGym', JSON.stringify(gymData));
-                 handleGymLoginFlow(gymData);
-             } else {
-                 setLoginError('Usuario o contraseña incorrecto.');
-             }
+        } else {
+            const result = await apiClient.loginClient(id, code || '');
+            if (result.success) {
+                if (result.resetRequired) {
+                    setPasswordResetDni(id);
+                    setView('clientPasswordReset');
+                } else {
+                    const clientData = await apiClient.getClientData(id);
+                    if (clientData?.planStatus === 'pending') {
+                         setCurrentClientDni(id);
+                        if (clientData.profile.name) { // If profile has a name, go to plan selection
+                            setView('planSelection');
+                        } else { // otherwise go to onboarding to fill name etc.
+                            setView('clientOnboarding');
+                        }
+                    } else {
+                        setCurrentClientDni(id);
+                        setView('clientView');
+                    }
+                }
+            } else {
+                setLoginError('DNI o código/contraseña incorrectos.');
+            }
         }
     };
-    
+
     const handleLogout = () => {
-        sessionStorage.clear();
         setCurrentClientDni(null);
         setCurrentGym(null);
         setImpersonatedGym(null);
+        localStorage.removeItem('appState');
         setView('landing');
     };
-    
+
     const handleSelectClient = (dni: string) => {
         setCurrentClientDni(dni);
         setView('clientDashboard');
     };
-
-    const handleBackToAdmin = () => {
-        setCurrentClientDni(null);
+    
+    const handleSelectGymForImpersonation = (gym: Gym) => {
+        setImpersonatedGym(gym);
         setView('adminDashboard');
     };
     
-    const handleSelectGym = (gymToManage: Gym) => {
-        setImpersonatedGym(gymToManage);
-        setView('adminDashboard');
-    };
-
     const handleBackToSuperAdmin = () => {
         setImpersonatedGym(null);
         setView('superAdminDashboard');
-    };
-    
-    const handleRegisterAndContinue = (dni: string) => {
-        sessionStorage.setItem('loggedInClientDni', dni);
-        setCurrentClientDni(dni);
-        setView('planSelection');
     };
 
     const renderView = () => {
         switch (view) {
             case 'landing':
-                return <LandingPage onIngresar={() => setView('login')} />;
+                return <LandingPage onIngresar={() => {
+                    localStorage.removeItem('appState');
+                    setView('login');
+                }} />;
             case 'login':
-                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+                return <LoginPage 
+                    onLogin={handleLogin} 
+                    error={loginError} 
+                    message={loginMessage}
+                    onBack={() => setView('landing')} 
+                    onGoToRegister={() => { setLoginError(''); setLoginMessage(''); setView('clientRegistration'); }}
+                />;
             case 'clientRegistration':
-                return <ClientRegistrationPage onRegister={handleRegisterAndContinue} onBack={() => setView('login')} />;
-            case 'clientPasswordReset':
-                return <NewPasswordResetPage 
-                    dni={currentClientDni!} 
-                    onPasswordSet={() => {
-                        setCurrentClientDni(null);
+                return <ClientRegistrationPage 
+                    onRegister={(dni) => {
+                        setLoginMessage(`¡Cuenta para DNI ${dni} creada! Por favor, inicia sesión.`);
                         setView('login');
-                        setLoginMessage('¡Contraseña actualizada! Por favor, inicia sesión con tus nuevas credenciales.');
                     }} 
-                    onBackToLogin={() => setView('login')} 
+                    onBack={() => { setLoginError(''); setLoginMessage(''); setView('login'); }}
                 />;
+            case 'clientPasswordReset':
+                 return passwordResetDni ? (
+                    <NewPasswordResetPage 
+                        dni={passwordResetDni}
+                        onPasswordSet={() => {
+                            setLoginMessage('¡Contraseña actualizada! Por favor, inicia sesión con tu nueva contraseña.');
+                            setPasswordResetDni(null);
+                            setView('login');
+                        }}
+                        onBackToLogin={() => {
+                            setPasswordResetDni(null);
+                            setView('login');
+                        }}
+                    />
+                ) : <LoginPage onLogin={handleLogin} error="Error: No se encontró DNI para resetear." message="" onBack={() => setView('login')} onGoToRegister={() => setView('clientRegistration')} />;
             case 'planSelection':
-                 return <PlanSelectionPage 
-                    dni={currentClientDni!} 
-                    onSelectCustom={() => setView('clientOnboarding')} 
-                    onPlanApplied={() => setView('clientView')}
-                />;
+                return currentClientDni ? (
+                    <PlanSelectionPage 
+                        dni={currentClientDni} 
+                        onSelectCustom={() => setView('clientOnboarding')}
+                        onPlanApplied={() => setView('clientView')}
+                    />
+                ) : <LoginPage onLogin={handleLogin} error="Error: Cliente no encontrado." message="" onBack={() => setView('login')} onGoToRegister={() => setView('clientRegistration')} />;
             case 'clientOnboarding':
-                return <ClientOnboardingView 
-                    dni={currentClientDni!} 
-                    onOnboardingComplete={() => setView('clientView')}
-                    onBack={() => setView('planSelection')}
-                />;
-            case 'adminDashboard':
-                return <AdminDashboard 
-                            onSelectClient={handleSelectClient} 
-                            onLogout={handleLogout} 
-                            gym={impersonatedGym || currentGym!} 
-                            loggedInGym={currentGym!}
-                            onBackToSuperAdmin={handleBackToSuperAdmin}
-                        />;
-            case 'clientDashboard':
-                return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
-            case 'clientView':
-                return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
+                return currentClientDni ? (
+                    <ClientOnboardingView 
+                        dni={currentClientDni}
+                        onOnboardingComplete={() => setView('clientView')}
+                        onBack={() => setView('planSelection')}
+                    />
+                ) : <LoginPage onLogin={handleLogin} error="Error: Cliente no encontrado." message="" onBack={() => setView('login')} onGoToRegister={() => setView('clientRegistration')} />;
             case 'superAdminDashboard':
-                return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
+                return currentGym && <SuperAdminDashboard gym={currentGym} onLogout={handleLogout} onSelectGym={handleSelectGymForImpersonation} />;
+            case 'adminDashboard':
+                const gymToDisplay = impersonatedGym || currentGym;
+                return gymToDisplay ? <AdminDashboard 
+                    onSelectClient={handleSelectClient} 
+                    onLogout={handleLogout} 
+                    gym={gymToDisplay} 
+                    loggedInGym={currentGym!}
+                    onBackToSuperAdmin={handleBackToSuperAdmin}
+                /> : null;
+            case 'clientDashboard':
+                const gymForClientDashboard = impersonatedGym || currentGym;
+                return currentClientDni && gymForClientDashboard ? (
+                    <ClientManagementView 
+                        dni={currentClientDni} 
+                        onBack={() => {
+                            setCurrentClientDni(null);
+                            setView('adminDashboard');
+                        }} 
+                        onLogout={handleLogout}
+                        gym={gymForClientDashboard}
+                    />
+                ) : null;
+            case 'clientView':
+                return currentClientDni && <ClientView dni={currentClientDni} onLogout={handleLogout} />;
             default:
-                return <LoginPage onLogin={handleLogin} error={loginError} message={loginMessage} onBack={() => setView('landing')} onGoToRegister={() => setView('clientRegistration')} />;
+                return <div>Cargando...</div>;
         }
     };
+    
+    return <div className="app-container">{renderView()}</div>;
+}
 
-    return <>{renderView()}</>;
-};
-
-const container = document.getElementById("root");
-createRoot(container!).render(<App />);
+// Mount the app
+const container = document.getElementById('root');
+if (container) {
+    createRoot(container!).render(<App />);
+}
