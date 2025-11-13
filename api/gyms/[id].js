@@ -1,4 +1,5 @@
 
+
 import { ObjectId } from 'mongodb';
 import clientPromise from '../util/mongodb.js';
 import bcrypt from 'bcryptjs';
@@ -18,13 +19,18 @@ export default async function handler(req, res) {
   switch (req.method) {
     case 'PUT':
       try {
-        const { name, password, dailyQuestionLimit, logoSvg, planType } = req.body;
+        const { name, password, accountingPassword, dailyQuestionLimit, logoSvg, planType } = req.body;
         const updateData = {};
         if (name) updateData.name = name;
         
         if (password) {
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(password, salt);
+        }
+
+        if (accountingPassword) {
+            const salt = await bcrypt.genSalt(10);
+            updateData.accountingPassword = await bcrypt.hash(accountingPassword, salt);
         }
 
         if (dailyQuestionLimit !== undefined) {

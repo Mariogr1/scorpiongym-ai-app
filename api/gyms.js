@@ -1,4 +1,5 @@
 
+
 import clientPromise from './util/mongodb.js';
 import bcrypt from 'bcryptjs';
 
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
       try {
         const gyms = await gymsCollection.find(
             { username: { $ne: 'superadmin' } }, 
-            { projection: { password: 0 } }
+            { projection: { password: 0, accountingPassword: 0 } }
         ).toArray();
         res.status(200).json(gyms);
       } catch (e) {
@@ -23,9 +24,9 @@ export default async function handler(req, res) {
 
     case 'POST':
       try {
-        const { name, username, password, dailyQuestionLimit, logoSvg, planType } = req.body;
-        if (!name || !username || !password) {
-          return res.status(400).json({ message: 'Name, username, and password are required' });
+        const { name, username, password, accountingPassword, dailyQuestionLimit, logoSvg, planType } = req.body;
+        if (!name || !username || !password || !accountingPassword) {
+          return res.status(400).json({ message: 'Name, username, password, and accounting password are required' });
         }
         
         const existingUser = await gymsCollection.findOne({ username });
@@ -35,11 +36,13 @@ export default async function handler(req, res) {
         
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
+        const hashedAccountingPassword = await bcrypt.hash(accountingPassword, salt);
 
         const newGym = {
           name,
           username,
           password: hashedPassword,
+          accountingPassword: hashedAccountingPassword,
           dailyQuestionLimit: Number(dailyQuestionLimit) || 10,
           logoSvg: logoSvg || null,
           planType: planType || 'full',

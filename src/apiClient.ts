@@ -146,6 +146,7 @@ export interface Gym {
     dailyQuestionLimit?: number;
     logoSvg?: string;
     planType?: PlanType;
+    accountingPassword?: string;
 }
 
 export interface Request {
@@ -261,12 +262,12 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, accountingPassword: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
      try {
         const response = await fetchWithRetry('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
+            body: JSON.stringify({ name, username, password, accountingPassword, dailyQuestionLimit, logoSvg, planType }),
         });
         return response.ok;
     } catch (error) {
@@ -275,7 +276,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
+  async updateGym(gymId: string, data: Partial<Gym & { password?: string; accountingPassword?: string }>): Promise<boolean> {
      try {
         const response = await fetchWithRetry('/api/gyms/' + gymId, {
             method: 'PUT',
@@ -312,6 +313,22 @@ export const apiClient = {
     } catch (error) {
         console.error("Gym login failed:", error);
         return null;
+    }
+  },
+
+  async verifyAccountingPassword(gymId: string, password: string): Promise<boolean> {
+    try {
+        const response = await fetchWithRetry('/api/auth/verify-accounting-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gymId, password }),
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        return data.success;
+    } catch (error) {
+        console.error("Failed to verify accounting password:", error);
+        return false;
     }
   },
 
