@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -1071,7 +1072,7 @@ const App: React.FC = () => {
             case 'clientDashboard':
                 return <ClientManagementView dni={currentClientDni!} onBack={handleBackToAdmin} onLogout={handleLogout} gym={impersonatedGym || currentGym!} />;
             case 'clientView':
-                return <ClientView dni={currentClientDni!} onLogout={handleLogout} />;
+                return <ClientDashboardView dni={currentClientDni!} onLogout={handleLogout} />;
             case 'superAdminDashboard':
                 return <SuperAdminDashboard gym={currentGym!} onLogout={handleLogout} onSelectGym={handleSelectGym} />;
             default:
