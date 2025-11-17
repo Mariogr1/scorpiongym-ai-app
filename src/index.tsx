@@ -1,6 +1,4 @@
 
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -3807,23 +3805,72 @@ const ClientView: React.FC<{ dni: string; onLogout: () => void }> = ({ dni, onLo
 
 
     return (
-        <div className="client-view-container">
-            <header>
-                <h1>Bienvenido, {clientData.profile.name}!</h1>
-                <div className="client-header-actions">
-                    <button onClick={() => setShowChat(true)} className="header-nav-button ai-assistant-button">Asistente IA</button>
-                    <button onClick={onLogout} className="logout-button">Salir</button>
-                </div>
-            </header>
+         <div className="client-management-view animated-fade-in">
+            <div className="dashboard-grid">
+                <aside className="profile-section">
+                    <ClientDashboardProfile 
+                        clientData={clientData}
+                        onLogout={onLogout}
+                        onShowChat={() => setShowChat(true)}
+                    />
+                </aside>
+                <main className="main-content">
+                    {isPlanExpired() ? (
+                        <div className="expired-view">
+                             <h2>Tu plan ha expirado</h2>
+                             <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
+                        </div>
+                    ) : (
+                        <ClientPortalTabs clientData={clientData} exerciseLibrary={exerciseLibrary} onDataUpdate={() => fetchAllClientViewData(false)} />
+                    )}
+                </main>
+            </div>
+        </div>
+    );
+};
 
-            {isPlanExpired() ? (
-                <div className="expired-view">
-                     <h2>Tu plan ha expirado</h2>
-                     <p>Tu plan de entrenamiento ha finalizado. Por favor, contacta a tu entrenador para generar una nueva rutina.</p>
+const ClientDashboardProfile: React.FC<{
+    clientData: ClientData;
+    onLogout: () => void;
+    onShowChat: () => void;
+}> = ({ clientData, onLogout, onShowChat }) => {
+    
+    const bmi = useMemo(() => {
+         const lastWeight = clientData.bodyWeightLog?.[clientData.bodyWeightLog.length - 1]?.weight;
+         return calculateBMI(lastWeight || parseFloat(clientData.profile.weight), parseFloat(clientData.profile.height));
+    }, [clientData.profile.weight, clientData.profile.height, clientData.bodyWeightLog]);
+    
+    const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(clientData.profile.height)), [clientData.profile.height]);
+    const estimatedFinalWeight = useMemo(() => calculateEstimatedFinalWeight(clientData), [clientData]);
+    const planDuration = useMemo(() => {
+        if (!clientData.routineGeneratedDate || !clientData.routine?.totalDurationWeeks) return 'N/A';
+        const startDate = new Date(clientData.routineGeneratedDate);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + clientData.routine.totalDurationWeeks * 7);
+        return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+    }, [clientData.routineGeneratedDate, clientData.routine?.totalDurationWeeks]);
+
+
+    return (
+        <div className="client-dashboard-profile">
+            <h2>¡Hola, {clientData.profile.name}!</h2>
+            <p className="client-dashboard-subtitle">¡Listo para entrenar!</p>
+            
+            <div className="client-dashboard-actions">
+                 <button onClick={onShowChat} className="cta-button secondary ai-assistant-button">Asistente IA</button>
+                 <button onClick={onLogout} className="cta-button secondary">Cerrar Sesión</button>
+            </div>
+
+            <div className="client-stats-card">
+                <h3>Tus Estadísticas</h3>
+                <div className="stats-list">
+                    <div className="stat-item"><span>Peso Inicial:</span> <strong>{clientData.profile.weight} kg</strong></div>
+                    <div className="stat-item"><span>IMC Actual:</span> <strong>{bmi.value || 'N/A'}</strong></div>
+                    <div className="stat-item"><span>Peso Objetivo:</span> <strong>{targetWeight}</strong></div>
+                    <div className="stat-item"><span>Peso Estimado Final:</span> <strong>{estimatedFinalWeight}</strong></div>
+                    <div className="stat-item"><span>Duración del Plan:</span> <strong>{planDuration}</strong></div>
                 </div>
-            ) : (
-                <ClientPortalTabs clientData={clientData} exerciseLibrary={exerciseLibrary} onDataUpdate={() => fetchAllClientViewData(false)} />
-            )}
+            </div>
         </div>
     );
 };
