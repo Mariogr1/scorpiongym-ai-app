@@ -1,3 +1,4 @@
+
 import { ObjectId } from 'mongodb';
 import clientPromise from './util/mongodb.js';
 
@@ -10,7 +11,7 @@ export default async function handler(req, res) {
     if (!gymId) {
         return res.status(400).json({ message: 'Gym ID is required' });
     }
-    if (!entity || !['transactions', 'accounts', 'fixed_expenses', 'expense_category_groups'].includes(entity)) {
+    if (!entity || !['transactions', 'accounts', 'employees'].includes(entity)) {
         return res.status(400).json({ message: 'A valid entity is required' });
     }
 
@@ -29,15 +30,11 @@ export default async function handler(req, res) {
 
         case 'POST':
             try {
-                const newData = { ...req.body, gymId };
-                if (entity !== 'transactions') { // transactions will have their own date
-                    newData.createdAt = new Date();
-                }
+                const newData = { ...req.body, gymId, createdAt: new Date() };
                 delete newData._id; // Ensure we don't try to insert an existing _id
 
                 const result = await collection.insertOne(newData);
-                const createdDoc = { ...newData, _id: result.insertedId };
-                res.status(201).json(createdDoc);
+                res.status(201).json({ success: true, insertedId: result.insertedId });
             } catch (e) {
                 console.error(`API /api/accounting [POST] for ${entity} Error:`, e);
                 res.status(500).json({ error: `Unable to create ${entity}` });

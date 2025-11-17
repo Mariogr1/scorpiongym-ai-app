@@ -146,7 +146,6 @@ export interface Gym {
     dailyQuestionLimit?: number;
     logoSvg?: string;
     planType?: PlanType;
-    accountingPassword?: string;
 }
 
 export interface Request {
@@ -159,45 +158,6 @@ export interface Request {
     status: 'new' | 'read' | 'resolved';
     createdAt: string;
 }
-
-// --- Accounting Types ---
-export interface AccountingAccount {
-    _id: string;
-    gymId: string;
-    name: string;
-    balance: number;
-}
-
-export interface FixedExpense {
-    _id: string;
-    gymId: string;
-    name: string;
-    amount: number;
-    lastPaid: string | null; // ISO date string of last payment
-}
-
-export interface ExpenseCategoryGroup {
-    _id: string;
-    gymId: string;
-    name: string;
-    categories: string[];
-}
-
-export interface AccountingTransaction {
-    _id: string;
-    gymId: string;
-    date: string; // ISO date string
-    type: 'income' | 'expense';
-    amount: number;
-    description: string;
-    accountId: string;
-    accountName: string; // For display purposes
-    category?: {
-        group: string;
-        name: string;
-    }
-}
-
 
 /**
  * A wrapper around fetch that retries on transient server errors and network issues.
@@ -262,12 +222,12 @@ export const apiClient = {
     }
   },
   
-  async createGym(name: string, username: string, password: string, accountingPassword: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
+  async createGym(name: string, username: string, password: string, dailyQuestionLimit: number, logoSvg: string | null, planType: PlanType): Promise<boolean> {
      try {
         const response = await fetchWithRetry('/api/gyms', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, username, password, accountingPassword, dailyQuestionLimit, logoSvg, planType }),
+            body: JSON.stringify({ name, username, password, dailyQuestionLimit, logoSvg, planType }),
         });
         return response.ok;
     } catch (error) {
@@ -276,7 +236,7 @@ export const apiClient = {
     }
   },
   
-  async updateGym(gymId: string, data: Partial<Gym & { password?: string; accountingPassword?: string }>): Promise<boolean> {
+  async updateGym(gymId: string, data: Partial<Gym & { password?: string }>): Promise<boolean> {
      try {
         const response = await fetchWithRetry('/api/gyms/' + gymId, {
             method: 'PUT',
@@ -313,22 +273,6 @@ export const apiClient = {
     } catch (error) {
         console.error("Gym login failed:", error);
         return null;
-    }
-  },
-
-  async verifyAccountingPassword(gymId: string, password: string): Promise<boolean> {
-    try {
-        const response = await fetchWithRetry('/api/auth/verify-accounting-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gymId, password }),
-        });
-        if (!response.ok) return false;
-        const data = await response.json();
-        return data.success;
-    } catch (error) {
-        console.error("Failed to verify accounting password:", error);
-        return false;
     }
   },
 
@@ -635,58 +579,6 @@ export const apiClient = {
         return response.ok;
     } catch (error) {
         console.error(`Failed to delete routine template ${templateId}:`, error);
-        return false;
-    }
-  },
-  // --- Accounting ---
-  async getAccountingData<T>(gymId: string, entity: 'accounts' | 'fixed_expenses' | 'expense_category_groups' | 'transactions'): Promise<T[]> {
-    try {
-        const response = await fetchWithRetry(`/api/accounting?gymId=${gymId}&entity=${entity}`);
-        if (!response.ok) throw new Error('Network response was not ok');
-        return (await response.json()) as T[];
-    } catch (error) {
-        console.error(`Failed to fetch ${entity}:`, error);
-        return [];
-    }
-  },
-
-  async createAccountingData<T>(gymId: string, entity: 'accounts' | 'fixed_expenses' | 'expense_category_groups' | 'transactions', data: Partial<T>): Promise<T | null> {
-    try {
-        const response = await fetchWithRetry(`/api/accounting?gymId=${gymId}&entity=${entity}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        if (!response.ok) return null;
-        return (await response.json()) as T;
-    } catch (error) {
-        console.error(`Failed to create ${entity}:`, error);
-        return null;
-    }
-  },
-
-  async updateAccountingData(entity: 'accounts' | 'fixed_expenses' | 'expense_category_groups' | 'transactions', id: string, data: object): Promise<boolean> {
-    try {
-        const response = await fetchWithRetry(`/api/accounting/${id}?entity=${entity}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-        });
-        return response.ok;
-    } catch (error) {
-        console.error(`Failed to update ${entity} with id ${id}:`, error);
-        return false;
-    }
-  },
-  
-  async deleteAccountingData(entity: 'accounts' | 'fixed_expenses' | 'expense_category_groups' | 'transactions', id: string): Promise<boolean> {
-    try {
-        const response = await fetchWithRetry(`/api/accounting/${id}?entity=${entity}`, {
-            method: 'DELETE',
-        });
-        return response.ok;
-    } catch (error) {
-        console.error(`Failed to delete ${entity} with id ${id}:`, error);
         return false;
     }
   },
