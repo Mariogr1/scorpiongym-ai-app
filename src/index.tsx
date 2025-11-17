@@ -1,4 +1,5 @@
 
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -807,42 +808,18 @@ const ClientRoutineView: React.FC<{
     onPlayVideo: (url: string) => void,
     getExerciseVideoUrl: (name: string) => string | undefined 
 }> = ({ routine, onPlayVideo, getExerciseVideoUrl }) => {
-    const [activePhaseIndex, setActivePhaseIndex] = useState(0);
-    const activePhase = routine.phases[activePhaseIndex];
-    
     return (
-        <div className="client-routine-view animated-fade-in">
-             <div className="phases-selector">
-                {routine.phases.map((phase, index) => (
-                    <button key={index} className={`phase-button ${activePhaseIndex === index ? 'active' : ''}`} onClick={() => setActivePhaseIndex(index)}>
-                        {phase.phaseName}
-                    </button>
-                ))}
-            </div>
-
-            <div className="phase-details">
-                <p><strong>Duración:</strong> {activePhase.durationWeeks} semanas</p>
-            </div>
-
-            <div className="day-list">
-                {activePhase.routine.dias.map((day, dayIndex) => (
-                    <div key={dayIndex} className="day-section">
-                        <h4>{day.dia}: <span className="muscle-group">{day.grupoMuscular}</span></h4>
-                        <ul className="exercise-list">
-                            {day.ejercicios.map((ex, exIndex) => (
-                                <li key={exIndex} className="exercise-item-client">
-                                    <ExerciseView 
-                                        exercise={ex} 
-                                        onPlayVideo={onPlayVideo} 
-                                        videoUrl={getExerciseVideoUrl(ex.nombre)} 
-                                    />
-                                </li>
-                            ))}
-                        </ul>
-                        {day.cardio && day.cardio.toLowerCase() !== "ninguno" && <p className="cardio-note"><strong>Cardio:</strong> {day.cardio}</p>}
-                    </div>
-                ))}
-            </div>
+        <div className="plan-container animated-fade-in">
+            <header className="plan-header">
+                <h2>{routine.planName}</h2>
+                <p>Duración Total: {routine.totalDurationWeeks} semanas</p>
+            </header>
+            <RoutinePlan 
+                routine={routine}
+                isEditing={false}
+                onRoutineChange={() => {}} // No-op for client view
+                exerciseLibrary={{}} // Not needed for read-only view
+            />
         </div>
     );
 };
@@ -3961,42 +3938,28 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
 // --- Client-Facing Views (Read-Only) ---
 
 const ClientStats: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
-    const bmi = useMemo(() => {
-        return calculateBMI(parseFloat(clientData.profile.weight), parseFloat(clientData.profile.height));
-    }, [clientData.profile.weight, clientData.profile.height]);
-
-    const targetWeight = useMemo(() => {
-        return calculateTargetWeight(parseFloat(clientData.profile.height));
-    }, [clientData.profile.height]);
+    const { profile, routine, routineGeneratedDate } = clientData;
+    const initialWeight = parseFloat(profile.weight);
     
-    const estimatedFinalWeight = useMemo(() => {
-        return calculateEstimatedFinalWeight(clientData);
-    }, [clientData]);
+    const bmi = useMemo(() => calculateBMI(initialWeight, parseFloat(profile.height)), [initialWeight, profile.height]);
+    const targetWeight = useMemo(() => calculateTargetWeight(parseFloat(profile.height)), [profile.height]);
+    const estimatedFinalWeight = useMemo(() => calculateEstimatedFinalWeight(clientData), [clientData]);
 
-    const routineStartDate = clientData.routineGeneratedDate ? new Date(clientData.routineGeneratedDate) : null;
-    const routineDuration = clientData.routine?.totalDurationWeeks;
+    const routineStartDate = routineGeneratedDate ? new Date(routineGeneratedDate) : null;
+    const routineDuration = routine?.totalDurationWeeks;
     const routineEndDate = routineStartDate && routineDuration ? new Date(routineStartDate.getTime() + routineDuration * 7 * 24 * 60 * 60 * 1000) : null;
     
-    const stats = [
-        { label: "Peso Inicial", value: `${parseFloat(clientData.profile.weight).toFixed(1)} kg` },
-        { label: "IMC Actual", value: bmi.value },
-        { label: "Peso Objetivo", value: targetWeight },
-        { label: "Peso Estimado Final", value: estimatedFinalWeight },
-        { label: "Duración del Plan", value: routineEndDate ? `${routineStartDate?.toLocaleDateString()} - ${routineEndDate.toLocaleDateString()}` : 'N/A' },
-    ];
-
     return (
-         <aside className="client-stats-sidebar">
+        <div className="profile-section">
             <h2>Tus Estadísticas</h2>
-            <div className="client-stats-list">
-                {stats.map(stat => (
-                    <div key={stat.label} className="stat-item">
-                        <span>{stat.label}</span>
-                        <strong>{stat.value}</strong>
-                    </div>
-                ))}
+             <div className="profile-form">
+                <div className="form-group"><label>Peso Inicial</label><p>{initialWeight ? `${initialWeight.toFixed(1)} kg` : 'N/A'}</p></div>
+                <div className="form-group"><label>IMC Actual</label><p>{bmi.value || 'N/A'}</p></div>
+                <div className="form-group"><label>Peso Objetivo</label><p>{targetWeight}</p></div>
+                <div className="form-group"><label>Peso Estimado Final</label><p>{estimatedFinalWeight}</p></div>
+                <div className="form-group"><label>Duración del Plan</label><p>{routineEndDate ? `${routineStartDate?.toLocaleDateString()} - ${routineEndDate.toLocaleDateString()}` : 'N/A'}</p></div>
             </div>
-        </aside>
+        </div>
     );
 };
 
@@ -4065,18 +4028,24 @@ const ClientDashboardView: React.FC<{ dni: string, onLogout: () => void }> = ({ 
 
 
     return (
-         <div className="client-dashboard-view">
-            <div className="dashboard-layout">
-                <div className="client-sidebar">
-                    <header className="client-header">
-                        <h1>Hola, {clientData.profile.name || 'Cliente'}</h1>
+         <div className="client-management-view">
+             <div className="main-header">
+                <div className="header-title-wrapper">
+                     <div>
+                        <h1>Hola, {clientData.profile.name || 'Cliente'}!</h1>
                         <p>¡Listo para entrenar!</p>
-                        <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-                    </header>
-                    <ClientStats clientData={clientData} />
+                    </div>
                 </div>
-                <main className="client-main-content">
-                    <nav className="main-tabs-nav client-tabs">
+                 <div className="admin-header-nav">
+                    <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
+                 </div>
+            </div>
+            <div className="dashboard-grid">
+                 <aside className="profile-section">
+                    <ClientStats clientData={clientData} />
+                </aside>
+                <main className="main-content">
+                    <nav className="main-tabs-nav">
                          {(planType === 'full' || planType === 'routine') &&
                             <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
                          }
@@ -4086,7 +4055,7 @@ const ClientDashboardView: React.FC<{ dni: string, onLogout: () => void }> = ({ 
                         <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
                         <button className={`main-tab-button ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>Mensaje</button>
                     </nav>
-                     <div className="tab-content-area">
+                     <div className="results-section">
                         {renderContent()}
                     </div>
                 </main>

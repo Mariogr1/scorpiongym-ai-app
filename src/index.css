@@ -2003,146 +2003,6 @@ input:checked + .slider:before { transform: translateX(20px); }
     padding: 2rem;
     color: var(--text-secondary-color);
 }
-
-/* ======================================= */
-/* --- VISTA DE CLIENTE (NUEVOS ESTILOS) --- */
-/* ======================================= */
-
-.client-dashboard-view {
-    padding: 0;
-    margin: 0 auto;
-    max-width: 100%;
-}
-
-.dashboard-layout {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    gap: 2rem;
-    align-items: flex-start;
-}
-
-.client-sidebar {
-    position: sticky;
-    top: 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-}
-
-.client-header {
-    text-align: left;
-}
-
-.client-header h1 {
-    font-size: 2.5rem;
-    font-weight: 700;
-}
-
-.client-header p {
-    color: var(--text-secondary-color);
-    font-size: 1.1rem;
-}
-
-.client-header .logout-button {
-    margin-top: 1rem;
-    width: auto;
-    padding: 0.5rem 1.2rem;
-}
-
-.client-stats-sidebar h2 {
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.client-stats-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.stat-item span {
-    display: block;
-    font-size: 0.9rem;
-    color: var(--text-secondary-color);
-}
-
-.stat-item strong {
-    font-size: 1.2rem;
-    color: var(--text-color);
-    font-weight: 600;
-}
-
-.client-main-content {
-    background-color: transparent;
-    padding: 0;
-    border-radius: 0;
-}
-
-.client-tabs {
-    justify-content: flex-start;
-    gap: 2rem;
-}
-
-.client-tabs .main-tab-button {
-    flex-grow: 0;
-    padding: 0.8rem 0;
-    font-size: 1.1rem;
-}
-.client-tabs .main-tab-button.active::after {
-    height: 2px;
-    bottom: 0;
-}
-.tab-content-area {
-    margin-top: 2rem;
-}
-
-.client-routine-view .phases-selector {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-}
-.client-routine-view .phase-button {
-    background-color: var(--secondary-button-color);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary-color);
-    padding: 0.3rem 0.8rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-.client-routine-view .phase-button.active {
-    background-color: var(--surface-color);
-    color: var(--text-color);
-    border-color: var(--text-color);
-}
-
-.client-routine-view .phase-details p {
-    margin-bottom: 1.5rem;
-    color: var(--text-secondary-color);
-}
-
-.day-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2.5rem;
-}
-.day-section h4 {
-    font-size: 1.4rem;
-    margin-bottom: 1.5rem;
-}
-.day-section .exercise-list {
-    gap: 2rem;
-}
-
-.exercise-item-client {
-    padding-left: 1.5rem;
-    border-left: 3px solid var(--primary-color);
-}
-.exercise-item-client .exercise-name-wrapper {
-    margin-bottom: 0.75rem;
-}
-
 .client-chat-view {
     max-width: 600px;
     margin: 0 auto;
@@ -2159,7 +2019,6 @@ input:checked + .slider:before { transform: translateX(20px); }
     text-align: left;
 }
 
-/* --- Fin de Nuevos Estilos de Vista de Cliente --- */
 
 .video-modal-overlay {
     position: fixed;
@@ -2199,10 +2058,10 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 /* --- Responsive Adjustments --- */
 @media (max-width: 960px) {
-    .dashboard-grid, .dashboard-layout {
+    .dashboard-grid {
         grid-template-columns: 1fr;
     }
-    .profile-section, .client-sidebar {
+    .profile-section {
         position: static;
     }
 }
@@ -2257,9 +2116,6 @@ input:checked + .slider:before { transform: translateX(20px); }
     .main-tab-button {
         font-size: 0.9rem;
         padding: 0.8rem 0.5rem;
-    }
-    .client-tabs {
-        gap: 1.5rem;
     }
 }
 @media (max-width: 480px) {
