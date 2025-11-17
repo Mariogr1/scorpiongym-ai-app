@@ -1,7 +1,4 @@
 
-
-
-
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -822,27 +819,29 @@ const ClientRoutineView: React.FC<{
                     </button>
                 ))}
             </div>
+
             <div className="phase-details">
                 <p><strong>Duración:</strong> {activePhase.durationWeeks} semanas</p>
-                <div className="day-cards-grid">
-                     {activePhase.routine.dias.map((day, dayIndex) => (
-                        <div key={dayIndex} className="day-card-client">
-                            <h3>{day.dia}: <span className="muscle-group">{day.grupoMuscular}</span></h3>
-                            <ul className="exercise-list">
-                                {day.ejercicios.map((ex, exIndex) => (
-                                    <li key={exIndex} className="exercise-item">
-                                        <ExerciseView 
-                                            exercise={ex} 
-                                            onPlayVideo={onPlayVideo} 
-                                            videoUrl={getExerciseVideoUrl(ex.nombre)} 
-                                        />
-                                    </li>
-                                ))}
-                            </ul>
-                            {day.cardio && day.cardio !== "Ninguno" && <p className="cardio-note"><strong>Cardio:</strong> {day.cardio}</p>}
-                        </div>
-                     ))}
-                </div>
+            </div>
+
+            <div className="day-list">
+                {activePhase.routine.dias.map((day, dayIndex) => (
+                    <div key={dayIndex} className="day-section">
+                        <h4>{day.dia}: <span className="muscle-group">{day.grupoMuscular}</span></h4>
+                        <ul className="exercise-list">
+                            {day.ejercicios.map((ex, exIndex) => (
+                                <li key={exIndex} className="exercise-item-client">
+                                    <ExerciseView 
+                                        exercise={ex} 
+                                        onPlayVideo={onPlayVideo} 
+                                        videoUrl={getExerciseVideoUrl(ex.nombre)} 
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                        {day.cardio && day.cardio.toLowerCase() !== "ninguno" && <p className="cardio-note"><strong>Cardio:</strong> {day.cardio}</p>}
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -3978,37 +3977,25 @@ const ClientStats: React.FC<{ clientData: ClientData }> = ({ clientData }) => {
     const routineDuration = clientData.routine?.totalDurationWeeks;
     const routineEndDate = routineStartDate && routineDuration ? new Date(routineStartDate.getTime() + routineDuration * 7 * 24 * 60 * 60 * 1000) : null;
     
+    const stats = [
+        { label: "Peso Inicial", value: `${parseFloat(clientData.profile.weight).toFixed(1)} kg` },
+        { label: "IMC Actual", value: bmi.value },
+        { label: "Peso Objetivo", value: targetWeight },
+        { label: "Peso Estimado Final", value: estimatedFinalWeight },
+        { label: "Duración del Plan", value: routineEndDate ? `${routineStartDate?.toLocaleDateString()} - ${routineEndDate.toLocaleDateString()}` : 'N/A' },
+    ];
 
     return (
          <aside className="client-stats-sidebar">
             <h2>Tus Estadísticas</h2>
-            <div className="stats-grid">
-                 <div className="stat-card">
-                    <h4>Peso Inicial</h4>
-                    <p>{parseFloat(clientData.profile.weight).toFixed(1)} kg</p>
-                </div>
-                 <div className="stat-card">
-                    <h4>IMC Actual</h4>
-                    <p className={bmi.categoryClass}>{bmi.value}</p>
-                </div>
-                 <div className="stat-card">
-                    <h4>Peso Objetivo</h4>
-                    <p>{targetWeight}</p>
-                </div>
-                <div className="stat-card">
-                    <h4>Peso Estimado Final</h4>
-                    <p>{estimatedFinalWeight}</p>
-                </div>
-                 <div className="stat-card full-width">
-                    <h4>Duración del Plan</h4>
-                     {routineEndDate ? (
-                        <p>{routineStartDate?.toLocaleDateString()} - {routineEndDate.toLocaleDateString()}</p>
-                    ) : (
-                        <p>N/A</p>
-                    )}
-                </div>
+            <div className="client-stats-list">
+                {stats.map(stat => (
+                    <div key={stat.label} className="stat-item">
+                        <span>{stat.label}</span>
+                        <strong>{stat.value}</strong>
+                    </div>
+                ))}
             </div>
-            
         </aside>
     );
 };
@@ -4079,15 +4066,15 @@ const ClientDashboardView: React.FC<{ dni: string, onLogout: () => void }> = ({ 
 
     return (
          <div className="client-dashboard-view">
-             <header className="client-header">
-                <div className="header-content">
-                    <h1>Hola, {clientData.profile.name || 'Cliente'}</h1>
-                    <p>¡Listo para entrenar!</p>
-                </div>
-                <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-            </header>
             <div className="dashboard-layout">
-                <ClientStats clientData={clientData} />
+                <div className="client-sidebar">
+                    <header className="client-header">
+                        <h1>Hola, {clientData.profile.name || 'Cliente'}</h1>
+                        <p>¡Listo para entrenar!</p>
+                        <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
+                    </header>
+                    <ClientStats clientData={clientData} />
+                </div>
                 <main className="client-main-content">
                     <nav className="main-tabs-nav client-tabs">
                          {(planType === 'full' || planType === 'routine') &&
