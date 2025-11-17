@@ -1,5 +1,7 @@
 
 
+
+
 declare var process: any;
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -138,7 +140,7 @@ async function generateRoutineForClient(clientData: ClientData, gymId: string, a
             -   Si el cliente solicitó una "Fase de Descarga", esta debe ser la ÚLTIMA fase, durar 1 semana, y reducir significativamente el volumen y la intensidad (menos series, menos peso).
             -   Las fases principales deben tener una duración lógica (ej. 4-6 semanas).
             -   La cantidad de días de entrenamiento por fase debe coincidir con los "trainingDays" del perfil del cliente.
-        4.  **LÓGICA DE ENTRENAMIENTO:**
+        4.  **LÓGICA DE ENTRENAMENTO:**
             -   Distribuye los grupos musculares de forma inteligente a lo largo de los días de entrenamiento disponibles. Ej: para 4 días, una buena división es 'Tren Superior', 'Tren Inferior', 'Tren Superior', 'Tren Inferior'. Para 5 días, puede ser 'Pecho', 'Espalda', 'Hombros', 'Piernas', 'Brazos'.
             -   Ajusta el volumen (series/reps) según el nivel y objetivo del cliente. Principiantes: 3 series. Intermedios/Avanzados: 4-5 series. Hipertrofia: 8-12 reps. Pérdida de grasa: 12-15 reps.
             -   Asigna técnicas avanzadas (de la lista: ${advancedTechniqueOptions.map(o => o.value).filter(Boolean).join(', ')}) solo si el perfil lo indica ("useAdvancedTechniques: 'Sí'") y solo a clientes intermedios o avanzados, en el último ejercicio de un grupo muscular.
@@ -169,13 +171,16 @@ async function generateRoutineForClient(clientData: ClientData, gymId: string, a
         // Final save to client data will happen in the component that calls this function.
         return correctedRoutine;
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error generating routine with Gemini:", error);
         let errorMessage = "La IA no pudo generar una rutina. Intenta ajustar el perfil del cliente o ser más específico en las instrucciones.";
-        if (error.message.includes('SAFETY')) {
-            errorMessage = "La solicitud fue bloqueada por políticas de seguridad. Revisa las instrucciones y el perfil del cliente por si hay texto inapropiado."
-        } else if (error.message.includes('JSON')) {
-             errorMessage = "La IA generó una respuesta con formato incorrecto. Por favor, intenta de nuevo."
+        // FIX: Add type guard for error object to safely access 'message' property.
+        if (error instanceof Error) {
+            if (error.message.includes('SAFETY')) {
+                errorMessage = "La solicitud fue bloqueada por políticas de seguridad. Revisa las instrucciones y el perfil del cliente por si hay texto inapropiado."
+            } else if (error.message.includes('JSON')) {
+                 errorMessage = "La IA generó una respuesta con formato incorrecto. Por favor, intenta de nuevo."
+            }
         }
         throw new Error(errorMessage);
     }
@@ -549,6 +554,83 @@ const ClientOnboardingView: React.FC<{
     );
 };
 
+// --- Progress & Chart Components ---
+const ProgressChart: React.FC<{ data: BodyWeightEntry[] }> = ({ data }) => {
+    // FIX: The ref is attached to a div, so its type should be HTMLDivElement, not SVGSVGElement.
+    const svgRef = useRef<HTMLDivElement>(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 250 });
+
+    useEffect(() => {
+        if (svgRef.current) {
+            // FIX: Since the ref is on the container div, use its clientWidth directly instead of its parent's.
+            setDimensions({ width: svgRef.current.clientWidth, height: 250 });
+        }
+    }, []);
+
+    if (data.length < 2) {
+        return <div className="chart-placeholder">Se necesitan al menos 2 registros de peso para mostrar la gráfica.</div>;
+    }
+
+    const { width, height } = dimensions;
+    const padding = { top: 20, right: 20, bottom: 40, left: 40 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    const sortedData = data.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const weights = sortedData.map(d => d.weight);
+    const dates = sortedData.map(d => new Date(d.date));
+
+    const minWeight = Math.min(...weights) - 2;
+    const maxWeight = Math.max(...weights) + 2;
+    const minDate = dates[0].getTime();
+    const maxDate = dates[dates.length - 1].getTime();
+
+    const getX = (date: Date) => (date.getTime() - minDate) / (maxDate - minDate) * chartWidth + padding.left;
+    const getY = (weight: number) => chartHeight - ((weight - minWeight) / (maxWeight - minWeight)) * chartHeight + padding.top;
+
+    const path = sortedData.map((d, i) => {
+        const x = getX(new Date(d.date));
+        const y = getY(d.weight);
+        return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+    }).join(' ');
+
+    const yAxisLabels = Array.from({ length: 5 }, (_, i) => {
+        const weight = minWeight + (maxWeight - minWeight) / 4 * i;
+        return { y: getY(weight), label: weight.toFixed(1) };
+    });
+    
+    const formatDate = (date: Date) => date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+
+    return (
+        <div className="progress-chart-container" ref={svgRef}>
+            {width > 0 && (
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+                    {/* Y-Axis Grid Lines & Labels */}
+                    {yAxisLabels.map(({ y, label }) => (
+                        <g key={label}>
+                            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="var(--border-color)" strokeDasharray="2" />
+                            <text x={padding.left - 8} y={y + 4} textAnchor="end" fill="var(--text-secondary-color)" fontSize="10">{label}</text>
+                        </g>
+                    ))}
+                    {/* X-Axis Labels */}
+                     <g>
+                        <text x={padding.left} y={height - 10} textAnchor="start" fill="var(--text-secondary-color)" fontSize="10">{formatDate(dates[0])}</text>
+                        <text x={width - padding.right} y={height - 10} textAnchor="end" fill="var(--text-secondary-color)" fontSize="10">{formatDate(dates[dates.length - 1])}</text>
+                    </g>
+                    
+                    {/* Data Line */}
+                    <path d={path} fill="none" stroke="var(--primary-color)" strokeWidth="2" />
+                    
+                    {/* Data Points */}
+                    {sortedData.map((d, i) => (
+                        <circle key={i} cx={getX(new Date(d.date))} cy={getY(d.weight)} r="4" fill="var(--primary-color)" />
+                    ))}
+                </svg>
+            )}
+        </div>
+    );
+};
+
 // FIX: Add missing component 'ProgressView'.
 const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void; }> = ({ clientData, onDataUpdate }) => {
     const [activeTab, setActiveTab] = useState<'bodyweight' | 'exercises'>('bodyweight');
@@ -640,8 +722,9 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
         const sortedLog = [...(clientData.bodyWeightLog || [])].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         return (
             <div>
+                 <ProgressChart data={sortedLog} />
                  {!isAddingEntry ? (
-                     <button onClick={() => setIsAddingEntry(true)} className="cta-button">Añadir Nuevo Registro</button>
+                     <button onClick={() => setIsAddingEntry(true)} className="cta-button" style={{marginTop: '2rem'}}>Añadir Nuevo Registro de Peso</button>
                  ) : (
                     <form onSubmit={handleAddBodyWeight} className="add-progress-form">
                         <input type="number" step="0.1" value={newWeight} onChange={e => setNewWeight(e.target.value)} placeholder="Peso en kg" required />
@@ -649,7 +732,7 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
                         <button type="button" className="secondary" onClick={() => setIsAddingEntry(false)}>Cancelar</button>
                     </form>
                  )}
-                 <div className="progress-log-list">
+                 <div className="progress-log-list" style={{marginTop: '2rem'}}>
                     {sortedLog.length === 0 ? <p className="placeholder">No hay registros de peso corporal.</p> : sortedLog.map(entry => (
                         <div key={entry.date} className="progress-log-item">
                             <span>{new Date(entry.date).toLocaleDateString()}</span>
@@ -686,7 +769,7 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
                         <button type="button" className="secondary" onClick={() => setIsAddingEntry(false)}>Cancelar</button>
                     </form>
                  )}
-                 <div className="progress-log-list exercise-log">
+                 <div className="progress-log-list exercise-log" style={{marginTop: '2rem'}}>
                      {sortedLog.length === 0 ? <p className="placeholder">No hay registros para este ejercicio.</p> : sortedLog.map(entry => (
                         <div key={entry.date} className="progress-log-item">
                             <span>{new Date(entry.date).toLocaleDateString()}</span>
@@ -701,6 +784,7 @@ const ProgressView: React.FC<{ clientData: ClientData; onDataUpdate: () => void;
 
     return (
         <div className="progress-view animated-fade-in">
+             <h2>Registra tu Progreso</h2>
             <nav className="progress-tabs-nav">
                 <button 
                     className={`progress-tab-button ${activeTab === 'bodyweight' ? 'active' : ''}`} 
@@ -832,98 +916,6 @@ const ClientChatView: React.FC<{ clientData: ClientData }> = ({ clientData }) =>
             </form>
             {status === 'success' && <p className="success-text" style={{marginTop: '1rem'}}>¡Mensaje enviado con éxito!</p>}
             {status === 'error' && <p className="error-text" style={{marginTop: '1rem'}}>No se pudo enviar el mensaje. Inténtalo de nuevo.</p>}
-        </div>
-    );
-};
-
-const ClientView: React.FC<{ dni: string; onLogout: () => void; }> = ({ dni, onLogout }) => {
-    const [clientData, setClientData] = useState<ClientData | null>(null);
-    const [gym, setGym] = useState<Gym | null>(null);
-    const [exerciseLibrary, setExerciseLibrary] = useState<ExerciseLibrary>({});
-    const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'routine' | 'diet' | 'progress' | 'chat'>('routine');
-    const [videoModalUrl, setVideoModalUrl] = useState<string | null>(null);
-
-    const fetchAllData = async () => {
-        setIsLoading(true);
-        const data = await apiClient.getClientData(dni);
-        if (data) {
-            setClientData(data);
-            if (data.planType === 'nutrition' && activeTab === 'routine') {
-                setActiveTab('diet');
-            }
-            if (data.gymId) {
-                const library = await apiClient.getExerciseLibrary(data.gymId);
-                setExerciseLibrary(library);
-            }
-        }
-        setIsLoading(false);
-    };
-    
-    useEffect(() => {
-        fetchAllData();
-    }, [dni]);
-    
-     if (isLoading) {
-        return <div className="loading-container"><div className="spinner"></div>Cargando tu plan...</div>;
-    }
-
-    if (!clientData) {
-        return <div className="error-container">No se pudieron cargar tus datos. Por favor, contacta a tu entrenador. <button onClick={onLogout} className="logout-button">Cerrar Sesión</button></div>;
-    }
-    
-    const planType = clientData.planType || 'full';
-    
-    const getExerciseVideoUrl = (exerciseName: string): string | undefined => {
-        for (const group in exerciseLibrary) {
-            const exercise = (exerciseLibrary[group] as ExerciseDefinition[]).find(ex => ex.name === exerciseName);
-            if (exercise) return exercise.videoUrl;
-        }
-        return undefined;
-    };
-    
-    const renderContent = () => {
-        switch (activeTab) {
-            case 'routine':
-                 if (!clientData.routine) return <div className="placeholder">Aún no tienes una rutina asignada.</div>;
-                 return <ClientRoutineView routine={clientData.routine} onPlayVideo={setVideoModalUrl} getExerciseVideoUrl={getExerciseVideoUrl} />;
-            case 'diet':
-                 if (!clientData.dietPlans || clientData.dietPlans.every(p => p === null)) return <div className="placeholder">Aún no tienes un plan de nutrición asignado.</div>;
-                 return <ClientDietView dietPlan={clientData.dietPlans[0]!} />; // Assuming first plan for now
-            case 'progress':
-                 return <ProgressView clientData={clientData} onDataUpdate={fetchAllData} />; // Re-use progress view
-            case 'chat':
-                 return <ClientChatView clientData={clientData} />; // A new component for client-trainer communication
-            default:
-                return null;
-        }
-    }
-
-    return (
-        <div className="client-view">
-            <header className="client-header">
-                <h1>Hola, {clientData.profile.name || 'Cliente'}</h1>
-                <button onClick={onLogout} className="logout-button">Cerrar Sesión</button>
-            </header>
-            
-            <nav className="main-tabs-nav client-tabs">
-                 {(planType === 'full' || planType === 'routine') &&
-                    <button className={`main-tab-button ${activeTab === 'routine' ? 'active' : ''}`} onClick={() => setActiveTab('routine')}>Rutina</button>
-                 }
-                 {(planType === 'full' || planType === 'nutrition') &&
-                    <button className={`main-tab-button ${activeTab === 'diet' ? 'active' : ''}`} onClick={() => setActiveTab('diet')}>Nutrición</button>
-                 }
-                <button className={`main-tab-button ${activeTab === 'progress' ? 'active' : ''}`} onClick={() => setActiveTab('progress')}>Progreso</button>
-                <button className={`main-tab-button ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>Mensajes</button>
-            </nav>
-            
-            <main className="client-main-content">
-                {renderContent()}
-            </main>
-
-            {videoModalUrl && (
-                <VideoPlayerModal videoUrl={videoModalUrl} onClose={() => setVideoModalUrl(null)} />
-            )}
         </div>
     );
 };
@@ -3751,7 +3743,7 @@ const ClientDietView: React.FC<{ dietPlan: DietPlan }> = ({ dietPlan }) => {
     const { planTitle, summary, meals, recommendations } = dietPlan;
 
     return (
-        <div className="diet-plan animated-fade-in">
+        <div className="diet-plan-container animated-fade-in">
             <div className="plan-header">
                 <h2>{planTitle}</h2>
                 <div className="diet-summary">
@@ -3939,7 +3931,7 @@ const DietPlanGenerator: React.FC<{ clientData: ClientData; setClientData: (data
                  <>
                     <div className="actions-bar">
                          <h2>Plan de Nutrición</h2>
-                         <button onClick={handleDeletePlan} className="cta-button delete">
+                         <button onClick={handleDeletePlan} className="cta-button secondary delete">
                              Eliminar Plan
                         </button>
                     </div>
@@ -4076,7 +4068,7 @@ const ClientDashboardView: React.FC<{ dni: string, onLogout: () => void }> = ({ 
                  if (!clientData.dietPlans || clientData.dietPlans.every(p => p === null)) return <div className="placeholder">Aún no tienes un plan de nutrición. Contacta a tu entrenador.</div>;
                  return <ClientDietView dietPlan={clientData.dietPlans[0]!} />;
             case 'progress':
-                 return <div className="placeholder">Función de progreso en desarrollo.</div>;
+                 return <ProgressView clientData={clientData} onDataUpdate={fetchAllData} />;
             case 'chat':
                  return <ClientChatView clientData={clientData} />;
             default:
